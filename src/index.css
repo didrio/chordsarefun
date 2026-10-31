@@ -2,6 +2,7 @@
   --bg: #14151a;
   --surface: #1f2128;
   --surface-hover: #2a2d36;
+  --border: #333642;
   --text: #e8e8ec;
   --muted: #8b8d98;
   --accent: #7c9cff;
@@ -21,7 +22,7 @@ body {
 }
 
 main {
-  max-width: 960px;
+  max-width: 1100px;
   margin: 0 auto;
   padding: 2rem 1.5rem;
 }
@@ -32,7 +33,7 @@ header {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
 }
 
 h1 {
@@ -40,20 +41,85 @@ h1 {
   font-size: 1.75rem;
 }
 
-h2 {
-  font-size: 0.85rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
+.controls,
+.group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
 }
 
 .controls {
-  display: flex;
-  flex-wrap: wrap;
   gap: 1rem;
 }
 
-.controls label {
+/* Toolbar above the track: playback | track settings | undo/redo */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.75rem;
+  margin: 2.25rem 0 0.75rem;
+}
+
+.toolbar .group label {
+  margin-left: 0.4rem;
+}
+
+.group.end {
+  margin-left: auto;
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.palette-hint {
+  margin: 0 0 0.6rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.palette-hint.replacing {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.shortcuts summary {
+  font-size: 0.8rem;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.shortcuts summary:hover {
+  color: var(--text);
+}
+
+.shortcuts dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.35rem 1.25rem;
+  margin: 0.75rem 0 0;
+  font-size: 0.8rem;
+}
+
+.shortcuts dt {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.shortcuts dd {
+  margin: 0;
+  color: var(--muted);
+}
+
+label {
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -66,7 +132,7 @@ button {
   font: inherit;
   color: var(--text);
   background: var(--surface);
-  border: 1px solid #333642;
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0.4rem 0.7rem;
 }
@@ -88,62 +154,414 @@ button:disabled {
   cursor: default;
 }
 
-.palette,
-.progression {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  padding: 0;
-  margin: 0;
-  list-style: none;
+button.play {
+  min-width: 6.5rem;
+  border-color: var(--accent);
 }
 
-.chord {
+button.primary {
+  color: var(--bg);
+  font-weight: 600;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+button.primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 85%, white);
+}
+
+/* On/off buttons (Loop, 7ths): lit when on. */
+button.toggle {
+  color: var(--muted);
+}
+
+button.toggle[aria-pressed='true'] {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 25%, var(--surface));
+  border-color: var(--accent);
+}
+
+button.toggle[aria-pressed='true']:hover {
+  background: color-mix(in srgb, var(--accent) 35%, var(--surface));
+}
+
+/* Chord colors: --hue is set per scale degree, so the same chord is always the same color. */
+.chord,
+.clip {
+  --tint: hsl(var(--hue, 0) 55% 60%);
+}
+
+.palette {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.palette .chord {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  min-width: 0;
+  padding: 0.7rem 0.4rem;
+  border-top: 3px solid var(--tint);
+  border-radius: 10px;
+  cursor: grab;
+}
+
+.symbol {
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.roman {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.notes {
+  font-size: 0.75rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* Timeline */
+
+.ruler {
   position: relative;
+  height: 1.6rem;
+  margin-bottom: 2px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  user-select: none;
+  touch-action: none;
+}
+
+/* Clicking anywhere in the ruler moves the playhead, but only the marker shows a pointer. */
+.ruler.scrubbing,
+.ruler.scrubbing .playhead-marker {
+  cursor: pointer;
+}
+
+.bar-number {
+  position: absolute;
+  top: 0.25rem;
+  padding-left: 12px;
+  border-left: 1px solid #ffffff30;
+  line-height: 1.1rem;
+}
+
+/* DAW-style triangle; the whole ruler is the hit area, so it's easy to grab. */
+.playhead-marker {
+  /* Generous invisible hit area (full ruler height) around the visible triangle. */
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 20px;
+  margin-left: -10px;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.playhead-marker::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 1px;
+  border-left: 9px solid transparent;
+  border-right: 9px solid transparent;
+  border-top: 18px solid var(--accent);
+  transition: filter 80ms;
+}
+
+.playhead-marker:hover::after,
+.ruler.scrubbing .playhead-marker::after {
+  filter: brightness(1.3);
+}
+
+.track {
+  position: relative;
+  height: 7rem;
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  user-select: none;
+  touch-action: none;
+}
+
+/* One per bar: grid lines restart at each bar line (matters in odd meters like 7/8). */
+.bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background-image: linear-gradient(to right, #ffffff14 1px, transparent 1px);
+  background-size: var(--grid-size) 100%;
+  border-left: 1px solid #ffffff30;
+  pointer-events: none;
+}
+
+.bar:first-child {
+  border-left-color: transparent;
+}
+
+/* Grid off: beat lines turn dotted (stripes of the track color laid over them). */
+.track.grid-off .bar {
+  background-image:
+    linear-gradient(to bottom, var(--surface) 50%, transparent 50%),
+    linear-gradient(to right, #ffffff30 1px, transparent 1px);
+  background-size:
+    100% 4px,
+    var(--grid-size) 100%;
+}
+
+.clip {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.25rem;
-  width: 6rem;
-  height: 5rem;
-  background: var(--surface);
-  border: 1px solid #333642;
-  border-radius: 10px;
-  transition: border-color 80ms, transform 80ms;
+  gap: 0.15rem;
+  overflow: hidden;
+  container-type: inline-size;
+  background: color-mix(in srgb, var(--tint) 28%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--tint) 60%, transparent);
+  border-radius: 6px;
+  cursor: grab;
+  transition: filter 80ms;
 }
 
-.chord.active {
-  border-color: var(--accent);
-  transform: translateY(-2px);
+.clip[data-diatonic='no'] {
+  --tint: #888;
 }
 
-.roman {
-  font-size: 1.25rem;
-  font-weight: 600;
+.clip.selected {
+  outline: 2px solid var(--text);
+  outline-offset: -1px;
 }
 
-.symbol {
-  font-size: 0.9rem;
-  color: var(--muted);
+.clip.active {
+  filter: brightness(1.45);
 }
 
-.remove {
+.clip .roman {
+  color: var(--text);
+  opacity: 0.7;
+}
+
+@container (max-width: 70px) {
+  .clip .notes,
+  .clip .remove {
+    display: none;
+  }
+}
+
+@container (max-width: 40px) {
+  .clip .roman {
+    display: none;
+  }
+  .clip .symbol {
+    font-size: 0.75rem;
+  }
+}
+
+.handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: ew-resize;
+  z-index: 1;
+}
+
+.handle.start {
+  left: 0;
+}
+
+.handle.end {
+  right: 0;
+}
+
+.handle:hover {
+  background: #ffffff30;
+}
+
+.clip .remove {
   position: absolute;
   top: 2px;
-  right: 2px;
-  padding: 0 0.4rem;
+  right: 10px;
+  padding: 0 0.3rem;
   border: none;
   background: transparent;
   color: var(--muted);
+  opacity: 0;
 }
 
-.empty {
-  color: var(--muted);
+.clip:hover .remove {
+  opacity: 1;
 }
 
-.actions {
+.drop-marker,
+.playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.drop-marker {
+  background: var(--accent);
+}
+
+.playhead {
+  margin-left: -1px;
+  background: var(--accent);
+}
+
+/* Dragging */
+
+.palette .chord {
+  touch-action: none;
+  user-select: none;
+}
+
+.track.dragging .clip {
+  transition:
+    left 120ms ease-out,
+    width 120ms ease-out;
+  pointer-events: none;
+}
+
+.track.invalid {
+  border-color: #c0504d;
+}
+
+.clip.placing {
+  outline: 2px dashed var(--text);
+  outline-offset: -2px;
+  filter: brightness(1.25);
+}
+
+.clip.lifted {
+  opacity: 0.35;
+}
+
+.track-empty {
+  position: absolute;
+  inset: 0;
   display: flex;
-  gap: 0.75rem;
-  margin-top: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.drag-ghost {
+  --tint: hsl(var(--hue, 0) 55% 60%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  white-space: nowrap;
+  position: fixed;
+  z-index: 10;
+  padding: 0.35rem 0.7rem;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--tint) 35%, var(--bg));
+  border: 1px solid var(--tint);
+  border-radius: 6px;
+  pointer-events: none;
+  transform: translate(-50%, -140%);
+  box-shadow: 0 6px 20px #0008;
+  transition: opacity 80ms;
+}
+
+.drag-ghost[data-diatonic='no'] {
+  --tint: #888;
+}
+
+.drag-ghost.over .ghost-symbol {
+  opacity: 0.6;
+}
+
+.ghost-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+/* Drag preview: what will happen to each affected clip. */
+.change-badge {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0 0.4rem;
+  font-size: 0.7rem;
+  line-height: 1.1rem;
+  white-space: nowrap;
+  color: var(--bg);
+  background: var(--text);
+  border-radius: 999px;
+}
+
+.change-badge.squeeze {
+  background: #e0a458;
+}
+
+.change-badge.replace,
+.change-badge.swap {
+  background: var(--accent);
+}
+
+@container (max-width: 80px) {
+  .change-text {
+    display: none;
+  }
+}
+
+body:has(.drag-ghost) {
+  cursor: grabbing;
+}
+
+/* Keyboard shortcut (1-7) shown on each palette chord. */
+.palette .chord {
+  position: relative;
+}
+
+.key-hint {
+  position: absolute;
+  top: 4px;
+  left: 6px;
+  font-size: 0.65rem;
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+.metronome {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+input.volume {
+  width: 5rem;
+  accent-color: var(--accent);
+}
+
+.custom-sig {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--muted);
 }

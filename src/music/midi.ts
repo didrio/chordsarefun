@@ -1,27 +1,30 @@
 import { Midi } from '@tonejs/midi'
-import type { ProgressionChord } from './progression'
+import { TICKS_PER_BEAT, type Clip, type TimeSignature } from './timeline'
 import { voiceChord } from './theory'
 
-export function progressionToMidi(chords: ProgressionChord[], bpm: number): Uint8Array {
+export function clipsToMidi(clips: Clip[], bpm: number, sig: TimeSignature = { beats: 4, unit: 4 }): Uint8Array {
   const midi = new Midi()
   midi.header.setTempo(bpm)
-  const ppq = midi.header.ppq
+  midi.header.timeSignatures.push({ ticks: 0, timeSignature: [sig.beats, sig.unit] })
+  const scale = midi.header.ppq / TICKS_PER_BEAT
   const track = midi.addTrack()
   track.name = 'Chords'
 
-  let ticks = 0
-  for (const chord of chords) {
-    const durationTicks = chord.beats * ppq
-    for (const note of voiceChord(chord.symbol)) {
-      track.addNote({ midi: note, ticks, durationTicks, velocity: 0.8 })
+  for (const clip of clips) {
+    for (const note of voiceChord(clip.symbol)) {
+      track.addNote({
+        midi: note,
+        ticks: Math.round(clip.start * scale),
+        durationTicks: Math.round(clip.length * scale),
+        velocity: 0.8,
+      })
     }
-    ticks += durationTicks
   }
   return midi.toArray()
 }
 
-export function downloadMidi(chords: ProgressionChord[], bpm: number, filename = 'progression.mid') {
-  const bytes = progressionToMidi(chords, bpm)
+export function downloadMidi(clips: Clip[], bpm: number, sig: TimeSignature, filename = 'progression.mid') {
+  const bytes = clipsToMidi(clips, bpm, sig)
   const blob = new Blob([bytes as BlobPart], { type: 'audio/midi' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')

@@ -22,10 +22,12 @@ npm run lint
 
 ## Layout
 
-- `src/music/theory.ts` – diatonic chords, roman numerals, voicings (pure, tested)
-- `src/music/audio.ts` – Tone.js playback
-- `src/music/midi.ts` – MIDI export
-- `src/App.tsx` – UI
+See [AGENTS.md](AGENTS.md) for product behavior, design decisions, and architecture.
+
+- `src/music/` – timeline/editing rules, theory, audio (Tone.js), MIDI export
+- `src/components/` – Timeline, Palette, drag hook, time signature control
+- `src/*.ts` – undo history, persistence, selection, shortcuts, drag labels (all tested)
+- `src/App.tsx` – app state, wiring, and layout
 
 ## Deploy
 
