@@ -22,7 +22,7 @@ type Props = {
 export function OptionsMenu({ bpm, onBpm, sig, onSig, bars, onBars, gridKey, onGrid }: Props) {
   const { open, setOpen, rootRef } = useDropdown()
   return (
-    <div className="dropdown" ref={rootRef}>
+    <div className="dropdown options-menu" ref={rootRef}>
       <button
         className="dropdown-trigger"
         aria-haspopup="dialog"

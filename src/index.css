@@ -33,18 +33,60 @@ main {
 }
 
 header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 0.6rem;
 }
 
+/* Logo-like wordmark: small, light, lowercase, wide-spaced. */
 h1 {
   margin: 0;
-  font-size: 1.75rem;
+  font-size: 1rem;
+  font-weight: 300;
+  letter-spacing: 0.3em;
+  text-transform: lowercase;
 }
+
+/* The main toolbar: song settings | progressions + groove ... session (right). */
+.main-toolbar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem 0.8rem;
+  padding: 0.45rem 0;
+  margin-bottom: 0.5rem;
+  border-top: 1px dotted var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.toolbar-section {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.toolbar-session {
+  margin-left: auto;
+}
+
+.toolbar-divider {
+  align-self: stretch;
+  width: 1px;
+  flex: none;
+  background: var(--border);
+}
+
+/* Toolbar controls never change size with their content. */
+.main-toolbar .dropdown-trigger {
+  justify-content: space-between;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.main-toolbar .home-menu .dropdown-trigger { width: 8.5rem; }
+.main-toolbar .options-menu .dropdown-trigger { width: 12rem; }
+.main-toolbar .progression-menu .dropdown-trigger { width: 8.5rem; }
+.main-toolbar .groove-menu .dropdown-trigger { width: 10rem; }
+.main-toolbar .session-trigger { width: 9.5rem; }
+.main-toolbar input.volume { width: 4rem; }
 
 .controls,
 .group {
@@ -1321,7 +1363,7 @@ input[type='text'][aria-invalid='true'] {
 }
 
 .progression-panel {
-  right: 0;
+  left: 0;
   display: grid;
   grid-template-columns: 11rem minmax(0, 1fr);
   width: min(44rem, calc(100vw - 3rem));
@@ -1508,7 +1550,7 @@ input[type='text'][aria-invalid='true'] {
 
 /* Home menu: key buttons over the mood list. */
 .home-panel {
-  right: 0;
+  left: 0;
   width: 24rem;
 }
 
@@ -1851,14 +1893,16 @@ button.dice {
 
 /* Sessions menu */
 .session-trigger .session-name {
-  max-width: 14rem;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .session-panel {
-  left: 0;
+  right: 0;
   width: 22rem;
   display: flex;
   flex-direction: column;
@@ -1926,10 +1970,6 @@ button.dice {
   color: var(--muted);
 }
 
-/* The session menu sits next to the title; the controls stay on the right. */
-header > .dropdown {
-  margin-right: auto;
-}
 
 /* Details panel: a bar to collapse/expand it, like a DAW's detail view. */
 .panel-bar {

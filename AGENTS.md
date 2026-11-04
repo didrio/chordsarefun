@@ -448,9 +448,10 @@ tracks; drums on channel 10 with General MIDI notes) or one part alone.
 
 ## Visual design
 
-- Dark UI. Layout top to bottom: header (title, Sessions menu | Home, Options, metronome icon +
-  volume) → home notice (after a home change) → palette head (Progressions + die,
-  Groove + die) →
+- Dark UI. Layout top to bottom: header (the small, light, wide-spaced "chords are fun" wordmark) →
+  main toolbar (dotted line above, solid below: Home, Options, metronome + volume | Progressions + die,
+  Groove + die ... "Session:" menu pinned right; every toolbar dropdown has a fixed width, long
+  text truncates) → home notice (after a home change) →
   transport row right above the track (Play, Stop, Loop … Undo, Redo)
   → ruler + track → notes bar (Notes toggle, Octave, Smooth voicing) + notes lane →
   panel (inspector) → footer

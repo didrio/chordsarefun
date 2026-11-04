@@ -579,9 +579,11 @@ function Workspace({ prefix, sessions, onSaveAs, flushRef }: WorkspaceProps) {
   return (
     <main>
       <header>
-        <h1>Chords</h1>
-        <SessionMenu sessions={sessions} onSaveAs={onSaveAs} onOpen={sessions.open} />
-        <div className="controls">
+        <h1>chords are fun</h1>
+      </header>
+
+      <div className="main-toolbar">
+        <div className="toolbar-section">
           <HomeMenu home={{ tonic, mode }} suggestion={homeSuggestion} onChange={changeHome} />
           <OptionsMenu
             bpm={bpm}
@@ -619,7 +621,21 @@ function Workspace({ prefix, sessions, onSaveAs, flushRef }: WorkspaceProps) {
             />
           </span>
         </div>
-      </header>
+        <span className="toolbar-divider" aria-hidden />
+        <div className="toolbar-section">
+          <ProgressionMenu tonic={tonic} onUse={loadProgression} onPreview={hearProgression} onRandom={randomProgression} />
+          <GrooveMenu
+            groove={groove}
+            onChange={setGroove}
+            isPlaying={isPlaying}
+            onTogglePlay={togglePlay}
+            onRandom={randomGroove}
+          />
+        </div>
+        <div className="toolbar-section toolbar-session">
+          <SessionMenu sessions={sessions} onSaveAs={onSaveAs} onOpen={sessions.open} />
+        </div>
+      </div>
 
       {activeOffer && (
         <HomeNotice
@@ -630,19 +646,6 @@ function Workspace({ prefix, sessions, onSaveAs, flushRef }: WorkspaceProps) {
           onDismiss={() => setHomeOffer(null)}
         />
       )}
-
-      <section>
-        <div className="palette-head">
-          <ProgressionMenu tonic={tonic} onUse={loadProgression} onPreview={hearProgression} onRandom={randomProgression} />
-          <GrooveMenu
-            groove={groove}
-            onChange={setGroove}
-            isPlaying={isPlaying}
-            onTogglePlay={togglePlay}
-            onRandom={randomGroove}
-          />
-        </div>
-      </section>
 
       <section>
         <div className="toolbar">

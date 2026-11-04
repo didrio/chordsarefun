@@ -38,6 +38,7 @@ export function SessionMenu({ sessions, onSaveAs, onOpen }: Props) {
 
   return (
     <div className="dropdown" ref={rootRef}>
+      <span className="dropdown-label">Session:</span>
       <button
         className="dropdown-trigger session-trigger"
         aria-haspopup="dialog"
