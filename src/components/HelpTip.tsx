@@ -53,6 +53,7 @@ export function HelpTip() {
         i
       </button>
       <div className="help-tip" id="help-tip" role="tooltip">
+        <h2 className="help-brand">chords are fun</h2>
         <div>
         <h2>How it works</h2>
         <ol>
@@ -73,8 +74,8 @@ export function HelpTip() {
             hold {COPY_KEY} to copy.
           </li>
           <li>
-            <b>Choose a Groove</b> for the chords, bass and drums, then press Play. Tempo, time signature, length and
-            grid are under the BPM button.
+            <b>Choose a Groove</b> for the chords, bass and drums, then press Play. Key, tempo, time signature, length and
+            grid are in the <b>Config</b> menu.
           </li>
           <li>
             <b>Keep it.</b> Everything saves as you go. Name a session to keep it, and Download MIDI to take the chords

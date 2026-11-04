@@ -2,13 +2,14 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { ChordInspector, type InspectorTab } from './components/ChordInspector'
 import { NotesLane } from './components/NotesLane'
 import { ProgressionMenu } from './components/ProgressionMenu'
-import { HomeMenu } from './components/HomeMenu'
 import { HomeNotice } from './components/HomeNotice'
 import { GrooveMenu } from './components/GrooveMenu'
 import { ArrowIcon } from './components/ArrowIcon'
 import { HelpTip } from './components/HelpTip'
 import { MidiMenu } from './components/MidiMenu'
-import { OptionsMenu } from './components/OptionsMenu'
+import { ConfigMenu } from './components/ConfigMenu'
+import { DismissPanel, Panel } from './components/Panel'
+import { LoopIcon, PauseIcon, PlayIcon, PlusIcon, RedoIcon, StopIcon, UndoIcon } from './components/Icons'
 import { SessionMenu } from './components/SessionMenu'
 import { Timeline } from './components/Timeline'
 import { useChordDrag, type DragState } from './components/useChordDrag'
@@ -33,7 +34,7 @@ import {
   stopPlayback,
   stopPreview,
 } from './music/audio'
-import { canInvert, chordName, invert, shiftOctave, type Chord } from './music/chord'
+import { canInvert, invert, shiftOctave, type Chord } from './music/chord'
 import { downloadMidi } from './music/midi'
 import { suggestHome, type Home } from './music/home'
 import { PROGRESSIONS, progressionChords, progressionClips, type Progression } from './music/progressions'
@@ -156,7 +157,7 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
   // Everything here is saved in the session (keys listed in SESSION_KEYS).
   const k = (key: string) => prefix + key
   // Hidden by default: powerful, but a lot on first sight.
-  const [showNotes, setShowNotes] = usePersistentState(k('notesLaneOpen'), false)
+  const [moreOpen, setMoreOpen] = usePersistentState(k('moreOpen'), false)
   const [bpm, setBpm] = usePersistentState(k('bpm'), DEFAULT_BPM)
   const [gridKey, setGridKey] = usePersistentState<GridKey>(k('grid'), '1/4', (v) => GRIDS.some((g) => g.key === v))
   const [loop, setLoop] = usePersistentState(k('loop'), true)
@@ -177,7 +178,7 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
     null,
     (v) => v === null || typeof v === 'string',
   )
-  const [panelOpen, setPanelOpen] = usePersistentState(k('panelOpen'), true)
+  const [panelOpen, setPanelOpen] = usePersistentState(k('panelOpen'), false)
   // The track (clips, length, key, time signature) is the undoable, saved document.
   const track = useHistory(DEFAULT_TRACK, { key: k('track'), isValid: isTrack, migrate: migrateTrack })
   useEffect(() => {
@@ -579,7 +580,8 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
     <main>
       <header>
         <div className="logo">
-          <h1>chords are fun</h1>
+          <img className="logo-icon" src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" width="22" height="22" />
+          <h1>create a chord progression</h1>
           <HelpTip />
         </div>
         <div className="header-actions">
@@ -597,8 +599,45 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
 
       <div className="main-toolbar">
         <div className="toolbar-section">
-          <HomeMenu home={{ tonic, mode }} suggestion={homeSuggestion} onChange={changeHome} />
-          <OptionsMenu
+          <ProgressionMenu tonic={tonic} onUse={loadProgression} onPreview={hearProgression} onRandom={randomProgression} />
+          <GrooveMenu
+            groove={groove}
+            onChange={setGroove}
+            isPlaying={isPlaying}
+            onTogglePlay={togglePlay}
+            onRandom={randomGroove}
+          />
+        </div>
+        <div className="toolbar-section">
+        <span className="metronome">
+          <button
+            className="toggle icon"
+            aria-pressed={metronomeOn}
+            aria-label="Metronome"
+            onClick={() => {
+              ensureAudio()
+              setMetronomeOn((m) => !m)
+            }}
+            title="Metronome (M)"
+          >
+            <MetronomeIcon />
+          </button>
+          <input
+            type="range"
+            className="volume"
+            min={0}
+            max={1}
+            step={0.01}
+            value={metronomeVolume}
+            onChange={(e) => setMetronomeVolume(Number(e.target.value))}
+            aria-label="Metronome volume"
+            title="Metronome volume"
+          />
+        </span>
+          <ConfigMenu
+            home={{ tonic, mode }}
+            suggestion={homeSuggestion}
+            onChange={changeHome}
             bpm={bpm}
             onBpm={setBpm}
             sig={sig}
@@ -607,41 +646,6 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
             onBars={changeBars}
             gridKey={gridKey}
             onGrid={setGridKey}
-          />
-          <span className="metronome">
-            <button
-              className="toggle icon"
-              aria-pressed={metronomeOn}
-              aria-label="Metronome"
-              onClick={() => {
-                ensureAudio()
-                setMetronomeOn((m) => !m)
-              }}
-              title="Metronome (M)"
-            >
-              <MetronomeIcon />
-            </button>
-            <input
-              type="range"
-              className="volume"
-              min={0}
-              max={1}
-              step={0.01}
-              value={metronomeVolume}
-              onChange={(e) => setMetronomeVolume(Number(e.target.value))}
-              aria-label="Metronome volume"
-              title="Metronome volume"
-            />
-          </span>
-        </div>
-        <div className="toolbar-section toolbar-right">
-          <ProgressionMenu tonic={tonic} onUse={loadProgression} onPreview={hearProgression} onRandom={randomProgression} />
-          <GrooveMenu
-            groove={groove}
-            onChange={setGroove}
-            isPlaying={isPlaying}
-            onTogglePlay={togglePlay}
-            onRandom={randomGroove}
           />
         </div>
       </div>
@@ -656,92 +660,95 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
         />
       )}
 
-      <section>
-        <div className="toolbar">
-          <div className="group">
-            <button className="play" onClick={togglePlay} title="Play / Pause (Space)">
-              {isPlaying ? '❚❚ Pause' : '▶ Play'}
-            </button>
-            <button onClick={stop} title="Stop and return to the start (Shift+Space)">
-              ■ Stop
-            </button>
-            <button className="toggle" aria-pressed={loop} onClick={() => setLoop((l) => !l)} title="Loop (L)">
-              Loop
-            </button>
+      <div className="panels" data-playhead-scope>
+          <div className="timeline-row">
+            <div className="side-buttons">
+              <button className="play" onClick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'} title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}>
+                {isPlaying ? <PauseIcon /> : <PlayIcon />}
+              </button>
+              <button onClick={stop} aria-label="Stop" title="Stop and return to the start (Shift+Space)">
+                <StopIcon />
+              </button>
+              <button className="toggle" aria-pressed={loop} onClick={() => setLoop((l) => !l)} aria-label="Loop" title="Loop (L)">
+                <LoopIcon />
+              </button>
+            </div>
+          <Timeline
+            trackRef={trackRef}
+            clips={preview ? preview.clips : clips}
+            totalTicks={totalTicks}
+            gridTicks={gridTicks}
+            barTicks={barTicks}
+            beatTicks={beatTicks}
+            tonic={tonic}
+            mode={mode}
+            selectedIds={selectedIds}
+            inspectedId={panelOpen && !multiSelected ? inspectedId : null}
+            isPlaying={isPlaying}
+            playhead={playheadPos}
+            onSeek={seek}
+            dragging={drag !== null}
+            placingIds={preview?.placedIds ?? []}
+            liftedIds={drag?.held.existing && !drag.copy && !preview ? (drag.held.groupIds ?? [drag.held.id]) : []}
+            invalid={isOverTrack && !preview}
+            changes={dropChangeMap}
+            onSelect={(id) => (id ? selectOnly(id) : clearSelection())}
+            onClipPointerDown={(clip, e, grabOffset) => {
+              // Dragging any clip of a multi-selection moves the whole selection.
+              const group = selectedIds.length > 1 && selectedIds.includes(clip.id) ? selectedIds : undefined
+              // Ids for copies, in case Option/Ctrl is held at some point during the drag.
+              const copyIds = Object.fromEntries((group ?? [clip.id]).map((id) => [id, crypto.randomUUID()]))
+              const held: HeldChord = { id: clip.id, chord: clip.chord, existing: true, grabOffset, groupIds: group, copyIds }
+              beginDrag(held, e)
+            }}
+            onResizeStart={track.beginGesture}
+            onResize={(id, edge, ticks) =>
+              track.updateGesture(withClips((c) => resizeClip(c, id, edge, ticks, totalTicks)))
+            }
+            onRemove={(id) => {
+              // The × on a selected clip removes the whole selection.
+              if (selectedIds.includes(id)) removeSelected()
+              else setClips((c) => removeClip(c, id))
+            }}
+            onCreateEmpty={(ticks) => {
+              const id = crypto.randomUUID()
+              const next = addEmptyClip(clips, id, ticks, totalTicks, barTicks)
+              if (next === clips) return
+              setClips(() => next)
+              select({ ids: [id], anchor: id }, next)
+            }}
+          />
+              <div className="side-buttons">
+              <button className="tinted" onClick={newChord} aria-label="New chord" title="New chord: add an empty spot in the first free space (up to a bar), then pick its chord">
+                <PlusIcon />
+              </button>
+              <button onClick={track.undo} disabled={!track.canUndo} aria-label="Undo" title="Undo (⌘Z / Ctrl+Z)">
+                <UndoIcon />
+              </button>
+              <button onClick={track.redo} disabled={!track.canRedo} aria-label="Redo" title="Redo (⇧⌘Z / Ctrl+Y)">
+                <RedoIcon />
+              </button>
+            </div>
           </div>
-          <div className="group">
-            <button className="tinted" onClick={newChord} title="Add an empty spot in the first free space (up to a bar), then pick its chord">
-              + New
-            </button>
-            <button onClick={track.undo} disabled={!track.canUndo} title="Undo (⌘Z / Ctrl+Z)">
-              Undo
-            </button>
-            <button onClick={track.redo} disabled={!track.canRedo} title="Redo (⇧⌘Z / Ctrl+Y)">
-              Redo
-            </button>
-          </div>
-        </div>
 
-        <Timeline
-          trackRef={trackRef}
-          clips={preview ? preview.clips : clips}
-          totalTicks={totalTicks}
-          gridTicks={gridTicks}
-          barTicks={barTicks}
-          beatTicks={beatTicks}
-          tonic={tonic}
-          mode={mode}
-          selectedIds={selectedIds}
-          inspectedId={panelOpen && !multiSelected ? inspectedId : null}
-          isPlaying={isPlaying}
-          playhead={playheadPos}
-          onSeek={seek}
-          dragging={drag !== null}
-          placingIds={preview?.placedIds ?? []}
-          liftedIds={drag?.held.existing && !drag.copy && !preview ? (drag.held.groupIds ?? [drag.held.id]) : []}
-          invalid={isOverTrack && !preview}
-          changes={dropChangeMap}
-          onSelect={(id) => (id ? selectOnly(id) : clearSelection())}
-          onClipPointerDown={(clip, e, grabOffset) => {
-            // Dragging any clip of a multi-selection moves the whole selection.
-            const group = selectedIds.length > 1 && selectedIds.includes(clip.id) ? selectedIds : undefined
-            // Ids for copies, in case Option/Ctrl is held at some point during the drag.
-            const copyIds = Object.fromEntries((group ?? [clip.id]).map((id) => [id, crypto.randomUUID()]))
-            const held: HeldChord = { id: clip.id, chord: clip.chord, existing: true, grabOffset, groupIds: group, copyIds }
-            beginDrag(held, e)
-          }}
-          onResizeStart={track.beginGesture}
-          onResize={(id, edge, ticks) =>
-            track.updateGesture(withClips((c) => resizeClip(c, id, edge, ticks, totalTicks)))
-          }
-          onRemove={(id) => {
-            // The × on a selected clip removes the whole selection.
-            if (selectedIds.includes(id)) removeSelected()
-            else setClips((c) => removeClip(c, id))
-          }}
-          onCreateEmpty={(ticks) => {
-            const id = crypto.randomUUID()
-            const next = addEmptyClip(clips, id, ticks, totalTicks, barTicks)
-            if (next === clips) return
-            setClips(() => next)
-            select({ ids: [id], anchor: id }, next)
-          }}
+        <Panel
+          title="More"
+          hint="voicings: inversions, octaves and each chord's notes"
+          open={moreOpen}
+          onToggle={() => setMoreOpen((o) => !o)}
         >
-          <div className="lane-bar">
-            <button
-              className="toggle small"
-              aria-pressed={showNotes}
-              onClick={() => setShowNotes((v) => !v)}
-              title="Show each chord's notes over time"
-            >
-              Notes
-            </button>
-            {showNotes && clips.length > 0 && (
-              <span className="lane-legend">
-                Lines show how each note moves to the next chord.
-                <span className="out-swatch" aria-hidden /> not in the key
-              </span>
-            )}
+          <div className="advanced-controls">
+            <span className="lane-legend">
+              {clips.length > 0 ? (
+                <>
+                  Lines show how each note moves to the next chord.
+                  <span className="out-swatch" aria-hidden /> not in the key
+                </>
+              ) : (
+                'Add chords to see their notes here.'
+              )}
+            </span>
+            <span className="advanced-buttons">
             <span className="octave" role="group" aria-label="Inversion">
               <span className="muted">Inversion{selectedClips.length > 0 ? ' (selected)' : ''}</span>
               <button
@@ -792,8 +799,9 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
             >
               Smooth voicing{selectedClips.length > 1 ? ' (selected)' : ''}
             </button>
+            </span>
           </div>
-          {showNotes && (
+          <div className="lane-wrap">
             <NotesLane
               clips={preview ? preview.clips : clips}
               totalTicks={totalTicks}
@@ -802,60 +810,27 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
               selectedIds={selectedIds}
               bassOn={groove.bass.on}
             />
-          )}
-        </Timeline>
+          </div>
+        </Panel>
 
-        <div className={panelOpen ? 'panel' : 'panel collapsed'}>
-          <button
-            className="panel-bar"
-            aria-expanded={panelOpen}
-            onClick={() => setPanelOpen((o) => !o)}
-            title={panelOpen ? 'Collapse the details' : 'Expand the details'}
-          >
-            <span className="chevron" aria-hidden />
-            <span>{multiSelected ? `${selectedClips.length} chords selected` : 'Chord details'}</span>
-            {!panelOpen && !multiSelected && inspected && (
-              <span className="muted">· {inspected.chord ? chordName(inspected.chord) : 'Select a chord'}</span>
-            )}
-          </button>
-          {panelOpen &&
-            (multiSelected ? (
-              <div className="multi">
-                <p className="muted">Change their voicing together:</p>
-                <div className="group">
-                  <button onClick={() => invertChords(-1)} title="Lower inversion (↓)">
-                    <ArrowIcon dir="down" /> Lower
-                  </button>
-                  <button onClick={() => invertChords(1)} title="Higher inversion (↑)">
-                    <ArrowIcon dir="up" /> Higher
-                  </button>
-                  <button onClick={smoothen} title="Pick inversions so each chord moves as little as possible">
-                    Smooth voicing
-                  </button>
-                </div>
-              </div>
-            ) : inspected ? (
-              <ChordInspector
-                key={inspected.id}
-                chord={inspected.chord}
-                spot={spotOf(inspected.id)}
-                tab={inspectorTab}
-                onTab={setInspectorTab}
-                onChange={(chord, fresh) => setInspectedChord(inspected, chord, fresh)}
-                onClear={() => {
-                  setClips((c) => c.map((x) => (x.id === inspected.id ? { ...x, chord: null } : x)))
-                  setInspectorTab('ideas')
-                }}
-                onPreview={(chord, fresh) => !isPlaying && previewChord(fresh ? fitOctave(chord, otherChords(inspected.id)) : chord)}
-              />
-            ) : (
-              <p className="muted panel-empty">
-                Select a chord on the track to see how it fits the key, try other flavors, and edit its notes. Press + New (or
-                double-click empty space on the track) to add a spot with chord ideas.
-              </p>
-            ))}
-        </div>
-      </section>
+        {panelOpen && !multiSelected && inspected && (
+          <DismissPanel title="Chord details" hint="how it fits, other flavors, notes and ideas" onDismiss={() => setPanelOpen(false)}>
+            <ChordInspector
+              key={inspected.id}
+              chord={inspected.chord}
+              spot={spotOf(inspected.id)}
+              tab={inspectorTab}
+              onTab={setInspectorTab}
+              onChange={(chord, fresh) => setInspectedChord(inspected, chord, fresh)}
+              onClear={() => {
+                setClips((c) => c.map((x) => (x.id === inspected.id ? { ...x, chord: null } : x)))
+                setInspectorTab('ideas')
+              }}
+              onPreview={(chord, fresh) => !isPlaying && previewChord(fresh ? fitOctave(chord, otherChords(inspected.id)) : chord)}
+            />
+          </DismissPanel>
+        )}
+      </div>
 
       {drag && (
         <div

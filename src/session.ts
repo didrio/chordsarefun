@@ -26,7 +26,7 @@ export const SESSION_KEYS = [
   'metronomeVolume',
   'groove2',
   'flavor',
-  'notesLaneOpen',
+  'moreOpen',
   'selection',
   'inspectorTab',
   'inspected',

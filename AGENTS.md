@@ -112,16 +112,15 @@ colors, fit dots and plain-language reasons, always relative to Home.
 
 ### Chord inspector, notes lane, progressions
 
-- The **details panel** under the track (like Ableton's detail view) has a bar with a
-  chevron to collapse/expand it (saved per session). It shows the **inspected clip**:
-  the last clip selected on its own. Selecting a clip, adding one (palette drop,
-  double-click, copy) or stepping with ←/→ switches it and expands the panel; clicking
-  elsewhere or Esc only deselects, so the panel never closes by itself. Selecting
-  several clips collapses it (the bar says "3 chords selected"; expanded, it offers
-  inversion/smooth-voicing for them). The inspected clip gets a dashed outline on the
-  track while it isn't selected. With no clip inspected it shows a one-line hint.
+- The **details panel** under the track (like Ableton's detail view) is dismissable, not
+  collapsible: an X at its top right closes it. It shows the **inspected clip**: the last
+  clip selected on its own. Selecting a clip, adding one (palette drop, double-click, copy)
+  or stepping with ←/→ switches it and shows the panel; clicking elsewhere or Esc only
+  deselects (so nothing jumps). Selecting several clips (or none) hides it entirely; the
+  group voicing buttons are in More. The inspected clip gets a dashed outline on the track
+  while it isn't selected.
 - Inspector (`ChordInspector.tsx`): **one layout for chords and empty clips**; rows hide
-  or show, nothing moves. Expanded, the panel is **always the same height** (25rem on
+  or show, nothing moves. The panel is **always the same height** (25rem on
   desktop): the parts that vary scroll inside it.
   - Left, fixed from the name down to the keyboard legend: ▶, name (or "Select a chord" for an empty one),
     roman, notes (+ "bass E"), and a red **Clear chord** (the clip becomes empty, in
@@ -154,12 +153,12 @@ colors, fit dots and plain-language reasons, always relative to Home.
   A slash always sets the bass, never an inversion. Typed chords and ideas are moved to
   the octave nearest the other chords (like dropped chords; `fitOctave`); the inversion
   you chose is kept.
-- Notes lane (`NotesLane.tsx`, toggle "Notes", saved as `notesLaneOpen`, **hidden by
-  default**): a **display-only** piano roll on the track's time axis showing what the
+- Notes lane (`NotesLane.tsx`, in the **Advanced** panel): a **display-only** piano roll on the
+  track's time axis showing what the
   chords part plays for each clip (its voicing, plus a slash chord's low bass note when
   the Bass part is off; empty clips show nothing), out-of-key notes striped, lines from each note to the nearest note of
-  the next chord. Individual notes are edited only in the inspector; the notes bar
-  adjusts **whole chords**:
+  the next chord. Individual notes are edited only in the inspector; the Advanced buttons
+  adjust **whole chords**:
   - "Inversion ↓/↑" and "Octave ↓/↑" buttons (arrows with a shaft; keys ↓/↑ and Shift+↓/↑, `shiftOctave` = inversion ±
     note count) act on the selection, or every chord when nothing is selected; they
     move together (if any can't, none do). Clips have no buttons of their own.
@@ -174,7 +173,7 @@ colors, fit dots and plain-language reasons, always relative to Home.
   centered nearest the average of all the other chords (`fitOctave`), in the drag preview
   too. With no other chords it centers around C4 (middle C), not C3.
   Existing chords are never re-voiced automatically (that's the Smooth voicing button).
-- "Progressions" (`ProgressionMenu.tsx`, in the palette head): a dropdown with genre
+- "Progressions" (`ProgressionMenu.tsx`, in the main toolbar): a dropdown with genre
   submenus (hover switches genre after a short delay; ←/→ between columns). ~180
   progressions (no two with the same chords in the same mood; a test enforces it),
   curated most common first within each genre (`progressions.ts`), genres and progressions ordered most common first.
@@ -464,13 +463,27 @@ tracks; drums on channel 10 with General MIDI notes) or one part alone.
 
 ## Visual design
 
-- Dark UI. Layout top to bottom: header (the small, light, wide-spaced "chords are fun" wordmark with an (i) help tooltip
-  left; "Your sessions:" menu, + New session and a subtle Download MIDI pinned right) → main toolbar (dashed line above, solid below: Home, Options, metronome + volume on the
-  left; Progressions + die, Groove + die on the right; every dropdown here has a fixed width, long
-  text truncates) → home notice (after a home change) →
-  transport row right above the track (Play, Stop, Loop … Undo, Redo)
-  → ruler + track → notes bar (Notes toggle, Octave, Smooth voicing) + notes lane →
-  panel (inspector). Nothing below the details panel.
+- Dark UI. Layout top to bottom: header (the piano icon + "create a chord progression" in the
+  normal font, an (i) help tooltip headed "chords are fun"; right: "Your sessions:" menu, + New
+  session, a subtle Download MIDI) → **main toolbar** (dashed line above, solid below: Progressions
+  + die and Groove + die on the left, spaced apart; metronome + volume on the right; fixed-width
+  dropdowns, long text truncates) → home notice (after a home change) → **the timeline** (no panel around it, full width) →
+  two panels (`Panel.tsx`):
+  - The toolbar's right side: metronome + volume, then **Config:**, a dropdown (`ConfigMenu.tsx`)
+    showing "C major · 120 BPM · 4/4" and listing one setting per row, labels left, controls
+    lined up right: Song (Home; its picker opens over the list) and Timing (Tempo, Time,
+    Length, Grid).
+  - Timeline: icon-only side buttons (tooltips say what they do; no text) stretched to exactly the
+    timeline's height: Play/Pause, Stop, Loop on the left; + New (new chord), Undo, Redo on the right.
+  - **More** (collapsible, closed by default, saved per session as `moreOpen`): a row with the
+    notes-lane legend on the left and Inversion ↓/↑, Octave ↓/↑ and Smooth voicing on the right
+    (unusable until expanded; the ↑/↓ shortcuts still work), then the notes lane, lined up with the
+    timeline above (`--side` columns).
+  - **Chord details** (`DismissPanel`): not collapsible; it appears when one chord is selected or
+    stepped to, and goes away with the X at its top right (or when several chords are selected,
+    or none). Selecting a chord again brings it back.
+  The playhead CSS variable lives on the `.panels` wrapper (`data-playhead-scope`), so the
+  timeline and the notes lane share one playhead.
 - There is no Clear button: start over with + New session.
 - **Chord color = scale degree of the root** (hue = degree × 360/7), identical in
   palette, clips, lane and progression menu, so Dm, Dm7 and D (V/V) in C share the "2" color; how
@@ -478,6 +491,8 @@ tracks; drums on channel 10 with General MIDI notes) or one part alone.
   gray.
 - Fit colors: green in key, blue common move (borrowed/leading), orange outside;
   tension yellow (some bite) / red (clashing).
+- Clips are drawn 2px inside their real start/end (`CLIP_GAP_PX` in `Timeline.tsx`), so neighbors and the
+  track edge never touch; this is visual only, the times are unchanged.
 - Clips show chord name, roman numeral, and notes; narrow clips hide details via
   container queries.
 - On/off settings (Loop, 7ths, Metronome) are toggle buttons that light up, not
@@ -505,8 +520,7 @@ These were discussed and chosen deliberately; don't "fix" them without asking.
   slash chords are audible in "Just chords" too, while plain chords sound unchanged.
 - **Ableton's drag modifiers** (copy: Option/Ctrl; ignore grid: ⌘/Alt) rather than
   our own; on Mac this moved "ignore grid" from Alt to ⌘.
-- **The details panel never closes by itself** (only the chevron, or a multi-selection,
-  collapses it), chords and empty clips share one layout, the keyboard is anchored above
+- **The details panel never closes by itself** (only its X, or a multi-selection, hides it), chords and empty clips share one layout, the keyboard is anchored above
   the (variable) description, and the panel has a fixed height with paged ideas, so
   adding or switching clips never makes it jump.
 - **Ideas are clicked in, not dragged**: an empty clip's target is obvious, and the
@@ -522,9 +536,10 @@ These were discussed and chosen deliberately; don't "fix" them without asking.
 - **Chords are descriptions, not note lists**: keeps names readable, lets key changes
   keep roles, makes every edit one clear change. Note edits are pitch-class based; a
   name can't capture every voicing (Cadd9 with the D moved down still reads "Cadd9").
-- **Options** (`OptionsMenu.tsx`): tempo, time signature, length and grid behind one
-  header button that shows "120 BPM · 4/4 · 4 bars": defaults suit most sketching, so
-  they stay out of the way.
+- **Config menu** (`ConfigMenu.tsx`; `OptionsMenu.tsx` has the tempo/time/length/grid fields,
+  `HomeMenu.tsx` Home): defaults suit most sketching, so these live in one dropdown, out of the
+  way; the things used constantly (Progressions, Groove, metronome) stay in the toolbar.
+- **Timeline buttons are icons only** (tooltips explain them), so the side columns stay narrow.
 - **Custom dropdowns only where native selects can't show enough** (descriptions,
   submenus); simple value pickers (Key, Length, Grid) stay native.
 - **The palette stays 7 chords**; extensions, sus, altered etc. are variations in the

@@ -107,6 +107,12 @@ button.help-icon {
   display: block;
 }
 
+.help-tip .help-brand {
+  column-span: all;
+  margin-bottom: 0.8rem;
+  font-size: 1rem;
+}
+
 .help-tip h2 {
   margin: 0 0 0.5rem;
   font-size: 0.85rem;
@@ -161,21 +167,25 @@ button.help-icon {
   margin: 0;
 }
 
-/* Logo-like wordmark: small, light, lowercase, wide-spaced. */
+/* The page heading: the piano icon, then what the app does, in the normal font. */
 h1 {
   margin: 0;
   font-size: 1rem;
-  font-weight: 300;
-  letter-spacing: 0.2em;
-  text-transform: lowercase;
+  font-weight: 500;
 }
 
-/* The main toolbar: song settings | progressions + groove ... session (right). */
+.logo-icon {
+  display: block;
+  border-radius: 5px;
+}
+
+/* The main toolbar: Progressions + Groove on the left, the metronome on the right. */
 .main-toolbar {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 0.6rem 0.8rem;
+  justify-content: space-between;
+  gap: 0.6rem 1.5rem;
   padding: 0.6rem 0.6rem;
   margin-bottom: 0;
   border-top: 1px dashed var(--border);
@@ -186,11 +196,7 @@ h1 {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-}
-
-.toolbar-right {
-  margin-left: auto;
+  gap: 2rem;
 }
 
 /* Toolbar controls never change size with their content. */
@@ -199,10 +205,8 @@ h1 {
   white-space: nowrap;
   overflow: hidden;
 }
-.main-toolbar .home-menu .dropdown-trigger { width: 8.5rem; }
-.main-toolbar .options-menu .dropdown-trigger { width: 12rem; }
-.main-toolbar .progression-menu .dropdown-trigger { width: 8.5rem; }
-.main-toolbar .groove-menu .dropdown-trigger { width: 10rem; }
+.main-toolbar .progression-menu .dropdown-trigger { width: 9.5rem; }
+.main-toolbar .groove-menu .dropdown-trigger { width: 11rem; }
 .header-actions .session-trigger { width: 14rem; }
 .main-toolbar input.volume { width: 4rem; }
 
@@ -218,28 +222,164 @@ h1 {
   gap: 1rem;
 }
 
-/* Toolbar above the track: playback | track settings | undo/redo */
-.toolbar {
-  position: relative;
+/* The panels under the toolbar. The playhead variable is shared by the timeline and the notes lane. */
+.panels {
+  --side: 2.75rem;
+  --side-gap: 0.6rem;
+}
+
+/* Timeline: play/stop/loop on the left, new/undo/redo on the right, as tall as the timeline. */
+.timeline-row {
+  margin-top: 0.6rem;
+  display: grid;
+  grid-template-columns: var(--side) minmax(0, 1fr) var(--side);
+  gap: var(--side-gap);
+  align-items: stretch;
+}
+
+.side-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.side-buttons button,
+.side-buttons button.play {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+}
+
+/* Config menu: one setting per row, labels on the left, controls lined up on the right. */
+.config-panel {
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  width: 22rem;
+  padding: 1rem 1.1rem;
+  color: var(--text);
+}
+
+.config-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.config-heading {
+  margin: 0;
+  padding-bottom: 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.config-panel .dropdown,
+.config-panel .field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--muted);
+}
+
+.config-panel .dropdown-trigger,
+.config-panel select,
+.config-panel .bpm {
+  width: 11rem;
+}
+
+.config-panel .dropdown-trigger {
+  justify-content: space-between;
+  color: var(--text);
+}
+
+.config-panel .bpm {
+  justify-content: flex-start;
+}
+
+.config-panel input[type='number'] {
+  width: 5.5rem;
+}
+
+.config-panel .field-time {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.config-panel .field-time > label {
+  flex: 1;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+}
+
+.config-panel .custom-sig {
+  width: 11rem;
+  justify-content: flex-start;
+}
+
+.config-panel .custom-sig select {
+  width: auto;
+  flex: 1;
+}
+
+/* The Home picker opens over the Config list, anchored to its right edge. */
+.config-panel .home-panel {
+  right: 0;
+  left: auto;
+}
+
+.config-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.main-toolbar .config-menu > .dropdown-trigger {
+  width: 16rem;
+}
+
+/* Advanced: the voicing buttons, then the notes lane lined up with the timeline above. */
+.advanced-controls {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem 1.75rem;
-  margin: 0.4rem 0;
+  justify-content: space-between;
+  gap: 0.6rem 1rem;
+  margin-bottom: 0.6rem;
 }
 
-.toolbar button {
-  height: 30px;
+.advanced-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1.2rem;
+}
+
+.advanced-buttons button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.9rem;
   padding-block: 0;
 }
 
-.toolbar .group label {
-  margin-left: 0.4rem;
+.advanced-buttons button.arrow {
+  width: 1.9rem;
+  padding-inline: 0;
 }
 
-/* Transport on the left, undo/redo on the right, right above the track. */
-.toolbar {
-  justify-content: space-between;
+.lane-wrap {
+  margin-inline: calc(var(--side) + var(--side-gap) - 1rem);
 }
 
 .palette-head {
@@ -558,7 +698,7 @@ button.toggle[aria-pressed='true']:hover {
   z-index: 2;
 }
 
-/* All playheads (ruler, track, notes lane) follow one variable set on .timeline. */
+/* All playheads (ruler, track, notes lane) follow one variable set on .panels. */
 .playhead,
 .playhead-marker {
   left: var(--playhead);
@@ -800,38 +940,12 @@ h2 {
 
 /* Notes lane: the chords' actual notes, piano-roll style */
 
-.lane-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.6rem;
-  margin: 0.6rem 0 0;
-}
-
-/* Every button in the notes bar is the same height, arrows included. */
-.lane-bar button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 1.9rem;
-  padding-block: 0;
-}
-
-.lane-bar button.arrow {
-  width: 1.9rem;
-  padding-inline: 0;
-}
-
 .lane-legend {
   display: flex;
   align-items: center;
   gap: 0.35rem;
   font-size: 0.75rem;
   color: var(--muted);
-}
-
-.lane-bar > button:last-child {
-  margin-left: auto;
 }
 
 .out-swatch {
@@ -1377,11 +1491,6 @@ input[type='text'][aria-invalid='true'] {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  margin-left: auto;
-}
-
-.lane-bar > .octave + button {
-  margin-left: 0;
 }
 
 /* Rich dropdowns (scale, progressions): room for a description per option. */
@@ -1457,7 +1566,7 @@ input[type='text'][aria-invalid='true'] {
 }
 
 .progression-panel {
-  right: 0;
+  left: 0;
   display: grid;
   grid-template-columns: 11rem minmax(0, 1fr);
   width: min(44rem, calc(100vw - 3rem));
@@ -1817,23 +1926,6 @@ button.icon {
   padding: 0.45rem 0.55rem;
 }
 
-.options-panel {
-  right: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  width: 17rem;
-  padding: 0.8rem;
-}
-
-.options-panel label {
-  justify-content: space-between;
-}
-
-.options-panel .custom-sig {
-  justify-content: flex-end;
-}
-
 .bpm {
   display: flex;
   align-items: center;
@@ -1857,10 +1949,6 @@ button.icon {
     font-size: 0.82rem;
     letter-spacing: -0.01em;
   }
-}
-
-.lane-bar > .octave + .octave {
-  margin-left: 0.6rem;
 }
 
 /* Random buttons: a die beside the Progressions and Groove menus. */
@@ -2266,4 +2354,31 @@ button.tinted {
 
 button.tinted:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 26%, var(--surface));
+}
+
+/* A panel that is dismissed with an X instead of collapsed (the chord details). */
+.panel-bar.static {
+  cursor: default;
+}
+
+.panel-bar.static:hover {
+  background: transparent;
+}
+
+.panel-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  margin: -0.2rem -0.5rem -0.2rem auto;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+}
+
+.panel-close:hover {
+  color: var(--text);
+  background: var(--surface-hover);
 }

@@ -1,7 +1,6 @@
 import { useState } from 'react'
-import { BAR_OPTIONS, GRIDS, sigLabel, type GridKey, type TimeSignature } from '../music/timeline'
+import { BAR_OPTIONS, GRIDS, type GridKey, type TimeSignature } from '../music/timeline'
 import { TimeSignatureControl } from './TimeSignatureControl'
-import { useDropdown } from './useDropdown'
 
 type Props = {
   bpm: number
@@ -15,59 +14,43 @@ type Props = {
 }
 
 /**
- * Tempo, time signature, length and grid: settings most people never need for sketching
- * (120 BPM, 4/4, 4 bars, 1/4 is fine), so they live behind one button that shows the
- * current values.
+ * Tempo, time signature, length and grid, each with its own space in the Configuration
+ * panel (they used to hide behind one dropdown).
  */
-export function OptionsMenu({ bpm, onBpm, sig, onSig, bars, onBars, gridKey, onGrid }: Props) {
-  const { open, setOpen, rootRef } = useDropdown()
+export function OptionsFields({ bpm, onBpm, sig, onSig, bars, onBars, gridKey, onGrid }: Props) {
   return (
-    <div className="dropdown options-menu" ref={rootRef}>
-      <button
-        className="dropdown-trigger"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        title="Tempo, time signature, length and grid"
-        onClick={() => setOpen((o) => !o)}
-      >
-        {bpm} BPM · {sigLabel(sig)} · {bars} {bars === 1 ? 'bar' : 'bars'}
-        <span className="caret" aria-hidden>
-          ▾
+    <>
+      <label className="field">
+        Tempo
+        <span className="bpm">
+          <TempoInput bpm={bpm} onBpm={onBpm} />
+          BPM
         </span>
-      </button>
-      {open && (
-        <div className="dropdown-panel options-panel" role="dialog" aria-label="Options">
-          <label>
-            Tempo
-            <span className="bpm">
-              <TempoInput bpm={bpm} onBpm={onBpm} />
-              BPM
-            </span>
-          </label>
-          <TimeSignatureControl sig={sig} onChange={onSig} />
-          <label>
-            Length
-            <select value={bars} onChange={(e) => onBars(Number(e.target.value))}>
-              {BAR_OPTIONS.map((n) => (
-                <option key={n} value={n}>
-                  {n} {n === 1 ? 'bar' : 'bars'}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Grid
-            <select value={gridKey} onChange={(e) => onGrid(e.target.value as GridKey)}>
-              {GRIDS.map((g) => (
-                <option key={g.key} value={g.key}>
-                  {g.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      )}
-    </div>
+      </label>
+      <span className="field field-time">
+        <TimeSignatureControl sig={sig} onChange={onSig} />
+      </span>
+      <label className="field">
+        Length
+        <select value={bars} onChange={(e) => onBars(Number(e.target.value))}>
+          {BAR_OPTIONS.map((n) => (
+            <option key={n} value={n}>
+              {n} {n === 1 ? 'bar' : 'bars'}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="field">
+        Grid
+        <select value={gridKey} onChange={(e) => onGrid(e.target.value as GridKey)}>
+          {GRIDS.map((g) => (
+            <option key={g.key} value={g.key}>
+              {g.label}
+            </option>
+          ))}
+        </select>
+      </label>
+    </>
   )
 }
 

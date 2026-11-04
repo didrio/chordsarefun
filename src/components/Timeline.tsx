@@ -42,11 +42,17 @@ type Props = {
   onRemove: (id: string) => void
   /** Double-click on empty space: add an empty clip there. */
   onCreateEmpty: (ticks: number) => void
-  /** Rendered under the track (the notes lane); can use the `.playhead` class to follow the playhead. */
-  children?: ReactNode
 }
 
 const pct = (ticks: number, total: number) => `${(ticks / total) * 100}%`
+
+/** Visual gap kept on each side of a clip, so neighbors (and the track edge) never touch. */
+const CLIP_GAP_PX = 2
+/** A clip's left/width as CSS: its real position, pulled in by the gap on both sides. */
+const clipBox = (clip: Clip, total: number) => ({
+  left: `calc(${pct(clip.start, total)} + ${CLIP_GAP_PX}px)`,
+  width: `calc(${pct(clip.length, total)} - ${CLIP_GAP_PX * 2}px)`,
+})
 
 const CHANGE_LABELS: Record<ClipChange, { icon: string; text: string }> = {
   swap: { icon: '⇄', text: 'swap' },
@@ -79,14 +85,24 @@ export function Timeline(props: Props) {
     let raf = 0
     const frame = () => {
       const t = playheadTicks() % totalTicks
-      // Every playhead (ruler marker, track line, notes lane line) reads this variable.
-      rootRef.current?.style.setProperty('--playhead', pct(t, totalTicks))
+      // Every playhead (ruler marker, track line, notes lane line) reads this variable, set on
+      // the shared scope around the panels (the notes lane lives in another panel).
+      const scope = rootRef.current?.closest<HTMLElement>('[data-playhead-scope]') ?? rootRef.current
+      scope?.style.setProperty('--playhead', pct(t, totalTicks))
       setActiveId(clips.find((c) => c.start <= t && t < clipEnd(c))?.id ?? null)
       raf = requestAnimationFrame(frame)
     }
     raf = requestAnimationFrame(frame)
     return () => cancelAnimationFrame(raf)
   }, [isPlaying, clips, totalTicks])
+
+  // Not playing: the playhead sits at the app's position. Set here (not as a React style) so
+  // stopping resets it even though the animation above wrote its own value while playing.
+  useEffect(() => {
+    if (isPlaying) return
+    const scope = rootRef.current?.closest<HTMLElement>('[data-playhead-scope]') ?? rootRef.current
+    scope?.style.setProperty('--playhead', pct(props.playhead, totalTicks))
+  }, [isPlaying, props.playhead, totalTicks])
 
   const startResize = (id: string, edge: 'start' | 'end') => (e: PointerEvent) => {
     e.stopPropagation()
@@ -124,13 +140,12 @@ export function Timeline(props: Props) {
   // Grid lines restart at each bar; with the grid off, show (dotted) beat lines.
   const lineTicks = gridTicks || props.beatTicks
   const trackClasses = ['track', !gridTicks && 'grid-off', props.dragging && 'dragging', props.invalid && 'invalid']
-  const playheadLeft = pct(props.playhead, totalTicks)
   // The chord after each clip, so "leading" chords can say whether they resolve.
   const sorted = [...clips].sort((a, b) => a.start - b.start)
   const nextChord = new Map(sorted.map((c, i) => [c.id, sorted[i + 1]?.chord]))
 
   return (
-    <div ref={rootRef} className="timeline" style={{ '--playhead': playheadLeft } as CSSProperties}>
+    <div ref={rootRef} className="timeline">
       <div
         className="ruler"
         onPointerDown={startScrub}
@@ -197,8 +212,7 @@ export function Timeline(props: Props) {
           ]
           const change = props.changes?.get(clip.id)
           const style = {
-            left: pct(clip.start, totalTicks),
-            width: pct(clip.length, totalTicks),
+            ...clipBox(clip, totalTicks),
             '--hue': degree === null ? undefined : (degree * 360) / 7,
           } as CSSProperties
           return (
@@ -245,7 +259,6 @@ export function Timeline(props: Props) {
 
         <div className="playhead" />
       </div>
-      {props.children}
     </div>
   )
 }
@@ -271,7 +284,7 @@ function EmptyClip({ clip, handle, ...props }: Props & { clip: Clip; handle: (ed
     <div
       className={classes.filter(Boolean).join(' ')}
       data-diatonic="no"
-      style={{ left: pct(clip.start, totalTicks), width: pct(clip.length, totalTicks) }}
+      style={clipBox(clip, totalTicks)}
       title="Empty spot: select it for chord ideas, or drop a chord on it"
       onPointerDown={(e) => {
         e.stopPropagation()
