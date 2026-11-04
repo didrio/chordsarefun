@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { ChordInspector, type InspectorTab } from './components/ChordInspector'
 import { NotesLane } from './components/NotesLane'
-import { Palette, SpiceRow } from './components/Palette'
 import { ProgressionMenu } from './components/ProgressionMenu'
 import { HomeMenu } from './components/HomeMenu'
 import { HomeNotice } from './components/HomeNotice'
@@ -15,7 +14,7 @@ import { describeDrop, heldName } from './dropLabel'
 import { COPY_KEY, FREE_KEY } from './platform'
 import { clearScratch, sessionPrefix, useSessions, type Sessions } from './session'
 import { useHistory } from './history'
-import { load, usePersistentState } from './persist'
+import { usePersistentState } from './persist'
 import { clickSelect, EMPTY_SELECTION, pruneSelection, selectAll, type ClickMods, type Selection } from './selection'
 import { shortcutFor } from './shortcuts'
 import { DEFAULT_TRACK, isTrack, migrateTrack } from './track'
@@ -35,7 +34,7 @@ import {
 } from './music/audio'
 import { canInvert, chordName, invert, shiftOctave, type Chord } from './music/chord'
 import { downloadMidi } from './music/midi'
-import { spiceChords, suggestHome, type Home } from './music/home'
+import { suggestHome, type Home } from './music/home'
 import { PROGRESSIONS, progressionChords, progressionClips, type Progression } from './music/progressions'
 import {
   applyGroove,
@@ -48,11 +47,8 @@ import {
 } from './music/grooves'
 import {
   chordToKey,
-  diatonicChords,
-  FLAVORS,
   isDiatonic,
   rootDegree,
-  type ChordSpec,
   type PaletteFlavor,
 } from './music/theory'
 import { fitToNeighbors, smoothVoicing } from './music/voicing'
@@ -119,11 +115,10 @@ const isSelection = (v: unknown) => {
 }
 
 /** Elements whose clicks don't clear the clip selection. */
-const KEEPS_SELECTION = '.clip, .palette .chord, button, input, select, label, summary, .ruler, .panel, .notes-lane, .dropdown'
+const KEEPS_SELECTION = '.clip, button, input, select, label, summary, .ruler, .panel, .notes-lane, .dropdown'
 
-const isFlavor = (v: unknown) => FLAVORS.some((f) => f.key === v)
-/** Before palette flavors there was a 7ths on/off setting; start from it. */
-const initialFlavor = (): PaletteFlavor => (load('sevenths', false, (v) => typeof v === 'boolean') ? '7ths' : 'triads')
+/** Chord size for ideas. The Triads/7ths/9ths toggle is gone with the palette, so ideas use triads. */
+const flavor: PaletteFlavor = 'triads'
 
 const DEFAULT_BPM = 120
 
@@ -145,7 +140,6 @@ type WorkspaceProps = {
 function Workspace({ prefix, sessions, onSaveAs, flushRef }: WorkspaceProps) {
   // Everything here is saved in the session (keys listed in SESSION_KEYS).
   const k = (key: string) => prefix + key
-  const [flavor, setFlavor] = usePersistentState<PaletteFlavor>(k('flavor'), initialFlavor(), isFlavor)
   // Hidden by default: powerful, but a lot on first sight.
   const [showNotes, setShowNotes] = usePersistentState(k('notesLaneOpen'), false)
   const [bpm, setBpm] = usePersistentState(k('bpm'), DEFAULT_BPM)
@@ -211,8 +205,6 @@ function Workspace({ prefix, sessions, onSaveAs, flushRef }: WorkspaceProps) {
   const totalTicks = bars * barTicks
   // Undo can shorten the track under the playhead.
   const playheadPos = playhead < totalTicks ? playhead : 0
-  const palette = useMemo(() => diatonicChords(tonic, mode, flavor), [tonic, mode, flavor])
-  const spice = useMemo(() => spiceChords(tonic, mode, flavor), [tonic, mode, flavor])
   const homeSuggestion = useMemo(() => suggestHome(clips, { tonic, mode }), [clips, tonic, mode])
   /**
    * After a home change: the home the chords were written in, offered as "move them".
@@ -481,8 +473,6 @@ function Workspace({ prefix, sessions, onSaveAs, flushRef }: WorkspaceProps) {
           return togglePlay()
         case 'stop':
           return stop()
-        case 'chord':
-          return palette[shortcut.index] && hearChord(palette[shortcut.index].chord)
         case 'step':
           if (!stepSelection(shortcut.dir)) nudgePlayhead(shortcut.dir)
           return
@@ -643,22 +633,6 @@ function Workspace({ prefix, sessions, onSaveAs, flushRef }: WorkspaceProps) {
 
       <section>
         <div className="palette-head">
-          <p className="palette-hint" title="Drop on a gap or a clip's edge to add, on a clip's middle to replace">
-            Click to hear · drag to add
-          </p>
-          <span className="segmented" role="group" aria-label="Palette chord size">
-            {FLAVORS.map((f) => (
-              <button
-                key={f.key}
-                className="toggle"
-                aria-pressed={flavor === f.key}
-                onClick={() => setFlavor(f.key)}
-                title={f.title}
-              >
-                {f.label}
-              </button>
-            ))}
-          </span>
           <ProgressionMenu tonic={tonic} onUse={loadProgression} onPreview={hearProgression} onRandom={randomProgression} />
           <GrooveMenu
             groove={groove}
@@ -666,25 +640,6 @@ function Workspace({ prefix, sessions, onSaveAs, flushRef }: WorkspaceProps) {
             isPlaying={isPlaying}
             onTogglePlay={togglePlay}
             onRandom={randomGroove}
-          />
-        </div>
-        <div className="chord-picker">
-          <div className="picker-half">
-            <span className="picker-label">In key</span>
-            <Palette
-              chords={palette}
-              onPick={(spec: ChordSpec) => hearChord(spec.chord)}
-              onPointerDown={(chord, e) =>
-                beginDrag({ id: crypto.randomUUID(), chord: chord.chord, existing: false, grabOffset: 0 }, e)
-              }
-            />
-          </div>
-          <SpiceRow
-            spice={spice}
-            tonic={tonic}
-            mode={mode}
-            onPick={(s) => hearChord(s.chord)}
-            onPointerDown={(s, e) => beginDrag({ id: crypto.randomUUID(), chord: s.chord, existing: false, grabOffset: 0 }, e)}
           />
         </div>
       </section>
@@ -907,10 +862,6 @@ function Workspace({ prefix, sessions, onSaveAs, flushRef }: WorkspaceProps) {
               <dd>Select a range of clips · add/remove one clip</dd>
               <dt>⌘A / Ctrl+A</dt>
               <dd>Select all clips</dd>
-              <dt>Click · drag a palette chord</dt>
-              <dd>Hear it · add it (or drop on a clip to replace it)</dd>
-              <dt>1 – 7</dt>
-              <dd>Hear that palette chord</dd>
               <dt>← →</dt>
               <dd>Previous / next clip, or move the playhead</dd>
               <dt>↑ ↓</dt>

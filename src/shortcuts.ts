@@ -5,8 +5,6 @@ export type Shortcut =
   | { type: 'redo' }
   | { type: 'playPause' }
   | { type: 'stop' }
-  /** Add (or replace the selected clip with) palette chord 0–6. */
-  | { type: 'chord'; index: number }
   /** Previous/next clip, or move the playhead when nothing is selected. */
   | { type: 'step'; dir: -1 | 1 }
   /** Move the selected chords one inversion up/down. */
@@ -30,7 +28,6 @@ export function shortcutFor(e: Keys): Shortcut | null {
   // Leave every other modifier combo (browser shortcuts like ⌘1, ⌘L) alone.
   if (mod || e.altKey) return null
   if (key === ' ') return { type: e.shiftKey ? 'stop' : 'playPause' }
-  if (/^[1-7]$/.test(key)) return { type: 'chord', index: Number(key) - 1 }
   if (key === 'arrowleft') return { type: 'step', dir: -1 }
   if (key === 'arrowright') return { type: 'step', dir: 1 }
   // Shift+↑/↓ is octave transpose, as in Ableton's MIDI editor.

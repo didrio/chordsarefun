@@ -92,29 +92,18 @@ colors, fit dots and plain-language reasons, always relative to Home.
 
 ## Behavior
 
-### Adding chords (palette)
+### Adding chords
 
-- The palette shows the 7 chords of the home key at the chosen size (Triads / 7ths /
-  9ths toggle next to the palette, a palette view setting, not a song setting; 9ths
-  skip a ♭9, which clashes, and stay 7ths), each with its number (1–7), chord name,
-  roman numeral, and notes. It stays 7 chords; variations live in the inspector.
-- **Spice row** under the palette (`spiceChords` in `home.ts`, `SpiceRow`): up to 8
-  popular chords from outside the key, most useful first, at the palette size, each
-  tagged with its reason ("borrowed", "→ G"). Major-type homes: minor iv, ♭VII, V of V,
-  ♭VI, V of vi, ♭III, V of ii, V of IV, V of iii. Minor-type: major V (harmonic minor),
-  major IV (Dorian), major I, V of iv, ♭II, V of v, V of VI. Chords already in the key
-  are skipped. Click / drag / replace exactly like palette chords (no number keys).
-- **Click (or press 1–7) only plays the chord** (over the track if it's playing), so
-  chords can be tried in context without touching the track. **Dragging** is how
-  chords get on the track: into a gap/edge to add, onto a clip's middle to replace
-  (see Dragging). Same for Spice chords. The dropped clip ends up selected, so the
-  inspector shows the chord just placed. (`addChord` in timeline.ts is kept, tested,
-  but unused by the UI.)
+- **The palette (7 in-key chords), the Spice row and the Triads/7ths/9ths toggle were
+  removed**: the inspector's Alternatives and Ideas cover chord ideas now. The 1–7
+  shortcuts went with them. Chords get on the track via Progressions, double-click
+  empty clips + Ideas / typing a chord in the inspector, and copy-drag of clips.
+  `Palette.tsx` (+ `SpiceRow`), `spiceChords`, `diatonicChords` and the `.chord-picker`
+  CSS are now unused by the UI (kept, tested; delete when sure they're not coming back).
+- Ideas use triads (the size toggle is gone; `flavor` is a constant in `App.tsx`).
 - Previews (clicking a chord anywhere) play it as the track would: the chord on the
   chord instrument plus its bass note on the bass instrument when the Bass part is on.
-- In-key chords and Spice sit side by side in one row (`.chord-picker`), each half
-  filling half the width with narrow "book" cards, labeled "In key" and "Spice ·
-  outside the key".
+- `useChordDrag` can still drag a *new* chord in (palette-style) but nothing in the UI starts one.
 
 ### Chord inspector, notes lane, progressions
 
@@ -406,7 +395,6 @@ browser.
 |---|---|
 | Space · Shift+Space | Play/pause · stop |
 | L · M | Loop · metronome on/off |
-| 1–7 | Hear that palette chord |
 | ← / → | Previous/next clip (with a selection), else move playhead one grid step |
 | ↑ / ↓ | Selected chords (or all) one inversion higher/lower |
 | Shift+↑ / Shift+↓ | Selected chords (or all) an octave up/down |
@@ -460,8 +448,8 @@ tracks; drums on channel 10 with General MIDI notes) or one part alone.
 ## Visual design
 
 - Dark UI. Layout top to bottom: header (title, Sessions menu | Home, Options, metronome icon +
-  volume) → home notice (after a home change) → palette head (hint | Triads/7ths/9ths,
-  Progressions + die, Groove + die) → chord picker (in-key half | Spice half) →
+  volume) → home notice (after a home change) → palette head (Progressions + die,
+  Groove + die) →
   transport row right above the track (Play, Stop, Loop … Undo, Redo)
   → ruler + track → notes bar (Notes toggle, Octave, Smooth voicing) + notes lane →
   panel (inspector) → footer

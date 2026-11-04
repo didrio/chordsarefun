@@ -12,11 +12,9 @@ describe('shortcutFor', () => {
     expect(press('M')).toEqual({ type: 'toggleMetronome' })
   })
 
-  it('maps 1–7 to palette chords, and nothing else', () => {
-    expect(press('1')).toEqual({ type: 'chord', index: 0 })
-    expect(press('7')).toEqual({ type: 'chord', index: 6 })
-    expect(press('8')).toBeNull()
-    expect(press('0')).toBeNull()
+  it('ignores number keys', () => {
+    expect(press('1')).toBeNull()
+    expect(press('7')).toBeNull()
   })
 
   it('maps undo/redo on both platforms', () => {
