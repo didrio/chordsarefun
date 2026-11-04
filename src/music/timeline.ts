@@ -209,6 +209,30 @@ export function addEmptyClip(clips: Clip[], id: string, x: number, total: number
 }
 
 /**
+ * The "+ New" button: an empty spot in the first gap on the track (never longer than a
+ * bar, even if the gap is bigger). With no gap, it's added at the end by taking up to
+ * half of the last clip, which keeps its start and just gets shorter. Null if nothing
+ * can give way.
+ */
+export function addNextEmptyClip(clips: Clip[], id: string, total: number, barTicks: number = TICKS_PER_BAR) {
+  const sorted = sortClips(clips)
+  let at = 0
+  for (const c of [...sorted, { start: total } as Clip]) {
+    if (c.start - at >= MIN_CLIP_TICKS) {
+      return sortClips([...sorted, { id, chord: null, start: at, length: Math.min(barTicks, c.start - at) }])
+    }
+    at = Math.max(at, c.start + (c.length ?? 0))
+  }
+  const last = sorted[sorted.length - 1]
+  if (!last || last.length < 2 * MIN_CLIP_TICKS) return null
+  const length = Math.max(MIN_CLIP_TICKS, Math.min(barTicks, Math.floor(last.length / 2)))
+  return sortClips([
+    ...sorted.map((c) => (c.id === last.id ? { ...c, length: last.length - length } : c)),
+    { id, chord: null, start: clipEnd(last) - length, length },
+  ])
+}
+
+/**
  * Drop a chord at `pos`:
  * - in empty space: fill from `pos` up to the next clip (max 1 bar)
  * - inside a clip: split it; the new chord takes the remainder

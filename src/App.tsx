@@ -5,13 +5,14 @@ import { ProgressionMenu } from './components/ProgressionMenu'
 import { HomeMenu } from './components/HomeMenu'
 import { HomeNotice } from './components/HomeNotice'
 import { GrooveMenu } from './components/GrooveMenu'
+import { ArrowIcon } from './components/ArrowIcon'
+import { HelpTip } from './components/HelpTip'
 import { MidiMenu } from './components/MidiMenu'
 import { OptionsMenu } from './components/OptionsMenu'
 import { SessionMenu } from './components/SessionMenu'
 import { Timeline } from './components/Timeline'
 import { useChordDrag, type DragState } from './components/useChordDrag'
 import { describeDrop, heldName } from './dropLabel'
-import { COPY_KEY, FREE_KEY } from './platform'
 import { clearScratch, sessionPrefix, useSessions, type Sessions } from './session'
 import { useHistory } from './history'
 import { usePersistentState } from './persist'
@@ -51,9 +52,10 @@ import {
   rootDegree,
   type PaletteFlavor,
 } from './music/theory'
-import { fitToNeighbors, smoothVoicing } from './music/voicing'
+import { fitOctave, smoothVoicing } from './music/voicing'
 import {
   addEmptyClip,
+  addNextEmptyClip,
   chordClips,
   dropChanges,
   fitToLength,
@@ -98,9 +100,20 @@ export default function App() {
     resetScratch.current = fromScratch
     sessions.open(id)
   }
+  /** Save what's on screen first, so a copy has the latest edits and undo history. */
+  const duplicate = (id: string | null) => {
+    if (id === sessions.current) flushRef.current()
+    sessions.duplicate(id)
+  }
+  const newSession = () => {
+    flushRef.current()
+    sessions.open(sessions.create())
+  }
   return (
     <Workspace
       key={sessions.current ?? 'scratch'}
+      onDuplicate={duplicate}
+      onNew={newSession}
       prefix={sessionPrefix(sessions.current)}
       sessions={sessions}
       onSaveAs={saveAs}
@@ -133,11 +146,13 @@ type WorkspaceProps = {
   prefix: string
   sessions: Sessions
   onSaveAs: (name: string) => void
+  onDuplicate: (id: string | null) => void
+  onNew: () => void
   /** Set to this workspace's "save everything now", so a session can be copied right away. */
   flushRef: { current: () => void }
 }
 
-function Workspace({ prefix, sessions, onSaveAs, flushRef }: WorkspaceProps) {
+function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }: WorkspaceProps) {
   // Everything here is saved in the session (keys listed in SESSION_KEYS).
   const k = (key: string) => prefix + key
   // Hidden by default: powerful, but a lot on first sight.
@@ -155,7 +170,6 @@ function Workspace({ prefix, sessions, onSaveAs, flushRef }: WorkspaceProps) {
     'flavors',
     (v) => v === 'flavors' || v === 'ideas',
   )
-  const [tipsOpen, setTipsOpen] = usePersistentState(k('tipsOpen'), false)
   // The details panel shows the inspected clip: the last one selected on its own. It
   // stays when you click elsewhere (deselect); only selecting another clip switches it.
   const [inspectedId, setInspectedId] = usePersistentState<string | null>(
@@ -342,29 +356,17 @@ function Workspace({ prefix, sessions, onSaveAs, flushRef }: WorkspaceProps) {
     if (target >= 0 && target < totalTicks) seek(target)
   }
 
-  /** Start over: the default track, groove and tempo. Workspace preferences (grid, loop, metronome, display) stay. */
-  const isFresh =
-    clips.length === 0 &&
-    bars === DEFAULT_TRACK.bars &&
-    tonic === DEFAULT_TRACK.tonic &&
-    mode === DEFAULT_TRACK.mode &&
-    sig.beats === DEFAULT_TRACK.sig.beats &&
-    sig.unit === DEFAULT_TRACK.sig.unit &&
-    bpm === DEFAULT_BPM &&
-    JSON.stringify(groove) === JSON.stringify(DEFAULT_GROOVE)
-  const clearAll = () => {
-    track.commit(() => DEFAULT_TRACK)
-    setGroove(DEFAULT_GROOVE)
-    setBpm(DEFAULT_BPM)
-    clearSelection()
-    stop()
-  }
+  /** Every chord on the track (except one clip's own): what a new chord's octave is fitted to. */
+  const otherChords = (exceptId?: string) =>
+    chordClips(sortedClips)
+      .filter((c) => c.id !== exceptId)
+      .map((c) => c.chord)
 
   /**
    * Clicking a palette or spice chord only plays it (over the track, if it's playing), so
    * you can try chords in context without touching the track. Dragging places them.
    */
-  const hearChord = (chord: Chord) => previewChord(chord)
+  const hearChord = (chord: Chord) => previewChord(fitOctave(chord, otherChords()))
 
   /** Change the chords of clips `ids` (one undo step) and play the first result. */
   const editChords = (ids: string[], update: (chord: Chord) => Chord) => {
@@ -376,30 +378,20 @@ function Workspace({ prefix, sessions, onSaveAs, flushRef }: WorkspaceProps) {
 
   /**
    * Set the inspected clip's chord (one undo step). A fresh chord (typed, an idea, built
-   * on the keyboard) is voiced to fit its neighbors, like a chord dragged in; edits of
+   * on the keyboard) is moved to the octave nearest the other chords (its inversion is kept), like a chord dragged in; edits of
    * the current chord (notes, bass, inversion, flavor) keep its voicing.
    */
   const setInspectedChord = (clip: Clip, chord: Chord, fresh = false) => {
-    const { prev, next } = spotOf(clip.id)
-    const voiced = fresh ? fitToNeighbors(chord, prev ?? clip.chord, next ?? clip.chord) : chord
+    const voiced = fresh ? fitOctave(chord, otherChords(clip.id)) : chord
     setClips((c) => c.map((x) => (x.id === clip.id ? { ...x, chord: voiced } : x)))
   }
 
-  /**
-   * Inversion up/down (↑/↓, the notes bar, a clip's buttons): the selected chords, or all
-   * of them when nothing is selected; a clip's own buttons on an unselected clip move just
-   * it. They move together: if any can't, none do.
-   */
-  const invertTargets = (id?: string) =>
-    id && !selectedIds.includes(id) ? chordClips(sortedClips).filter((c) => c.id === id) : octaveTargets
-  const canInvertAll = (dir: 1 | -1, id?: string) => {
-    const targets = invertTargets(id)
-    return targets.length > 0 && targets.every((c) => canInvert(c.chord, dir))
-  }
-  const invertChords = (dir: 1 | -1, id?: string) => {
-    if (!canInvertAll(dir, id)) return
+  /** Inversion up/down (↑/↓, the notes bar): the selected chords, or all when nothing is selected. They move together: if any can't, none do. */
+  const canInvertAll = (dir: 1 | -1) => octaveTargets.length > 0 && octaveTargets.every((c) => canInvert(c.chord, dir))
+  const invertChords = (dir: 1 | -1) => {
+    if (!canInvertAll(dir)) return
     editChords(
-      invertTargets(id).map((c) => c.id),
+      octaveTargets.map((c) => c.id),
       (c) => invert(c, dir),
     )
   }
@@ -496,21 +488,28 @@ function Workspace({ prefix, sessions, onSaveAs, flushRef }: WorkspaceProps) {
     return () => window.removeEventListener('keydown', onKey)
   })
 
+  /** "+ New": an empty spot in the first free space (see addNextEmptyClip), selected so its ideas show. */
+  const newChord = () => {
+    const id = crypto.randomUUID()
+    const next = addNextEmptyClip(clips, id, totalTicks, barTicks)
+    if (!next) return
+    setClips(() => next)
+    select({ ids: [id], anchor: id }, next)
+  }
+
   const trackRef = useRef<HTMLDivElement>(null)
   /**
-   * The drop plan for a drag. A new chord (from the palette or spice) is voiced to fit
-   * its neighbors, so it lands in the register the track is already in.
+   * The drop plan for a drag. A new chord (from the palette or spice) is moved to the
+   * octave nearest the other chords, so it lands in the register the track is already in.
    */
   const plan = (d: DragState) => {
     // Option/Ctrl turns a move into a copy, live, as in a DAW.
     const held = d.held.existing ? { ...d.held, copy: d.copy } : d.held
     const p = d.overTicks === null ? null : planDrop(clips, held, d.overTicks, totalTicks, d.free ? 0 : gridTicks, barTicks)
     if (!p || d.held.existing) return p
-    const sorted = [...p.clips].sort((a, b) => a.start - b.start)
-    const i = sorted.findIndex((c) => c.id === p.placedId)
-    const chord = sorted[i].chord
+    const chord = p.clips.find((c) => c.id === p.placedId)?.chord
     if (!chord) return p
-    const fitted = fitToNeighbors(chord, sorted[i - 1]?.chord, sorted[i + 1]?.chord)
+    const fitted = fitOctave(chord, chordClips(p.clips).filter((c) => c.id !== p.placedId).map((c) => c.chord))
     return { ...p, clips: p.clips.map((c) => (c.id === p.placedId ? { ...c, chord: fitted } : c)) }
   }
 
@@ -579,7 +578,21 @@ function Workspace({ prefix, sessions, onSaveAs, flushRef }: WorkspaceProps) {
   return (
     <main>
       <header>
-        <h1>chords are fun</h1>
+        <div className="logo">
+          <h1>chords are fun</h1>
+          <HelpTip />
+        </div>
+        <div className="header-actions">
+          <SessionMenu sessions={sessions} onSaveAs={onSaveAs} onDuplicate={onDuplicate} onOpen={sessions.open} />
+          <button className="tinted" onClick={onNew} title="Start a new, empty session. The current one is already saved.">
+            + New session
+          </button>
+          <MidiMenu
+            groove={groove}
+            disabled={chordClips(clips).length === 0}
+            onDownload={(parts, filename) => downloadMidi({ clips: sortedClips, totalTicks, bpm, sig, groove, parts }, filename)}
+          />
+        </div>
       </header>
 
       <div className="main-toolbar">
@@ -621,8 +634,7 @@ function Workspace({ prefix, sessions, onSaveAs, flushRef }: WorkspaceProps) {
             />
           </span>
         </div>
-        <span className="toolbar-divider" aria-hidden />
-        <div className="toolbar-section">
+        <div className="toolbar-section toolbar-right">
           <ProgressionMenu tonic={tonic} onUse={loadProgression} onPreview={hearProgression} onRandom={randomProgression} />
           <GrooveMenu
             groove={groove}
@@ -631,9 +643,6 @@ function Workspace({ prefix, sessions, onSaveAs, flushRef }: WorkspaceProps) {
             onTogglePlay={togglePlay}
             onRandom={randomGroove}
           />
-        </div>
-        <div className="toolbar-section toolbar-session">
-          <SessionMenu sessions={sessions} onSaveAs={onSaveAs} onOpen={sessions.open} />
         </div>
       </div>
 
@@ -661,6 +670,9 @@ function Workspace({ prefix, sessions, onSaveAs, flushRef }: WorkspaceProps) {
             </button>
           </div>
           <div className="group">
+            <button className="tinted" onClick={newChord} title="Add an empty spot in the first free space (up to a bar), then pick its chord">
+              + New
+            </button>
             <button onClick={track.undo} disabled={!track.canUndo} title="Undo (⌘Z / Ctrl+Z)">
               Undo
             </button>
@@ -707,7 +719,6 @@ function Workspace({ prefix, sessions, onSaveAs, flushRef }: WorkspaceProps) {
             if (selectedIds.includes(id)) removeSelected()
             else setClips((c) => removeClip(c, id))
           }}
-          onInvert={(id, dir) => invertChords(dir, id)}
           onCreateEmpty={(ticks) => {
             const id = crypto.randomUUID()
             const next = addEmptyClip(clips, id, ticks, totalTicks, barTicks)
@@ -734,43 +745,43 @@ function Workspace({ prefix, sessions, onSaveAs, flushRef }: WorkspaceProps) {
             <span className="octave" role="group" aria-label="Inversion">
               <span className="muted">Inversion{selectedClips.length > 0 ? ' (selected)' : ''}</span>
               <button
-                className="small"
+                className="small arrow"
                 onClick={() => invertChords(-1)}
                 disabled={!canInvertAll(-1)}
                 aria-label="Inversion down"
                 title="Move the selected chords (or all) one inversion down (↓)"
               >
-                ▾
+                <ArrowIcon dir="down" />
               </button>
               <button
-                className="small"
+                className="small arrow"
                 onClick={() => invertChords(1)}
                 disabled={!canInvertAll(1)}
                 aria-label="Inversion up"
                 title="Move the selected chords (or all) one inversion up (↑)"
               >
-                ▴
+                <ArrowIcon dir="up" />
               </button>
             </span>
             <span className="octave" role="group" aria-label="Octave">
               <span className="muted">Octave{selectedClips.length > 0 ? ' (selected)' : ''}</span>
               <button
-                className="small"
+                className="small arrow"
                 onClick={() => shiftOctaves(-1)}
                 disabled={!octaveShifted(-1)}
                 aria-label="Octave down"
                 title="Move the selected chords (or all) down an octave (Shift+↓)"
               >
-                ▾
+                <ArrowIcon dir="down" />
               </button>
               <button
-                className="small"
+                className="small arrow"
                 onClick={() => shiftOctaves(1)}
                 disabled={!octaveShifted(1)}
                 aria-label="Octave up"
                 title="Move the selected chords (or all) up an octave (Shift+↑)"
               >
-                ▴
+                <ArrowIcon dir="up" />
               </button>
             </span>
             <button
@@ -804,7 +815,7 @@ function Workspace({ prefix, sessions, onSaveAs, flushRef }: WorkspaceProps) {
             <span className="chevron" aria-hidden />
             <span>{multiSelected ? `${selectedClips.length} chords selected` : 'Chord details'}</span>
             {!panelOpen && !multiSelected && inspected && (
-              <span className="muted">· {inspected.chord ? chordName(inspected.chord) : 'Empty clip'}</span>
+              <span className="muted">· {inspected.chord ? chordName(inspected.chord) : 'Select a chord'}</span>
             )}
           </button>
           {panelOpen &&
@@ -813,10 +824,10 @@ function Workspace({ prefix, sessions, onSaveAs, flushRef }: WorkspaceProps) {
                 <p className="muted">Change their voicing together:</p>
                 <div className="group">
                   <button onClick={() => invertChords(-1)} title="Lower inversion (↓)">
-                    ▾ Lower
+                    <ArrowIcon dir="down" /> Lower
                   </button>
                   <button onClick={() => invertChords(1)} title="Higher inversion (↑)">
-                    ▴ Higher
+                    <ArrowIcon dir="up" /> Higher
                   </button>
                   <button onClick={smoothen} title="Pick inversions so each chord moves as little as possible">
                     Smooth voicing
@@ -835,68 +846,14 @@ function Workspace({ prefix, sessions, onSaveAs, flushRef }: WorkspaceProps) {
                   setClips((c) => c.map((x) => (x.id === inspected.id ? { ...x, chord: null } : x)))
                   setInspectorTab('ideas')
                 }}
-                onPreview={(chord) => !isPlaying && previewChord(chord)}
+                onPreview={(chord, fresh) => !isPlaying && previewChord(fresh ? fitOctave(chord, otherChords(inspected.id)) : chord)}
               />
             ) : (
               <p className="muted panel-empty">
-                Select a chord on the track to see how it fits the key, try other flavors, and edit its notes. Double-click
-                empty space on the track for an empty clip with chord ideas.
+                Select a chord on the track to see how it fits the key, try other flavors, and edit its notes. Press + New (or
+                double-click empty space on the track) to add a spot with chord ideas.
               </p>
             ))}
-        </div>
-
-        <div className="footer">
-          <details className="shortcuts" open={tipsOpen} onToggle={(e) => setTipsOpen(e.currentTarget.open)}>
-            <summary>Shortcuts &amp; tips</summary>
-            <dl>
-              <dt>Drag a clip</dt>
-              <dd>Move it; the preview shows what will happen</dd>
-              <dt>{COPY_KEY} + drag a clip</dt>
-              <dd>Copy it (or the selected clips) somewhere else</dd>
-              <dt>Double-click empty space</dt>
-              <dd>Add an empty clip (up to a bar) with chord ideas</dd>
-              <dt>Drag a clip's edge</dt>
-              <dd>Resize it</dd>
-              <dt>Click / drag the ruler</dt>
-              <dd>Move the playhead</dd>
-              <dt>{FREE_KEY} while dragging</dt>
-              <dd>Ignore the grid</dd>
-              <dt>Shift+click · ⌘/Ctrl+click</dt>
-              <dd>Select a range of clips · add/remove one clip</dd>
-              <dt>⌘A / Ctrl+A</dt>
-              <dd>Select all clips</dd>
-              <dt>← →</dt>
-              <dd>Previous / next clip, or move the playhead</dd>
-              <dt>↑ ↓</dt>
-              <dd>Selected chords (or all) one inversion higher / lower</dd>
-              <dt>Shift+↑ ↓</dt>
-              <dd>Selected chords (or all) an octave up / down</dd>
-              <dt>Notes bar</dt>
-              <dd>Inversion, octave and smooth voicing for the selected chords (or all)</dd>
-              <dt>Space · Shift+Space</dt>
-              <dd>Play/pause · stop</dd>
-              <dt>L · M</dt>
-              <dd>Loop · metronome on/off</dd>
-              <dt>Delete · Esc</dt>
-              <dd>Remove · deselect clips</dd>
-              <dt>⌘Z · ⇧⌘Z</dt>
-              <dd>Undo · redo</dd>
-            </dl>
-          </details>
-          <div className="group">
-            <button
-              onClick={clearAll}
-              disabled={isFresh}
-              title="Start over: empty track, C major, 4 bars of 4/4, 120 BPM, default groove. Undo brings the track back; the groove and tempo reset for good."
-            >
-              Clear
-            </button>
-            <MidiMenu
-              groove={groove}
-              disabled={chordClips(clips).length === 0}
-              onDownload={(parts, filename) => downloadMidi({ clips: sortedClips, totalTicks, bpm, sig, groove, parts }, filename)}
-            />
-          </div>
         </div>
       </section>
 

@@ -1,10 +1,11 @@
 import { useState, type CSSProperties } from 'react'
 import { Note } from 'tonal'
-import { analyzeChord, type FitKind } from '../music/analysis'
+import { analyzeChord } from '../music/analysis'
+import { ArrowIcon } from './ArrowIcon'
+import { FIT_MARK, FIT_MARKS, flavorOptions, type FitMark } from '../music/flavors'
 import {
   bassNote,
   canInvert,
-  CHORD_TYPES,
   chordIntervals,
   chordName,
   chordNotes,
@@ -19,7 +20,6 @@ import {
   voicedNoteNames,
   withBass,
   withRoot,
-  withType,
   type Chord,
 } from '../music/chord'
 import { chordFromNotes, readChordInput, type ParsedChord } from '../music/parse'
@@ -43,7 +43,8 @@ type Props = {
   onChange: (chord: Chord, fresh?: boolean) => void
   /** Clear chord: the clip becomes empty, staying where it is. */
   onClear: () => void
-  onPreview: (chord: Chord) => void
+  /** Hear a chord. `fresh` = a new chord (an idea, typed), which the app plays in the track's octave, as it would place it. */
+  onPreview: (chord: Chord, fresh?: boolean) => void
 }
 
 const WHITE = [0, 2, 4, 5, 7, 9, 11]
@@ -51,23 +52,12 @@ const BLACK = [1, 3, 6, 8, 10]
 /** Black key positions, in white-key widths from the left edge. */
 const BLACK_AT: Record<number, number> = { 1: 1, 3: 2, 6: 4, 8: 5, 10: 6 }
 
-/** Fit marks: in key, a common move (borrowed, leading), or outside. */
-type FitMark = 'in' | 'common' | 'out'
-const FIT_MARK: Record<FitKind, FitMark> = {
-  diatonic: 'in',
-  borrowed: 'common',
-  secondary: 'common',
-  passing: 'common',
-  substitute: 'common',
-  outside: 'out',
+/** The three fit categories, with what each means. */
+const FIT_SECTIONS: Record<FitMark, { title: string; hint: string }> = {
+  in: { title: 'In key', hint: 'every note is in the key' },
+  common: { title: 'Borrowed & leading', hint: 'outside the key, but a common move' },
+  out: { title: 'Outside the key', hint: 'surprising, a bold choice' },
 }
-
-/** The three sections other flavors are grouped in, with what each means. */
-const FIT_SECTIONS: { mark: FitMark; title: string; hint: string }[] = [
-  { mark: 'in', title: 'In key', hint: 'every note in the key' },
-  { mark: 'common', title: 'Borrowed & leading', hint: 'outside the key, but common moves' },
-  { mark: 'out', title: 'Outside the key', hint: 'surprising' },
-]
 
 /** Names for the 12 pitch classes: the key's spelling where it has one. */
 function pitchNames(tonic: string, mode: ModeName): string[] {
@@ -92,7 +82,7 @@ export function ChordInspector({ chord, spot, tab, onTab, onChange, onClear, onP
   const [picked, setPicked] = useState<string[]>([])
   const change = (c: Chord, fresh = false) => {
     onChange(c, fresh)
-    onPreview(c)
+    onPreview(c, fresh)
   }
   const toggleKey = (name: string) => {
     if (chord) return change(toggleNote(chord, name))
@@ -136,14 +126,14 @@ export function ChordInspector({ chord, spot, tab, onTab, onChange, onClear, onP
                 {voicedNoteNames(chord).join(' ')}
                 {isSlash(chord) && <span className="muted"> · bass {chord.bass}</span>}
               </span>
-              <button className="link danger clear-chord" onClick={onClear} title="Make this an empty clip (it stays where it is)">
+              <button className="link danger clear-chord" onClick={onClear} title="Remove this chord but keep its place, so you can pick another">
                 Clear chord
               </button>
             </>
           ) : (
             <>
-              <span className="inspector-name">Empty clip</span>
-              <span className="muted">Pick a chord for this spot</span>
+              <span className="inspector-name">Select a chord</span>
+              <span className="muted">Pick one for this spot</span>
             </>
           )}
         </div>
@@ -250,7 +240,7 @@ export function ChordInspector({ chord, spot, tab, onTab, onChange, onClear, onP
                   disabled={!canInvert(chord, -1)}
                   title="Lower inversion (↓)"
                 >
-                  ▾ Lower
+                  <ArrowIcon dir="down" /> Lower
                 </button>
                 <button
                   className="small"
@@ -258,7 +248,7 @@ export function ChordInspector({ chord, spot, tab, onTab, onChange, onClear, onP
                   disabled={!canInvert(chord, 1)}
                   title="Higher inversion (↑)"
                 >
-                  ▴ Higher
+                  <ArrowIcon dir="up" /> Higher
                 </button>
               </span>
               <span className="voice-hint">Reshapes the chord. The bass note stays {bassNote(chord)}.</span>
@@ -387,43 +377,41 @@ function SpotIdeas({
   )
 }
 
-/** Other flavors of the same root, in three sections by how they fit the key. */
+/**
+ * Other flavors of the same root as one list of chips. The left edge of each chip shows
+ * its fit (the legend on top), and within a fit the most expected chords come first.
+ */
 function Flavors({ chord, spot, onPick }: { chord: Chord; spot: Spot; onPick: (c: Chord) => void }) {
-  const { tonic, mode } = spot
-  const options = CHORD_TYPES.map((t) => {
-    const c = withType(chord, t.symbol)
-    return { t, c, a: analyzeChord(c, tonic, mode, spot.next ?? spot.loopTo) }
-  })
+  const options = flavorOptions(chord, spot.tonic, spot.mode, spot.next ?? spot.loopTo)
   return (
     <div className="variations">
-      {FIT_SECTIONS.map((section) => {
-        const shown = options.filter((o) => FIT_MARK[o.a.fit.kind] === section.mark)
-        if (shown.length === 0) return null
-        return (
-          <div key={section.mark} className={`variation-group fit-${section.mark}`}>
-            <span className="variation-label">
-              <span className="chip-dot" aria-hidden /> {section.title} <span className="muted">· {section.hint}</span>
-            </span>
-            <div className="chips">
-              {shown.map(({ t, c, a }) => {
-                const current = chord.type === t.symbol && chord.add.length === 0 && chord.omit.length === 0
-                return (
-                  <button
-                    key={t.symbol}
-                    className={`chip${current ? ' current' : ''}`}
-                    aria-pressed={current}
-                    title={`${t.feel}. ${a.fit.title}${a.tension.level ? `; ${a.tension.label.toLowerCase()}` : ''}.`}
-                    onClick={() => onPick(c)}
-                  >
-                    {chord.root}
-                    {t.symbol}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        )
-      })}
+      <ul className="fit-legend">
+        {FIT_MARKS.map((mark) => (
+          <li key={mark} className={`fit-${mark}`}>
+            <span className="chip-dot" aria-hidden />
+            <b>{FIT_SECTIONS[mark].title}</b>
+            <span className="muted">{FIT_SECTIONS[mark].hint}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="chips">
+        {options.map(({ t, c, a, mark }) => {
+          const current = chord.type === t.symbol && chord.add.length === 0 && chord.omit.length === 0
+          return (
+            <button
+              key={t.symbol}
+              className={`chip fit-${mark}${current ? ' current' : ''}`}
+              aria-pressed={current}
+              title={`${t.feel}. ${a.fit.title}${a.tension.level ? `; ${a.tension.label.toLowerCase()}` : ''}.`}
+              onClick={() => onPick(c)}
+            >
+              {chord.root}
+              {t.symbol}
+            </button>
+          )
+        })}
+      </div>
+      <p className="variations-note muted">Within each color, the most expected chords come first.</p>
     </div>
   )
 }

@@ -27,7 +27,7 @@ import {
   type HeldChord,
 } from './timeline'
 import type { Chord } from './chord'
-import { addEmptyClip, emptyClipSpan } from './timeline'
+import { addEmptyClip, addNextEmptyClip, emptyClipSpan } from './timeline'
 
 const BAR = TICKS_PER_BAR
 const BEAT = TICKS_PER_BEAT
@@ -563,5 +563,28 @@ describe('planDrop: copies (Option/Ctrl-drag)', () => {
 
   it('refuses a block that does not fit', () => {
     expect(planDrop(four, copy('C', { groupIds: ['C', 'G'] }), 4 * BAR - 10, 4 * BAR, TICKS_PER_BEAT)).toBeNull()
+  })
+})
+
+describe('addNextEmptyClip (+ New)', () => {
+  const TOTAL = 4 * BAR
+
+  it('fills the first gap, never longer than a bar', () => {
+    const out = addNextEmptyClip([clip('a', 0, BAR), clip('b', 3 * BAR, BAR)], 'n', TOTAL)!
+    expect(out.find((c) => c.id === 'n')).toMatchObject({ start: BAR, length: BAR, chord: null })
+    expect(addNextEmptyClip([], 'n', TOTAL)!.find((c) => c.id === 'n')).toMatchObject({ start: 0, length: BAR })
+  })
+
+  it('uses a smaller gap as is', () => {
+    const out = addNextEmptyClip([clip('a', 0, BAR), clip('b', BAR + BAR / 2, BAR)], 'n', TOTAL)!
+    expect(out.find((c) => c.id === 'n')).toMatchObject({ start: BAR, length: BAR / 2 })
+  })
+
+  it('on a full track, takes up to half of the last chord at the end', () => {
+    const full = [0, 1, 2, 3].map((i) => clip(`c${i}`, i * BAR, BAR))
+    const out = addNextEmptyClip(full, 'n', TOTAL)!
+    expect(out.find((c) => c.id === 'c3')).toMatchObject({ start: 3 * BAR, length: BAR / 2 })
+    expect(out.find((c) => c.id === 'n')).toMatchObject({ start: 3.5 * BAR, length: BAR / 2 })
+    for (let i = 1; i < out.length; i++) expect(out[i].start).toBeGreaterThanOrEqual(out[i - 1].start + out[i - 1].length)
   })
 })

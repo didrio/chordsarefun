@@ -2,7 +2,7 @@ import { chordName, type Chord } from './music/chord'
 import type { Clip, DropPlan, HeldChord } from './music/timeline'
 
 /** A clip's chord in words; empty clips read "empty clip". */
-export const clipLabel = (chord: Chord | null) => (chord ? chordName(chord) : 'empty clip')
+export const clipLabel = (chord: Chord | null) => (chord ? chordName(chord) : 'blank spot')
 
 /** What's being dragged, in words: the chord name, or "3 chords" for a group. */
 export function heldName(held: HeldChord): string {

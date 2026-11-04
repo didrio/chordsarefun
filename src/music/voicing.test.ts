@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { chordName, lowestNote, voiceChord } from './chord'
 import { parseChord } from './parse'
-import { chordVelocity, fitToNeighbors, movement, smoothVoicing } from './voicing'
+import { chordVelocity, fitOctave, movement, smoothVoicing } from './voicing'
 
 const chords = (names: string) => names.split(' ').map((n) => parseChord(n)!)
 
@@ -40,16 +40,25 @@ describe('chordVelocity', () => {
   })
 })
 
-describe('fitToNeighbors', () => {
+describe('fitOctave', () => {
   const c = (n: string) => parseChord(n)!
-  it('lands a new chord in the register of its neighbors', () => {
-    const high = { ...c('C'), inversion: 3 } // C an octave up (60 64 67)
-    const fitted = fitToNeighbors(c('F'), high, null)
-    expect(Math.min(...voiceChord(fitted))).toBeGreaterThanOrEqual(57)
-    expect([chordName(fitted), lowestNote(fitted)]).toEqual(['F', 'C'])
+  const mean = (ch: ReturnType<typeof c>) => voiceChord(ch).reduce((a, b) => a + b, 0) / voiceChord(ch).length
+
+  it('keeps the inversion shape and only moves whole octaves', () => {
+    const high = { ...c('C'), inversion: 6 } // C two octaves up
+    const fitted = fitOctave({ ...c('F'), inversion: 1 }, [high])
+    expect(((fitted.inversion % 3) + 3) % 3).toBe(1)
+    expect(Math.abs(mean(fitted) - mean(high))).toBeLessThan(6)
   })
 
-  it('leaves a chord with no neighbors alone', () => {
-    expect(fitToNeighbors(c('G'))).toEqual(c('G'))
+  it('lands near the average of all the other chords', () => {
+    const others = [{ ...c('C'), inversion: 3 }, { ...c('Am'), inversion: 3 }]
+    const fitted = fitOctave(c('G'), others)
+    expect(Math.min(...voiceChord(fitted))).toBeGreaterThanOrEqual(55)
+  })
+
+  it('starts around C4 when nothing else is on the track', () => {
+    const fitted = fitOctave(c('C'), [])
+    expect(voiceChord(fitted)[0]).toBe(60)
   })
 })

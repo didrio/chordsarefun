@@ -102,6 +102,10 @@ colors, fit dots and plain-language reasons, always relative to Home.
   `Palette.tsx` (+ `SpiceRow`), `spiceChords`, `diatonicChords` and the `.chord-picker`
   CSS are now unused by the UI (kept, tested; delete when sure they're not coming back).
 - Ideas use triads (the size toggle is gone; `flavor` is a constant in `App.tsx`).
+- Previews of a **new** chord (an idea, a typed chord, a picked root) are played in the octave
+  it would be placed in (`fitOctave`: nearest the chords on the track, around C4 on an empty
+  track), so you hear it in the register you're working in. Chords already on the track
+  (clicking them, ▶, flavor/bass/inversion edits) play their real voicing.
 - Previews (clicking a chord anywhere) play it as the track would: the chord on the
   chord instrument plus its bass note on the bass instrument when the Bass part is on.
 - `useChordDrag` can still drag a *new* chord in (palette-style) but nothing in the UI starts one.
@@ -119,7 +123,7 @@ colors, fit dots and plain-language reasons, always relative to Home.
 - Inspector (`ChordInspector.tsx`): **one layout for chords and empty clips**; rows hide
   or show, nothing moves. Expanded, the panel is **always the same height** (25rem on
   desktop): the parts that vary scroll inside it.
-  - Left, fixed from the name down to the keyboard legend: ▶, name (or "Empty clip"),
+  - Left, fixed from the name down to the keyboard legend: ▶, name (or "Select a chord" for an empty one),
     roman, notes (+ "bass E"), and a red **Clear chord** (the clip becomes empty, in
     place) · Root picker (for an empty clip it sets a major chord) + "type any chord" ·
     the one-octave keyboard (lit = in the chord; note names outside the key in yellow,
@@ -128,11 +132,13 @@ colors, fit dots and plain-language reasons, always relative to Home.
     notes make the chord) and its three-line legend. Then, under a dotted line and
     scrolling if long: the fit badge and "**Context:** …" explanation, theory term,
     out-of-key notes, tension; for an empty clip, "Context: Between G and F."
-  - Right: for chords, the **Inversion** row ("1st inversion (E on the bottom)", ▾/▴,
+  - Right: for chords, the **Inversion** row ("1st inversion (E on the bottom)", ↓/↑ arrows,
     "the bass note stays C") and the **Bass note** row (chord tones as buttons, root
     first, plus "Other note…"; explains slash chords); then tabs **Alternatives**
-    (other flavors of the root in three sections by fit: In key · Borrowed & leading ·
-    Outside the key) | **Ideas**. An empty clip just has an "Ideas" heading. Selecting
+    (other flavors of the root: a three-row color legend on top, then **one flat list of
+    chips** whose 2px left edge shows the fit: green In key, then blue Borrowed &
+    leading, then orange Outside the key; within each color the most expected chords
+    come first (`flavors.ts`, and the note under the chips says so)) | **Ideas**. An empty clip just has an "Ideas" heading. Selecting
     a different chord opens on Alternatives, an empty clip on Ideas; filling an empty
     clip (or Clear chord) keeps you on Ideas.
   - **Ideas are pages**, one per kind (Feel at home, Build tension, Flow smoothly, Add
@@ -145,27 +151,28 @@ colors, fit dots and plain-language reasons, always relative to Home.
   "c-e-g", "ceg": every note tried as root, first note wins ties, typed order kept as
   the voicing), and roman numerals in the home ("IV", "ii7", "bVII", "V7/ii": plain
   numerals are degrees of the home scale, ♭/♯ ones are measured from the major scale).
-  A slash always sets the bass, never an inversion. Typed chords and ideas are voiced to
-  fit their neighbors (like dropped chords); note lists keep their typed voicing.
+  A slash always sets the bass, never an inversion. Typed chords and ideas are moved to
+  the octave nearest the other chords (like dropped chords; `fitOctave`); the inversion
+  you chose is kept.
 - Notes lane (`NotesLane.tsx`, toggle "Notes", saved as `notesLaneOpen`, **hidden by
   default**): a **display-only** piano roll on the track's time axis showing what the
   chords part plays for each clip (its voicing, plus a slash chord's low bass note when
   the Bass part is off; empty clips show nothing), out-of-key notes striped, lines from each note to the nearest note of
   the next chord. Individual notes are edited only in the inspector; the notes bar
   adjusts **whole chords**:
-  - "Inversion ▾/▴" (↓/↑) and "Octave ▾/▴" (Shift+↓/↑, `shiftOctave` = inversion ±
+  - "Inversion ↓/↑" and "Octave ↓/↑" buttons (arrows with a shaft; keys ↓/↑ and Shift+↓/↑, `shiftOctave` = inversion ±
     note count) act on the selection, or every chord when nothing is selected; they
-    move together (if any can't, none do). A clip's own ▾/▴ on an unselected clip moves
-    just it.
+    move together (if any can't, none do). Clips have no buttons of their own.
   - "Smooth voicing" picks inversions so chords move least (`smoothVoicing`): the
     selection if 2+ clips are selected, else the whole track.
   - The lane fits the notes: 3 empty rows above the highest and below the lowest note.
     Rows keep a fixed height, so the lane grows and shrinks (one octave = compact,
     chords far apart = taller). Notes start after a small left gutter so they never
     cover the octave labels.
-- **New chords fit their neighbors**: a chord dragged in from the palette or spice
-  (added or replacing) takes the inversion that moves least from the chords on either
-  side (`fitToNeighbors`), in the drag preview too, so it lands in the track's register.
+- **New chords land in the track's octave**: any chord added (dropped, typed, an idea, built
+  on the keyboard) keeps its inversion and is shifted by whole octaves so its notes are
+  centered nearest the average of all the other chords (`fitOctave`), in the drag preview
+  too. With no other chords it centers around C4 (middle C), not C3.
   Existing chords are never re-voiced automatically (that's the Smooth voicing button).
 - "Progressions" (`ProgressionMenu.tsx`, in the palette head): a dropdown with genre
   submenus (hover switches genre after a short delay; ←/→ between columns). ~180
@@ -180,11 +187,19 @@ colors, fit dots and plain-language reasons, always relative to Home.
 - **Rich dropdowns** (`useDropdown.ts`): custom popovers instead of native selects where
   options need descriptions (Scale, progressions). Click outside / Esc closes; ↑/↓
   move; the app's shortcuts ignore keys inside `.dropdown`.
-- Selected clips show ▾/▴ inversion buttons; clips show a fit tag ("borrowed", "→ Dm",
+- Clips show a fit tag ("borrowed", "→ Dm",
   "outside", "clash") when not plainly in key.
 
 ### Empty clips and ideas (`suggest.ts`)
 
+- **Wording: users never see the word "clip".** In the UI (labels, tooltips, the how-to)
+  it's always "chord"; an empty one is a "spot" ("Select a chord", "blank spot", "empty
+  spot"). "Clip" is only our internal name in code and in this file.
+- **+ New** (tinted button left of Undo, `addNextEmptyClip`) adds an empty spot in the
+  first gap on the track, never longer than a bar even if the gap is bigger. With no gap
+  it goes at the end, taking up to half of (and shortening) the last chord. It ignores
+  the playhead on purpose (unexpected results). It's selected right away. **+ New
+  session** shares the tint (`button.tinted`).
 - **Double-click empty track space** to add an empty clip: the whole gap if it's a bar
   or less, else the part of the gap inside the clicked bar (`emptyClipSpan`). It's
   selected right away. Empty clips are dashed "?" clips: silent, resizable, movable,
@@ -384,7 +399,7 @@ one undo step.
 Buttons plus ⌘Z / ⇧⌘Z (Ctrl+Z / Ctrl+Y). The undoable document is the **Track**:
 clips, bars, key, scale, time signature (`src/track.ts`). Discrete edits use `commit`
 (one step each); continuous drags use `beginGesture`/`updateGesture` (one step per
-drag). No-op edits add no step. Max 100 steps. Grid, BPM, loop, 7ths, metronome,
+drag). No-op edits add no step. Max 500 steps (saved with the session). Grid, BPM, loop, 7ths, metronome,
 selection and playhead are not part of history.
 
 ### Keyboard (`src/shortcuts.ts`)
@@ -403,20 +418,21 @@ browser.
 | ⌘A / Ctrl+A | Select all |
 | ⌘Z · ⇧⌘Z / Ctrl+Y | Undo · redo |
 
-The in-app "Shortcuts & tips" panel (footer, collapsed) lists these; keep it in sync.
+The (i) tooltip next to the logo (`HelpTip.tsx`: how it works + every shortcut, shown on hover/focus) lists these; keep it in sync.
 
 ### Sessions (`src/session.ts`, `SessionMenu.tsx`)
 
 - A session is the whole workspace: the Track with its undo history, BPM, groove,
   grid, loop, metronome, palette size, notes lane, the selection, the inspected clip,
-  the details panel (open/collapsed, tab) and the tips disclosure (`SESSION_KEYS`), so it reopens exactly as it was left.
+  the details panel (open/collapsed, tab) (`SESSION_KEYS`), so it reopens exactly as it was left.
 - You're always in one session and **every change is saved to it as you go**. The
-  menu next to the title shows its name ("Unsaved session" for the scratch session).
-  "Save" names the current work as a new session and switches to it; from the unsaved
-  session, the unsaved one then starts over empty ("+ New session" in the list). From a
-  named session it's "Save copy". The list opens any session (most recently edited
-  first, with "4 chords · C major · 3 min ago"), and renames (✎) or deletes (×, with a
-  confirm) them.
+  "Your sessions:" menu in the header shows its name ("Unsaved session" for the scratch
+  session). **+ New session** (next to it, no confirm: everything is already saved)
+  makes an empty "Untitled session" and opens it. On the unsaved session only, a name
+  box at the top of the list names it as a new session (the unsaved one starts over
+  empty). The list opens any session (newest created first, so rows never reorder, with "4 chords · C
+  major · 3 min ago"), and duplicates (⧉: adds "<name> copy", stays on the current
+  session, menu stays open), renames (✎) or deletes (×, with a confirm) them.
 - Each session's values live under its own key prefix (`session:<id>:`); the unsaved
   session has no prefix, so work saved before sessions existed simply is the unsaved
   session. `App` keys the `Workspace` by session, so switching remounts it and
@@ -448,18 +464,14 @@ tracks; drums on channel 10 with General MIDI notes) or one part alone.
 
 ## Visual design
 
-- Dark UI. Layout top to bottom: header (the small, light, wide-spaced "chords are fun" wordmark) →
-  main toolbar (dotted line above, solid below: Home, Options, metronome + volume | Progressions + die,
-  Groove + die ... "Session:" menu pinned right; every toolbar dropdown has a fixed width, long
+- Dark UI. Layout top to bottom: header (the small, light, wide-spaced "chords are fun" wordmark with an (i) help tooltip
+  left; "Your sessions:" menu, + New session and a subtle Download MIDI pinned right) → main toolbar (dashed line above, solid below: Home, Options, metronome + volume on the
+  left; Progressions + die, Groove + die on the right; every dropdown here has a fixed width, long
   text truncates) → home notice (after a home change) →
   transport row right above the track (Play, Stop, Loop … Undo, Redo)
   → ruler + track → notes bar (Notes toggle, Octave, Smooth voicing) + notes lane →
-  panel (inspector) → footer
-  ("Shortcuts & tips" disclosure | Clear, Download MIDI as the one primary button).
-- **Clear starts over**: default track (empty, C major, 4 bars of 4/4), default groove
-  ("Just chords") and 120 BPM. Workspace preferences (grid, loop, metronome, palette
-  size, notes lane) stay. Undo restores the track; groove and tempo aren't in history.
-  Disabled when everything is already at defaults.
+  panel (inspector). Nothing below the details panel.
+- There is no Clear button: start over with + New session.
 - **Chord color = scale degree of the root** (hue = degree × 360/7), identical in
   palette, clips, lane and progression menu, so Dm, Dm7 and D (V/V) in C share the "2" color; how
   far a chord strays is shown by its fit tag, not its color. Roots outside the key are
@@ -499,9 +511,9 @@ These were discussed and chosen deliberately; don't "fix" them without asking.
   adding or switching clips never makes it jump.
 - **Ideas are clicked in, not dragged**: an empty clip's target is obvious, and the
   inspector keeps showing ideas so trying several is one click each (undo restores).
-- **Sessions autosave; "Save" means "name it"**, like a DAW project that never loses
-  work. No separate "New" button: the unsaved session is "+ New session" in the list
-  when it's empty, and Clear starts the current one over.
+- **Sessions autosave; naming is optional**, like a DAW project that never loses
+  work. New session never asks "are you sure", and there's no Clear button: a new
+  session is the way to start over.
 - **Home is context, not content.** Changing home re-labels; moving chords is an
   explicit, offered action. (Earlier, key changes rewrote the chords, which made
   C major → A minor turn C into Am despite identical notes.) Home and time signature
@@ -559,7 +571,8 @@ them up.
     (`detectHome`, `suggestHome`), and the Spice row (`spiceChords`).
   - `analysis.ts`: fit to the key (diatonic / borrowed / secondary dominant / passing
     diminished / tritone sub / outside) and tension, in plain words.
-  - `voicing.ts`: `smoothVoicing` (voice leading via inversions).
+  - `voicing.ts`: `smoothVoicing` (voice leading via inversions), `fitOctave`.
+  - `flavors.ts`: Alternatives, grouped by fit and ordered most expected first.
   - `progressions.ts`: the progression library (genres) and its layout on a track.
   - `audio.ts`: Tone.js playback of the three parts (synths, drum kit, per-part
     volume, limiter), seeking, metronome. The only module touching Web Audio.

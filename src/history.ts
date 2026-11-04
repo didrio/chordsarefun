@@ -11,7 +11,7 @@ import { load, save } from './persist'
  *   actual change (a gesture that changes nothing leaves no step).
  */
 
-const LIMIT = 100
+const LIMIT = 500
 
 export type History<T> = {
   past: T[]

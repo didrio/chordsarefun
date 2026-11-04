@@ -4,8 +4,10 @@ import { useDropdown } from './useDropdown'
 
 type Props = {
   sessions: Sessions
-  /** Save the current work under a name (flushes pending saves first). */
+  /** Name the unsaved session (flushes pending saves first). */
   onSaveAs: (name: string) => void
+  /** Add "<name> copy" to the list without switching to it. */
+  onDuplicate: (id: string | null) => void
   /** Switch to a session (null = the unsaved one). */
   onOpen: (id: string | null) => void
 }
@@ -23,14 +25,16 @@ function ago(time: number): string {
 
 /**
  * Sessions, like DAW projects but always saved: you're in one session and every change
- * goes into it. Save as names the current work; the list switches between sessions.
+ * goes into it, undo history included. The list switches, renames, duplicates and
+ * deletes; the unsaved session can be named from the box at the top.
  */
-export function SessionMenu({ sessions, onSaveAs, onOpen }: Props) {
+export function SessionMenu({ sessions, onSaveAs, onDuplicate, onOpen }: Props) {
   const { open, setOpen, rootRef } = useDropdown()
   const [name, setName] = useState('')
   const { current, currentName } = sessions
   const scratchSummary = open ? sessionSummary(null) : null
-  const sorted = [...sessions.sessions].sort((a, b) => b.updated - a.updated)
+  // The saved list is kept newest-created first, so rows never reorder as you edit.
+  const sorted = sessions.sessions
   const choose = (id: string | null) => {
     setOpen(false)
     if (id !== current) onOpen(id)
@@ -38,12 +42,12 @@ export function SessionMenu({ sessions, onSaveAs, onOpen }: Props) {
 
   return (
     <div className="dropdown" ref={rootRef}>
-      <span className="dropdown-label">Session:</span>
+      <span className="dropdown-label">Your sessions:</span>
       <button
         className="dropdown-trigger session-trigger"
         aria-haspopup="dialog"
         aria-expanded={open}
-        title="Sessions: save and open your work"
+        title="Your sessions: everything saves automatically"
         onClick={() => setOpen((o) => !o)}
       >
         <span className={currentName ? 'session-name' : 'session-name muted'}>{currentName ?? 'Unsaved session'}</span>
@@ -52,49 +56,67 @@ export function SessionMenu({ sessions, onSaveAs, onOpen }: Props) {
         </span>
       </button>
       {open && (
-        <div className="dropdown-panel session-panel" role="dialog" aria-label="Sessions">
-          <form
-            className="session-save"
-            onSubmit={(e) => {
-              e.preventDefault()
-              if (!name.trim()) return
-              onSaveAs(name.trim())
-              setName('')
-              setOpen(false)
-            }}
-          >
-            <input
-              type="text"
-              value={name}
-              placeholder={currentName ? 'Name for a copy' : 'Name this session'}
-              aria-label="Session name"
-              autoFocus
-              onChange={(e) => setName(e.target.value)}
-            />
-            <button type="submit" className="primary" disabled={!name.trim()}>
-              {currentName ? 'Save copy' : 'Save'}
-            </button>
-          </form>
-          <p className="session-note muted">
-            {currentName
-              ? `Changes to “${currentName}” save automatically. Save copy keeps this version under a new name.`
-              : 'Your work saves automatically. Name it to keep it as a session and start fresh.'}
-          </p>
+        <div className="dropdown-panel session-panel" role="dialog" aria-label="Your sessions">
+          {current === null && (
+            <section>
+              <form
+                className="session-save"
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  if (!name.trim()) return
+                  onSaveAs(name.trim())
+                  setName('')
+                  setOpen(false)
+                }}
+              >
+                <input
+                  type="text"
+                  value={name}
+                  placeholder="Name this session"
+                  aria-label="Session name"
+                  autoFocus
+                  onChange={(e) => setName(e.target.value)}
+                />
+                <button type="submit" className="primary" disabled={!name.trim()}>
+                  Save
+                </button>
+              </form>
+              <p className="session-note muted">Your work saves automatically. Name it to keep it in the list.</p>
+            </section>
+          )}
 
           <ul className="session-list">
-            <li>
-              <button className="session-item" aria-current={current === null} onClick={() => choose(null)}>
-                <span>{scratchSummary || current === null ? 'Unsaved session' : '+ New session'}</span>
-                <span className="muted">{scratchSummary ?? 'empty'}</span>
-              </button>
-            </li>
+            {(current === null || scratchSummary) && (
+              <li>
+                <button className="session-item" aria-current={current === null} onClick={() => choose(null)}>
+                  <span className="session-title">Unsaved session</span>
+                  <span className="muted">{scratchSummary ?? 'empty'}</span>
+                </button>
+                {scratchSummary && (
+                  <button
+                    className="small session-action"
+                    title="Duplicate"
+                    aria-label="Duplicate Unsaved session"
+                    onClick={() => onDuplicate(null)}
+                  >
+                    ⧉
+                  </button>
+                )}
+              </li>
+            )}
             {sorted.map((s) => (
               <li key={s.id}>
                 <button className="session-item" aria-current={current === s.id} onClick={() => choose(s.id)}>
-                  <span>{s.name}</span>
-                  <span className="muted">
-                    {[sessionSummary(s.id), ago(s.updated)].filter(Boolean).join(' · ')}
-                  </span>
+                  <span className="session-title">{s.name}</span>
+                  <span className="muted">{[sessionSummary(s.id), ago(s.updated)].filter(Boolean).join(' · ')}</span>
+                </button>
+                <button
+                  className="small session-action"
+                  title="Duplicate"
+                  aria-label={`Duplicate ${s.name}`}
+                  onClick={() => onDuplicate(s.id)}
+                >
+                  ⧉
                 </button>
                 <button
                   className="small session-action"

@@ -31,7 +31,6 @@ export const SESSION_KEYS = [
   'inspectorTab',
   'inspected',
   'panelOpen',
-  'tipsOpen',
 ]
 
 export type SessionMeta = { id: string; name: string; updated: number }
@@ -82,6 +81,23 @@ export function useSessions() {
       copyKeys(SESSION_KEYS, sessionPrefix(current), sessionPrefix(id))
       setSessions([{ id, name, updated: Date.now() }, ...sessions])
       return id
+    },
+    /** A new, empty session (defaults load for every value). Returns its id; the caller opens it. */
+    create(): string {
+      const id = crypto.randomUUID()
+      const names = new Set(sessions.map((s) => s.name))
+      let n = 1
+      while (names.has(n === 1 ? 'Untitled session' : `Untitled session ${n}`)) n++
+      setSessions([{ id, name: n === 1 ? 'Untitled session' : `Untitled session ${n}`, updated: Date.now() }, ...sessions])
+      return id
+    },
+    /** Copy a session (null = the unsaved one) as "<name> copy". Doesn't switch to it. */
+    duplicate(id: string | null) {
+      const name = id === null ? 'Unsaved session' : sessions.find((s) => s.id === id)?.name
+      if (name === undefined) return
+      const copy = crypto.randomUUID()
+      copyKeys(SESSION_KEYS, sessionPrefix(id), sessionPrefix(copy))
+      setSessions([{ id: copy, name: `${name} copy`, updated: Date.now() }, ...sessions])
     },
     rename(id: string, name: string) {
       setSessions(sessions.map((s) => (s.id === id ? { ...s, name } : s)))

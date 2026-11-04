@@ -48,6 +48,6 @@ describe('describeDrop: copies and empty clips', () => {
     const empty: Clip = { id: 'e', chord: null, start: 0, length: BAR }
     const held: HeldChord = { id: 'e', chord: null, existing: true, grabOffset: 0 }
     const track = [empty, ...clips.slice(1)]
-    expect(describeDrop(held, planDrop(track, held, 2.5 * BAR, 4 * BAR, TICKS_PER_BEAT), true, track)).toBe('Swap empty clip ⇄ Am')
+    expect(describeDrop(held, planDrop(track, held, 2.5 * BAR, 4 * BAR, TICKS_PER_BEAT), true, track)).toBe('Swap blank spot ⇄ Am')
   })
 })

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode, type RefObject } from 'react'
 import { analyzeChord } from '../music/analysis'
-import { canInvert, chordName, voicedNoteNames } from '../music/chord'
+import { chordName, voicedNoteNames } from '../music/chord'
 import { freeKey } from '../platform'
 import { playheadTicks } from '../music/audio'
 import { rootDegree, type ModeName } from '../music/theory'
@@ -42,8 +42,6 @@ type Props = {
   onRemove: (id: string) => void
   /** Double-click on empty space: add an empty clip there. */
   onCreateEmpty: (ticks: number) => void
-  /** Inversion buttons on a selected clip. */
-  onInvert: (id: string, dir: 1 | -1) => void
   /** Rendered under the track (the notes lane); can use the `.playhead` class to follow the playhead. */
   children?: ReactNode
 }
@@ -174,7 +172,7 @@ export function Timeline(props: Props) {
         ))}
 
         {clips.length === 0 && !props.dragging && (
-          <div className="track-empty">Drag chords here, or double-click for an empty clip with ideas</div>
+          <div className="track-empty">Pick a Progression, press + New, or double-click here to add a chord</div>
         )}
 
         {clips.map((clip) => {
@@ -232,26 +230,6 @@ export function Timeline(props: Props) {
               <span className="symbol">{name}</span>
               <span className="roman">{fit.roman}</span>
               <span className="notes">{notes}</span>
-              {selected && (
-                <span className="invert" onPointerDown={(e) => e.stopPropagation()}>
-                  <button
-                    aria-label="Lower inversion"
-                    title="Lower inversion (↓)"
-                    disabled={!canInvert(chord, -1)}
-                    onClick={() => props.onInvert(clip.id, -1)}
-                  >
-                    ▾
-                  </button>
-                  <button
-                    aria-label="Higher inversion"
-                    title="Higher inversion (↑)"
-                    disabled={!canInvert(chord, 1)}
-                    onClick={() => props.onInvert(clip.id, 1)}
-                  >
-                    ▴
-                  </button>
-                </span>
-              )}
               <button
                 className="remove"
                 aria-label={`Remove ${name}`}
@@ -294,7 +272,7 @@ function EmptyClip({ clip, handle, ...props }: Props & { clip: Clip; handle: (ed
       className={classes.filter(Boolean).join(' ')}
       data-diatonic="no"
       style={{ left: pct(clip.start, totalTicks), width: pct(clip.length, totalTicks) }}
-      title="Empty clip: select it for chord ideas, or drop a chord on it"
+      title="Empty spot: select it for chord ideas, or drop a chord on it"
       onPointerDown={(e) => {
         e.stopPropagation()
         props.onClipPointerDown(clip, e, ticksAt(e.clientX) - clip.start)
@@ -312,7 +290,7 @@ function EmptyClip({ clip, handle, ...props }: Props & { clip: Clip; handle: (ed
       <span className="notes">{selected ? 'pick a chord below' : 'empty'}</span>
       <button
         className="remove"
-        aria-label="Remove empty clip"
+        aria-label="Remove empty spot"
         onPointerDown={(e) => e.stopPropagation()}
         onClick={() => props.onRemove(clip.id)}
       >

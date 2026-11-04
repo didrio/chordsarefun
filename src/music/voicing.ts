@@ -46,21 +46,25 @@ export function smoothVoicing(chords: Chord[]): Chord[] {
  */
 export const chordVelocity = (count: number) => 1 / Math.sqrt(Math.max(1, count))
 
+/** Where a new chord's notes center when nothing else is on the track: around C4 (60). */
+const HOME_CENTER = 64
+
 /**
- * Voice a newly placed chord to fit the chords around it: the inversion (and so octave)
- * that moves least from its neighbors, so new chords land in the register the track is
- * already in. With no neighbors the chord is left as is.
+ * Place a newly added chord in the octave closest to the chords already on the track:
+ * its inversion (the shape you chose) is kept, only whole octaves are added or removed
+ * (`shiftOctave`) until the middle of its notes is nearest the average of everyone
+ * else's. With nothing else on the track it lands around C4 rather than C3.
  */
-export function fitToNeighbors(chord: Chord, prev?: Chord | null, next?: Chord | null): Chord {
-  const around = [prev, next].filter((c): c is Chord => !!c).map((c) => voiceChord(c))
-  if (around.length === 0) return chord
+export function fitOctave(chord: Chord, others: Chord[]): Chord {
+  const notes = others.flatMap((c) => voiceChord(c))
+  const target = notes.length ? center(notes) : HOME_CENTER
   const n = chordIntervals(chord).length
   let best = { cost: Infinity, chord }
-  for (let inversion = -2 * n; inversion <= 3 * n; inversion++) {
-    const c = { ...chord, inversion }
+  for (let k = -4; k <= 4; k++) {
+    const c = { ...chord, inversion: chord.inversion + k * n }
     const v = voiceChord(c)
     if (v[0] < VOICE_RANGE.low || v[v.length - 1] > VOICE_RANGE.high) continue
-    const cost = around.reduce((s, a) => s + movement(a, v), 0) + 0.01 * Math.abs(inversion)
+    const cost = Math.abs(center(v) - target) + 0.01 * Math.abs(k)
     if (cost < best.cost) best = { cost, chord: c }
   }
   return best.chord
