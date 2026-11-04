@@ -23,7 +23,8 @@ unless it conflicts with the fixed-length model below.
 
 Static site only: no backend, no accounts. State is saved in the browser's
 localStorage, as sessions (see Sessions). Hosted on GitHub Pages via `.github/workflows/deploy.yml` (tests, builds,
-deploys on push to `main`).
+deploys on push to `main`) and on Cloudflare (Workers static assets: `wrangler.jsonc` serves
+`dist`; build command `npm run build`, deploy command `npx wrangler deploy`).
 
 ## Working with the owner
 
