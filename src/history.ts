@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { load, save } from './persist'
 
 /**
@@ -66,7 +66,21 @@ export function redo<T>(h: History<T>): History<T> {
   }
 }
 
-type Persist = { key: string; isValid: (value: unknown) => boolean }
+type Persist = {
+  key: string
+  isValid: (value: unknown) => boolean
+  /** Upgrades a stored value from an older shape before it's validated. */
+  migrate?: (value: unknown) => unknown
+}
+
+/** A stored history, with every value migrated; null if it isn't a valid history. */
+export function readHistory<T>(stored: unknown, persist: Persist): History<T> | null {
+  const s = stored as History<unknown>
+  if (typeof s !== 'object' || s === null || !Array.isArray(s.past) || !Array.isArray(s.future)) return null
+  const up = persist.migrate ?? ((v: unknown) => v)
+  const h = { past: s.past.map(up), present: up(s.present), future: s.future.map(up), gesture: null }
+  return [...h.past, h.present, ...h.future].every(persist.isValid) ? (h as History<T>) : null
+}
 
 const SAVE_DELAY_MS = 300
 
@@ -74,35 +88,42 @@ const SAVE_DELAY_MS = 300
 export function useHistory<T>(initial: T, persist?: Persist) {
   const [h, setH] = useState(() => {
     if (!persist) return initHistory(initial)
-    const isHistory = (v: unknown) => {
-      const s = v as History<T>
-      return (
-        typeof s === 'object' &&
-        s !== null &&
-        Array.isArray(s.past) &&
-        Array.isArray(s.future) &&
-        [...s.past, s.present, ...s.future].every(persist.isValid)
-      )
-    }
-    const stored = load<History<T> | null>(persist.key, null, isHistory)
-    return stored ? { ...stored, gesture: null } : initHistory(initial)
+    return readHistory<T>(load<unknown>(persist.key, null, () => true), persist) ?? initHistory(initial)
   })
 
   // Debounced so continuous drags don't write on every pointer move; flushed when the
-  // page is closed/hidden so the last edit isn't lost.
+  // page is closed/hidden, on unmount (switching sessions) and on demand (flush), so
+  // the last edit isn't lost.
   const persistKey = persist?.key
+  const latest = useRef(h)
+  const dirty = useRef(false)
+  const write = () => {
+    if (!persistKey || !dirty.current) return
+    const { past, present, future } = latest.current
+    save(persistKey, { past, present, future })
+    dirty.current = false
+  }
+  const writeRef = useRef(write)
+  useEffect(() => {
+    writeRef.current = write
+  })
   useEffect(() => {
     if (!persistKey) return
-    const write = () => save(persistKey, { past: h.past, present: h.present, future: h.future })
-    const id = setTimeout(write, SAVE_DELAY_MS)
-    window.addEventListener('pagehide', write)
+    latest.current = h
+    dirty.current = true
+    const id = setTimeout(() => writeRef.current(), SAVE_DELAY_MS)
+    const onHide = () => writeRef.current()
+    window.addEventListener('pagehide', onHide)
     return () => {
       clearTimeout(id)
-      window.removeEventListener('pagehide', write)
+      window.removeEventListener('pagehide', onHide)
     }
   }, [h, persistKey])
+  useEffect(() => () => writeRef.current(), [])
 
   return {
+    /** Save now (e.g. before copying the saved session). */
+    flush: () => writeRef.current(),
     value: h.present,
     canUndo: h.past.length > 0,
     canRedo: h.future.length > 0,

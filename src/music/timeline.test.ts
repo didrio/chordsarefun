@@ -26,28 +26,32 @@ import {
   type Clip,
   type HeldChord,
 } from './timeline'
+import type { Chord } from './chord'
+import { addEmptyClip, emptyClipSpan } from './timeline'
 
 const BAR = TICKS_PER_BAR
 const BEAT = TICKS_PER_BEAT
 const TOTAL = 4 * BAR
 
-const clip = (id: string, start: number, length: number, symbol = id): Clip => ({ id, symbol, start, length })
-const layout = (clips: Clip[]) => clips.map((c) => [c.symbol, c.start, c.length])
+/** Clips treat chords as opaque values, so tests label them by root alone. */
+const ch = (label: string): Chord => ({ root: label, type: '', add: [], omit: [], inversion: 0 })
+const clip = (id: string, start: number, length: number, label = id): Clip => ({ id, chord: ch(label), start, length })
+const layout = (clips: Clip[]) => clips.map((c) => [c.chord!.root, c.start, c.length])
 
 const fourBars = () => [clip('C', 0, BAR), clip('G', BAR, BAR), clip('Am', 2 * BAR, BAR), clip('F', 3 * BAR, BAR)]
 
 describe('addChord', () => {
   it('fills the first gap with up to one bar', () => {
-    const one = addChord([], 'C', TOTAL, BEAT)
+    const one = addChord([], ch('C'), TOTAL, BEAT)
     expect(layout(one)).toEqual([['C', 0, BAR]])
-    expect(layout(addChord(one, 'G', TOTAL, BEAT))).toEqual([
+    expect(layout(addChord(one, ch('G'), TOTAL, BEAT))).toEqual([
       ['C', 0, BAR],
       ['G', BAR, BAR],
     ])
   })
 
   it('splits the last longest clip when the track is full, keeping total length', () => {
-    const out = addChord(fourBars(), 'Dm', TOTAL, BEAT)
+    const out = addChord(fourBars(), ch('Dm'), TOTAL, BEAT)
     expect(layout(out)).toEqual([
       ['C', 0, BAR],
       ['G', BAR, BAR],
@@ -60,7 +64,7 @@ describe('addChord', () => {
 
 describe('dropChord', () => {
   it('splits a clip at the drop point (flavor chord before the 3rd chord)', () => {
-    const out = dropChord(fourBars(), 'D7', 2 * BAR - BEAT / 2, TOTAL)
+    const out = dropChord(fourBars(), ch('D7'), 2 * BAR - BEAT / 2, TOTAL)
     expect(layout(out)).toEqual([
       ['C', 0, BAR],
       ['G', BAR, BAR - BEAT / 2],
@@ -71,11 +75,11 @@ describe('dropChord', () => {
   })
 
   it('replaces a clip when dropped on its start', () => {
-    expect(layout(dropChord(fourBars(), 'Em', BAR, TOTAL))[1]).toEqual(['Em', BAR, BAR])
+    expect(layout(dropChord(fourBars(), ch('Em'), BAR, TOTAL))[1]).toEqual(['Em', BAR, BAR])
   })
 
   it('fills empty space up to the next clip', () => {
-    const out = dropChord([clip('C', 0, BAR), clip('G', 2 * BAR, BAR)], 'F', BAR + BEAT, TOTAL)
+    const out = dropChord([clip('C', 0, BAR), clip('G', 2 * BAR, BAR)], ch('F'), BAR + BEAT, TOTAL)
     expect(layout(out)[1]).toEqual(['F', BAR + BEAT, 3 * BEAT])
   })
 })
@@ -179,9 +183,9 @@ describe('insertClip', () => {
 })
 
 describe('planDrop', () => {
-  const held = (id: string, symbol: string, existing: boolean, grabOffset = 0): HeldChord => ({
+  const held = (id: string, label: string, existing: boolean, grabOffset = 0): HeldChord => ({
     id,
-    symbol,
+    chord: ch(label),
     existing,
     grabOffset,
   })
@@ -197,7 +201,7 @@ describe('planDrop', () => {
     expect(plan.placedId).toBe('Am')
   })
 
-  const order = (clips: Clip[]) => [...clips].sort((a, b) => a.start - b.start).map((c) => c.symbol)
+  const order = (clips: Clip[]) => [...clips].sort((a, b) => a.start - b.start).map((c) => c.chord!.root)
 
   it('moving the first clip onto the start of the second changes nothing', () => {
     const plan = planDrop(fourBars(), held('C', 'C', true), BAR + BEAT / 2, TOTAL, BEAT)!
@@ -278,7 +282,7 @@ describe('reorderClip', () => {
 })
 
 describe('dropChanges', () => {
-  const held = (id: string, symbol: string, existing: boolean): HeldChord => ({ id, symbol, existing, grabOffset: 0 })
+  const held = (id: string, label: string, existing: boolean): HeldChord => ({ id, chord: ch(label), existing, grabOffset: 0 })
 
   it('marks clips that shift when reordering', () => {
     const plan = planDrop(fourBars(), held('C', 'C', true), 3 * BAR - BEAT / 2, TOTAL, BEAT)!
@@ -392,7 +396,7 @@ describe('every custom time signature', () => {
     const total = 4 * bar
     expect(metronomeClicks(total, sig)).toHaveLength(4 * sig.beats)
     // Clicking a chord into an empty track always adds it, at most one bar long.
-    const added = addChord([], 'C', total, BEAT, bar)
+    const added = addChord([], ch('C'), total, BEAT, bar)
     expect(added).toHaveLength(1)
     expect(added[0].length).toBe(Math.min(bar, total))
     // Snapping stays inside the track and on bar lines at bar boundaries.
@@ -409,12 +413,12 @@ describe('every custom time signature', () => {
 describe('group moves', () => {
   const group = (ids: string[], grabbed = ids[0], grabOffset = 0): HeldChord => ({
     id: grabbed,
-    symbol: grabbed,
+    chord: ch(grabbed),
     existing: true,
     grabOffset,
     groupIds: ids,
   })
-  const order = (clips: Clip[]) => clips.map((c) => c.symbol)
+  const order = (clips: Clip[]) => clips.map((c) => c.chord!.root)
 
   it('moves a contiguous selection after a later clip, closing the gap', () => {
     const plan = planDrop(fourBars(), group(['C', 'G']), 4 * BAR - 10, TOTAL, BEAT)!
@@ -487,5 +491,77 @@ describe('reorderClips', () => {
   it('does nothing when the target is part of the moving set', () => {
     const clips = fourBars()
     expect(reorderClips(clips, ['C', 'G'], 'G', 'after')).toBe(clips)
+  })
+})
+
+describe('emptyClipSpan / addEmptyClip', () => {
+  const BAR = TICKS_PER_BAR
+  const at = (start: number, length: number, id = `c${start}`): Clip => ({ id, chord: ch('C'), start, length })
+
+  it('fills the whole gap when it is a bar or less', () => {
+    const clips = [at(0, BAR), at(BAR + BAR / 2, BAR)]
+    expect(emptyClipSpan(clips, BAR + 100, 4 * BAR)).toEqual({ start: BAR, length: BAR / 2 })
+  })
+
+  it('takes only the clicked bar of a longer gap', () => {
+    expect(emptyClipSpan([], 2.5 * BAR, 4 * BAR)).toEqual({ start: 2 * BAR, length: BAR })
+    // A gap from beat 3 of bar 1 to the end: clicking bar 1 gets beats 3–4.
+    expect(emptyClipSpan([at(0, BAR / 2)], BAR * 0.75, 4 * BAR)).toEqual({ start: BAR / 2, length: BAR / 2 })
+  })
+
+  it('does nothing on a clip', () => {
+    const clips = [at(0, BAR)]
+    expect(emptyClipSpan(clips, 10, 4 * BAR)).toBeNull()
+    expect(addEmptyClip(clips, 'x', 10, 4 * BAR)).toBe(clips)
+  })
+
+  it('adds a silent placeholder clip', () => {
+    const out = addEmptyClip([], 'x', 10, 4 * BAR)
+    expect(out).toEqual([{ id: 'x', chord: null, start: 0, length: BAR }])
+  })
+})
+
+describe('planDrop: copies (Option/Ctrl-drag)', () => {
+  const BAR = TICKS_PER_BAR
+  const four = ['C', 'G', 'A', 'F'].map((r, i): Clip => ({ id: r, chord: ch(r), start: i * BAR, length: BAR }))
+  const roots = (clips: Clip[]) => [...clips].sort((a, b) => a.start - b.start).map((c) => c.chord?.root ?? '-')
+  const copy = (id: string, extra: Partial<HeldChord> = {}): HeldChord => ({
+    id,
+    chord: ch(id),
+    existing: true,
+    grabOffset: 0,
+    copy: true,
+    copyIds: { C: 'C2', G: 'G2', A: 'A2', F: 'F2' },
+    ...extra,
+  })
+
+  it('keeps the original and inserts a copy, making room', () => {
+    const plan = planDrop(four, copy('C'), 2 * BAR - 10, 4 * BAR, TICKS_PER_BEAT)!
+    expect(roots(plan.clips)).toEqual(['C', 'G', 'C', 'A', 'F'])
+    expect(plan.placedIds).toEqual(['C2'])
+    expect(plan.clips.find((c) => c.id === 'C')!.start).toBe(0)
+  })
+
+  it('replaces a clip when dropped on its middle', () => {
+    const plan = planDrop(four, copy('C'), 2.5 * BAR, 4 * BAR, TICKS_PER_BEAT)!
+    expect(roots(plan.clips)).toEqual(['C', 'G', 'C', 'F'])
+    expect(plan.action).toEqual({ kind: 'replace', targetId: 'A' })
+  })
+
+  it('copies into empty space at full length', () => {
+    const two = four.slice(0, 2)
+    const plan = planDrop(two, copy('G'), 3 * BAR + 10, 4 * BAR, TICKS_PER_BEAT)!
+    expect(plan.clips.find((c) => c.id === 'G2')).toMatchObject({ start: 3 * BAR, length: BAR })
+  })
+
+  it('copies a selection as one block', () => {
+    const two = four.slice(0, 2)
+    const plan = planDrop(two, copy('C', { groupIds: ['C', 'G'] }), 2 * BAR + 10, 4 * BAR, TICKS_PER_BEAT)!
+    expect(roots(plan.clips)).toEqual(['C', 'G', 'C', 'G'])
+    expect(plan.placedIds).toEqual(['C2', 'G2'])
+  })
+
+  it('refuses a block that does not fit', () => {
+    expect(planDrop(four, copy('C', { groupIds: ['C', 'G'] }), 4 * BAR - 10, 4 * BAR, TICKS_PER_BEAT)).toBeNull()
   })
 })

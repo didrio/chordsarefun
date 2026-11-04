@@ -1,6 +1,9 @@
+import { sameChord, type Chord } from './chord'
+
 /**
  * The workspace: one fixed-length track of non-overlapping chord clips.
  * All times are integer ticks. Every function here is pure: (clips, ...) => clips.
+ * Clips treat their chord as an opaque value; chord rules live in chord.ts.
  */
 
 /** Ticks per quarter note (MIDI-style PPQ). BPM is always quarter notes per minute. */
@@ -61,18 +64,25 @@ export const BAR_OPTIONS = [1, 2, 4, 8] as const
 
 export type Clip = {
   id: string
-  symbol: string
+  /** Null = an empty clip: a placeholder waiting for a chord (silent; suggestions offered). */
+  chord: Chord | null
   start: number
   length: number
 }
 
 export const clipEnd = (c: Clip) => c.start + c.length
 
+/** A clip that has a chord (not an empty placeholder). */
+export type ChordClip = Clip & { chord: Chord }
+
+/** Only the clips with a chord, e.g. for analysis and playback (empty clips are silent). */
+export const chordClips = (clips: Clip[]): ChordClip[] => clips.filter((c): c is ChordClip => c.chord !== null)
+
 const sortClips = (clips: Clip[]) => [...clips].sort((a, b) => a.start - b.start)
 
-const newClip = (symbol: string, start: number, length: number): Clip => ({
+const newClip = (chord: Chord | null, start: number, length: number): Clip => ({
   id: crypto.randomUUID(),
-  symbol,
+  chord,
   start,
   length,
 })
@@ -147,22 +157,55 @@ export function rescaleClips(clips: Clip[], factor: number): Clip[] {
 
 export const seconds = (ticks: number, bpm: number) => (ticks / TICKS_PER_BEAT) * (60 / bpm)
 
+const sameMaybeChord = (a: Chord | null, b: Chord | null) => (a && b ? sameChord(a, b) : a === b)
+
 /** True if two tracks have the same clips (same ids, chords, positions). */
 export function sameClips(a: Clip[], b: Clip[]): boolean {
   if (a === b) return true
   if (a.length !== b.length) return false
   const sb = sortClips(b)
   return sortClips(a).every(
-    (c, i) => c.id === sb[i].id && c.symbol === sb[i].symbol && c.start === sb[i].start && c.length === sb[i].length,
+    (c, i) =>
+      c.id === sb[i].id && sameMaybeChord(c.chord, sb[i].chord) && c.start === sb[i].start && c.length === sb[i].length,
   )
 }
 
-export function replaceChord(clips: Clip[], id: string, symbol: string): Clip[] {
-  return clips.map((c) => (c.id === id ? { ...c, symbol } : c))
+export function replaceChord(clips: Clip[], id: string, chord: Chord | null): Clip[] {
+  return clips.map((c) => (c.id === id ? { ...c, chord } : c))
+}
+
+/** Apply `update` to the chords of clips `ids` (e.g. invert, or set to a new chord). */
+export function updateChords(clips: Clip[], ids: string[], update: (chord: Chord) => Chord): Clip[] {
+  return clips.map((c) => (ids.includes(c.id) && c.chord ? { ...c, chord: update(c.chord) } : c))
 }
 
 export function removeClip(clips: Clip[], id: string): Clip[] {
   return clips.filter((c) => c.id !== id)
+}
+
+/**
+ * Where a new empty clip goes when you double-click empty space at `x`: the whole gap
+ * around it if that's a bar or less, else the part of the gap inside the clicked bar
+ * (so it never runs over a bar). Null if `x` is on a clip or the space is too small.
+ */
+export function emptyClipSpan(clips: Clip[], x: number, total: number, barTicks: number = TICKS_PER_BAR) {
+  if (x < 0 || x >= total || clips.some((c) => c.start <= x && x < clipEnd(c))) return null
+  const gapStart = Math.max(0, ...clips.filter((c) => clipEnd(c) <= x).map(clipEnd))
+  const gapEnd = Math.min(total, ...clips.filter((c) => c.start > x).map((c) => c.start))
+  let start = gapStart
+  let end = gapEnd
+  if (end - start > barTicks) {
+    const barStart = Math.floor(x / barTicks) * barTicks
+    start = Math.max(gapStart, barStart)
+    end = Math.min(gapEnd, barStart + barTicks)
+  }
+  return end - start >= MIN_CLIP_TICKS ? { start, length: end - start } : null
+}
+
+/** Add an empty clip (a placeholder for a chord) where you double-clicked; see emptyClipSpan. */
+export function addEmptyClip(clips: Clip[], id: string, x: number, total: number, barTicks: number = TICKS_PER_BAR) {
+  const span = emptyClipSpan(clips, x, total, barTicks)
+  return span ? sortClips([...clips, { id, chord: null, ...span }]) : clips
 }
 
 /**
@@ -173,7 +216,7 @@ export function removeClip(clips: Clip[], id: string): Clip[] {
  */
 export function dropChord(
   clips: Clip[],
-  symbol: string,
+  chord: Chord,
   pos: number,
   total: number,
   barTicks: number = TICKS_PER_BAR,
@@ -183,16 +226,16 @@ export function dropChord(
 
   if (hit) {
     if (pos - hit.start < MIN_CLIP_TICKS || clipEnd(hit) - pos < MIN_CLIP_TICKS) {
-      return replaceChord(sorted, hit.id, symbol)
+      return replaceChord(sorted, hit.id, chord)
     }
     const trimmed = sorted.map((c) => (c.id === hit.id ? { ...c, length: pos - c.start } : c))
-    return sortClips([...trimmed, newClip(symbol, pos, clipEnd(hit) - pos)])
+    return sortClips([...trimmed, newClip(chord, pos, clipEnd(hit) - pos)])
   }
 
   const next = sorted.find((c) => c.start > pos)
   const end = Math.min(next ? next.start : total, pos + barTicks)
   if (end - pos < MIN_CLIP_TICKS) return clips
-  return sortClips([...sorted, newClip(symbol, pos, end - pos)])
+  return sortClips([...sorted, newClip(chord, pos, end - pos)])
 }
 
 /**
@@ -201,7 +244,7 @@ export function dropChord(
  */
 export function addChord(
   clips: Clip[],
-  symbol: string,
+  chord: Chord,
   total: number,
   gridTicks: number,
   barTicks: number = TICKS_PER_BAR,
@@ -212,7 +255,7 @@ export function addChord(
   for (const c of [...sorted, null]) {
     const gapEnd = c ? c.start : total
     if (gapEnd - cursor >= minFillGap(barTicks)) {
-      return sortClips([...sorted, newClip(symbol, cursor, Math.min(gapEnd - cursor, barTicks))])
+      return sortClips([...sorted, newClip(chord, cursor, Math.min(gapEnd - cursor, barTicks))])
     }
     if (c) cursor = clipEnd(c)
   }
@@ -224,7 +267,7 @@ export function addChord(
     split = snap(longest.start + longest.length / 2, 0)
   }
   if (split - longest.start < MIN_CLIP_TICKS || clipEnd(longest) - split < MIN_CLIP_TICKS) return clips
-  return dropChord(sorted, symbol, split, total, barTicks)
+  return dropChord(sorted, chord, split, total, barTicks)
 }
 
 /**
@@ -344,12 +387,20 @@ export function insertClip(clips: Clip[], clip: Clip, total: number, minLen: num
 /** A chord being dragged: either an existing clip (moved) or a new one from the palette. */
 export type HeldChord = {
   id: string
-  symbol: string
+  /** Null when dragging an empty clip. */
+  chord: Chord | null
   existing: boolean
   /** Ticks between the clip's start and the pointer when it was grabbed. */
   grabOffset: number
   /** When moving a multi-clip selection: all selected clip ids (including `id`). */
   groupIds?: string[]
+  /**
+   * Duplicate instead of move (Option/Ctrl held): the originals stay and copies are
+   * dropped, like a new chord from the palette (making room, replacing on a clip's middle).
+   */
+  copy?: boolean
+  /** Ids for the copies, by original id (made when the drag starts, so the preview is stable). */
+  copyIds?: Record<string, string>
 }
 
 export type DropTarget =
@@ -477,6 +528,9 @@ export function planDrop(
   gridTicks: number,
   barTicks: number = TICKS_PER_BAR,
 ): DropPlan | null {
+  if (held.existing && held.copy && held.copyIds) {
+    return planCopyDrop(clips, held, x, total, gridTicks, barTicks)
+  }
   if (held.existing && held.groupIds && held.groupIds.length > 1) {
     return planGroupDrop(clips, held, x, total, gridTicks, barTicks)
   }
@@ -488,15 +542,15 @@ export function planDrop(
   if (target.kind === 'replace') {
     if (!original) {
       return {
-        clips: replaceChord(clips, target.id, held.symbol),
+        clips: replaceChord(clips, target.id, held.chord),
         placedId: target.id,
         placedIds: [target.id],
         action: { kind: 'replace', targetId: target.id },
       }
     }
-    const targetSymbol = others.find((c) => c.id === target.id)!.symbol
+    const targetChord = others.find((c) => c.id === target.id)!.chord
     const swapped = clips.map((c) =>
-      c.id === target.id ? { ...c, symbol: held.symbol } : c.id === original.id ? { ...c, symbol: targetSymbol } : c,
+      c.id === target.id ? { ...c, chord: held.chord } : c.id === original.id ? { ...c, chord: targetChord } : c,
     )
     return { clips: swapped, placedId: target.id, placedIds: [target.id], action: { kind: 'swap', targetId: target.id } }
   }
@@ -519,7 +573,7 @@ export function planDrop(
   const rightLengths = others.filter((c) => c.start >= target.at).reduce((sum, c) => sum + c.length, 0)
   const at = Math.max(target.min, Math.min(target.at, total - length - rightLengths))
 
-  const clip: Clip = original ? { ...original, start: at, length } : { id: held.id, symbol: held.symbol, start: at, length }
+  const clip: Clip = original ? { ...original, start: at, length } : { id: held.id, chord: held.chord, start: at, length }
   const result = insertClip(others, clip, total, minLen)
   if (!result) return null
   const action: DropAction =
@@ -569,7 +623,7 @@ function planGroupDrop(
   const rightLengths = others.filter((c) => c.start >= target.at).reduce((sum, c) => sum + c.length, 0)
   const at = Math.max(target.min, Math.min(target.at, total - length - rightLengths))
   const BLOCK = '\u0000block'
-  const result = insertClip(others, { id: BLOCK, symbol: '', start: at, length }, total, Math.max(gridTicks, MIN_CLIP_TICKS))
+  const result = insertClip(others, { id: BLOCK, chord: held.chord, start: at, length }, total, Math.max(gridTicks, MIN_CLIP_TICKS))
   const block = result?.find((c) => c.id === BLOCK)
   if (!result || !block || block.length < length) return null
 
@@ -584,6 +638,79 @@ function planGroupDrop(
     placedId: held.id,
     placedIds,
     action: { kind: 'place' },
+  }
+}
+
+/**
+ * Drop copies of the held clip(s). One clip drops like a palette chord of the same
+ * length (edges insert and make room, the middle replaces). A group is copied as one
+ * block that must fit at full length (edges insert before/after, no middle zone).
+ */
+function planCopyDrop(
+  clips: Clip[],
+  held: HeldChord,
+  x: number,
+  total: number,
+  gridTicks: number,
+  barTicks: number,
+): DropPlan | null {
+  const ids = new Set(held.groupIds && held.groupIds.length > 1 ? held.groupIds : [held.id])
+  const group = sortClips(clips.filter((c) => ids.has(c.id)))
+  const copyId = (id: string) => held.copyIds?.[id] ?? `${id}-copy`
+  if (!group.some((c) => c.id === held.id)) return null
+  const minLen = Math.max(gridTicks, MIN_CLIP_TICKS)
+
+  if (group.length === 1) {
+    const original = group[0]
+    const target = dropTarget(clips, x, held.grabOffset, gridTicks, total, barTicks)
+    if (target.kind === 'replace') {
+      if (target.id === original.id) return null
+      return {
+        clips: replaceChord(clips, target.id, original.chord),
+        placedId: target.id,
+        placedIds: [target.id],
+        action: { kind: 'replace', targetId: target.id },
+      }
+    }
+    const rightLengths = clips.filter((c) => c.start >= target.at).reduce((sum, c) => sum + c.length, 0)
+    const at = Math.max(target.min, Math.min(target.at, total - original.length - rightLengths))
+    const copy: Clip = { ...original, id: copyId(original.id), start: at }
+    const result = insertClip(clips, copy, total, minLen)
+    if (!result) return null
+    const action: DropAction = target.beside
+      ? { kind: 'insert', targetId: target.beside.id, side: target.beside.side }
+      : { kind: 'place' }
+    return { clips: result, placedId: copy.id, placedIds: [copy.id], action }
+  }
+
+  let offset = held.grabOffset
+  for (const c of group) {
+    if (c.id === held.id) break
+    offset += c.length
+  }
+  const target = dropTarget(clips, x, offset, gridTicks, total, barTicks, false)
+  if (target.kind !== 'insert') return null
+  const length = group.reduce((sum, c) => sum + c.length, 0)
+  const rightLengths = clips.filter((c) => c.start >= target.at).reduce((sum, c) => sum + c.length, 0)
+  const at = target.beside ? target.at : Math.max(target.min, Math.min(target.at, total - length - rightLengths))
+  const BLOCK = '\u0000block'
+  const result = insertClip(clips, { id: BLOCK, chord: null, start: at, length }, total, minLen)
+  const block = result?.find((c) => c.id === BLOCK)
+  if (!result || !block || block.length < length) return null
+  let cursor = block.start
+  const copies = group.map((c) => {
+    const placed = { ...c, id: copyId(c.id), start: cursor }
+    cursor += c.length
+    return placed
+  })
+  const action: DropAction = target.beside
+    ? { kind: 'insert', targetId: target.beside.id, side: target.beside.side }
+    : { kind: 'place' }
+  return {
+    clips: sortClips([...result.filter((c) => c.id !== BLOCK), ...copies]),
+    placedId: copyId(held.id),
+    placedIds: copies.map((c) => c.id),
+    action,
   }
 }
 

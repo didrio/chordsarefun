@@ -1,4 +1,9 @@
 :root {
+  --fit-in: #6fcf97;
+  --fit-common: #7c9cff;
+  --fit-out: #e0a458;
+  --tension-1: #d9c35b;
+  --tension-2: #e0786f;
   --bg: #14151a;
   --surface: #1f2128;
   --surface-hover: #2a2d36;
@@ -55,6 +60,7 @@ h1 {
 
 /* Toolbar above the track: playback | track settings | undo/redo */
 .toolbar {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -66,8 +72,9 @@ h1 {
   margin-left: 0.4rem;
 }
 
-.group.end {
-  margin-left: auto;
+/* Transport on the left, undo/redo on the right, right above the track. */
+.toolbar {
+  justify-content: space-between;
 }
 
 .footer {
@@ -79,8 +86,17 @@ h1 {
   margin-top: 1rem;
 }
 
+.palette-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
 .palette-hint {
-  margin: 0 0 0.6rem;
+  margin: 0;
   font-size: 0.8rem;
   color: var(--muted);
 }
@@ -406,7 +422,6 @@ button.toggle[aria-pressed='true']:hover {
   opacity: 1;
 }
 
-.drop-marker,
 .playhead {
   position: absolute;
   top: 0;
@@ -416,8 +431,10 @@ button.toggle[aria-pressed='true']:hover {
   z-index: 2;
 }
 
-.drop-marker {
-  background: var(--accent);
+/* All playheads (ruler, track, notes lane) follow one variable set on .timeline. */
+.playhead,
+.playhead-marker {
+  left: var(--playhead);
 }
 
 .playhead {
@@ -564,4 +581,1502 @@ input.volume {
   align-items: center;
   gap: 0.3rem;
   color: var(--muted);
+}
+
+/* Header extras */
+
+/* A row of toggle buttons where exactly one is on (palette chord size). */
+.segmented {
+  display: inline-flex;
+}
+
+.segmented button {
+  border-radius: 0;
+}
+
+.segmented button + button {
+  margin-left: -1px;
+}
+
+.segmented button:first-child {
+  border-radius: 6px 0 0 6px;
+}
+
+.segmented button:last-child {
+  border-radius: 0 6px 6px 0;
+}
+
+.segmented button[aria-pressed='true'] {
+  position: relative;
+  z-index: 1;
+}
+
+button.small {
+  padding: 0.2rem 0.55rem;
+  font-size: 0.8rem;
+}
+
+h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.muted {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* Clip extras: long names, fit tags, inversion buttons */
+
+.clip .symbol {
+  max-width: 100%;
+  padding: 0 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fit-tag {
+  position: absolute;
+  top: 4px;
+  left: 8px;
+  max-width: calc(100% - 36px);
+  padding: 0 0.35rem;
+  overflow: hidden;
+  font-size: 0.65rem;
+  line-height: 1rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--bg);
+  background: var(--fit-common);
+  border-radius: 999px;
+}
+
+.fit-tag.outside {
+  background: var(--fit-out);
+}
+
+.fit-tag.diatonic.clash {
+  background: var(--tension-2);
+}
+
+@container (max-width: 80px) {
+  .fit-tag {
+    width: 8px;
+    height: 8px;
+    padding: 0;
+  }
+  .fit-tag-text {
+    display: none;
+  }
+}
+
+.clip .invert {
+  position: absolute;
+  right: 8px;
+  bottom: 3px;
+  display: flex;
+  gap: 2px;
+  z-index: 2;
+}
+
+.clip .invert button {
+  padding: 0 0.3rem;
+  font-size: 0.75rem;
+  line-height: 1.1rem;
+  background: #0006;
+  border-color: #fff3;
+}
+
+@container (max-width: 90px) {
+  .clip .invert {
+    display: none;
+  }
+}
+
+/* Notes lane: the chords' actual notes, piano-roll style */
+
+.lane-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.6rem 0 0.4rem;
+}
+
+.lane-legend {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.lane-bar > button:last-child {
+  margin-left: auto;
+}
+
+.out-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 7px;
+  margin-left: 0.5rem;
+  border: 1px solid var(--fit-out);
+  background: repeating-linear-gradient(135deg, var(--fit-out) 0 2px, transparent 2px 4px);
+  border-radius: 2px;
+}
+
+.notes-lane {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  user-select: none;
+  touch-action: none;
+}
+
+.lane-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+}
+
+.lane-row.black {
+  background: #0000002a;
+}
+
+.lane-row.c-row {
+  border-bottom: 1px solid #ffffff1c;
+}
+
+.row-label {
+  position: absolute;
+  left: 4px;
+  bottom: 0;
+  font-size: 0.6rem;
+  line-height: 1;
+  color: var(--muted);
+  opacity: 0.5;
+}
+
+.lane-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.lane-lines line {
+  stroke: #ffffff40;
+  stroke-width: 1.5;
+}
+
+.lane-lines line.held {
+  stroke: #ffffff22;
+}
+
+.lane-clip {
+  --tint: hsl(var(--hue, 0) 55% 60%);
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  container-type: inline-size;
+}
+
+.lane-clip[data-diatonic='no'] {
+  --tint: #888;
+}
+
+.lane-clip.selected {
+  background: #ffffff0a;
+}
+
+.lane-note {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  padding-left: 3px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--tint) 70%, var(--bg));
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px #0004;
+}
+
+.lane-note.out {
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--tint) 70%, var(--bg)) 0 3px,
+    var(--fit-out) 3px 5px
+  );
+  box-shadow: inset 0 0 0 1px var(--fit-out);
+}
+
+.lane-note-name {
+  font-size: 0.55rem;
+  line-height: 1;
+  color: var(--bg);
+  font-weight: 700;
+}
+
+@container (max-width: 28px) {
+  .lane-note-name {
+    display: none;
+  }
+}
+
+/* Bottom panel: chord inspector, multi-selection, or a hint */
+
+.panel {
+  margin-top: 1.25rem;
+  padding: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.panel-empty {
+  margin: 0;
+}
+
+.multi {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.multi p {
+  margin: 0;
+}
+
+.inspector {
+  --tint: hsl(var(--hue, 0) 55% 60%);
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 1.5rem;
+}
+
+.inspector[data-diatonic='no'] {
+  --tint: #888;
+}
+
+@media (max-width: 800px) {
+  .inspector {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.inspector-main,
+.inspector-side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  min-width: 0;
+}
+
+.inspector-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem 0.7rem;
+  padding-left: 0.6rem;
+  border-left: 3px solid var(--tint);
+}
+
+.inspector-name {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+button.hear {
+  align-self: center;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.8rem;
+}
+
+.fit p,
+.tension ul,
+.out-notes {
+  margin: 0;
+}
+
+.fit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+}
+
+.fit-badge,
+.tension-badge {
+  display: inline-block;
+  padding: 0.05rem 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--bg);
+  border-radius: 999px;
+}
+
+.fit-in .fit-badge {
+  background: var(--fit-in);
+}
+
+.fit-common .fit-badge {
+  background: var(--fit-common);
+}
+
+.fit-out .fit-badge {
+  background: var(--fit-out);
+}
+
+.fit-detail {
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.term {
+  color: var(--muted);
+}
+
+.out-notes {
+  padding-left: 1.1rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.out-notes strong {
+  color: var(--fit-out);
+}
+
+.tension {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.6rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.tension ul {
+  flex-basis: 100%;
+  padding-left: 1.1rem;
+}
+
+.tension-0 .tension-badge {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.tension-1 .tension-badge {
+  background: var(--tension-1);
+}
+
+.tension-2 .tension-badge {
+  background: var(--tension-2);
+}
+
+/* One-octave keyboard: lit keys are in the chord, names outside the key are yellow. */
+.keyboard {
+  position: relative;
+  display: flex;
+  width: 280px;
+  max-width: 100%;
+  height: 92px;
+}
+
+.key {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1px;
+  padding: 0 0 6px;
+  font-size: 0.65rem;
+}
+
+.key.white {
+  flex: 1;
+  color: #333;
+  background: #e8e8ec;
+  border: 1px solid #555;
+  border-radius: 0 0 5px 5px;
+}
+
+.key.white:hover:not(:disabled) {
+  background: #fff;
+}
+
+.key.black {
+  position: absolute;
+  top: 0;
+  z-index: 1;
+  width: calc(100% / 7 * 0.62);
+  height: 58%;
+  padding-bottom: 4px;
+  color: #ccc;
+  background: #24262d;
+  border: 1px solid #000;
+  border-radius: 0 0 4px 4px;
+  transform: translateX(-50%);
+}
+
+.key.black:hover:not(:disabled) {
+  background: #363944;
+}
+
+.key.lit,
+.key.lit:hover:not(:disabled) {
+  color: var(--bg);
+  background: var(--tint);
+}
+
+/* Outside the key: the note name turns amber (darker on white keys, for contrast); on a
+   lit key it becomes an amber pill so it reads on any chord color. */
+.key.out .key-name {
+  color: var(--fit-out);
+}
+
+.key.white.out .key-name {
+  color: #a8650c;
+}
+
+.key.lit.out .key-name {
+  padding: 0 3px;
+  color: #1a1206;
+  background: var(--fit-out);
+  border-radius: 3px;
+}
+
+.key:disabled {
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+/* In-key marker on keys that aren't lit. */
+
+.key-name {
+  font-weight: 600;
+}
+
+.key-role {
+  /* The note's role in the chord (R, 3, b7, ...): small and quiet, at the top of the key. */
+  position: absolute;
+  top: 4px;
+  left: 0;
+  right: 0;
+  font-size: 0.58rem;
+  font-weight: 600;
+  text-align: center;
+  color: rgb(0 0 0 / 0.5);
+}
+
+.keyboard-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.keyboard-hint .out-name {
+  font-weight: 600;
+  color: var(--fit-out);
+}
+
+.keyboard-hint {
+  flex: 1;
+  min-width: 10rem;
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.change-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.type-chord {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 12rem;
+}
+
+.type-row {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.type-reading {
+  font-size: 0.78rem;
+  color: var(--fit-in);
+}
+
+.type-reading.error {
+  margin: 0;
+  color: var(--tension-2);
+}
+
+input[type='text'] {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+}
+
+input[type='text'][aria-invalid='true'] {
+  border-color: var(--tension-2);
+}
+
+.error {
+  margin: -0.4rem 0 0;
+  font-size: 0.8rem;
+  color: var(--tension-2);
+}
+
+.variations {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.variation-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.variation-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.variation-label .muted {
+  font-weight: 400;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.8rem;
+  border-radius: 999px;
+}
+
+.chip.current {
+  border-color: var(--text);
+  background: var(--surface-hover);
+}
+
+.chip-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.fit-in .chip-dot,
+.chip-dot.fit-in {
+  background: var(--fit-in);
+}
+
+.fit-common .chip-dot,
+.chip-dot.fit-common {
+  background: var(--fit-common);
+}
+
+.fit-out .chip-dot,
+.chip-dot.fit-out {
+  background: var(--fit-out);
+}
+
+
+/* Chord chips in the progression menu */
+
+.bank-chords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.bank-chord {
+  --tint: hsl(var(--hue, 0) 55% 60%);
+  padding: 0.05rem 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--tint) 28%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--tint) 60%, transparent);
+  border-radius: 4px;
+}
+
+.bank-chord[data-diatonic='no'] {
+  --tint: #888;
+}
+
+
+.octave {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: auto;
+}
+
+.lane-bar > .octave + button {
+  margin-left: 0;
+}
+
+/* Rich dropdowns (scale, progressions): room for a description per option. */
+
+.dropdown {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.dropdown-label {
+  color: var(--muted);
+}
+
+.dropdown-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.dropdown-trigger[aria-expanded='true'] {
+  border-color: var(--accent);
+}
+
+.caret {
+  font-size: 0.75em;
+  color: var(--muted);
+}
+
+.dropdown-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  z-index: 20;
+  padding: 0.35rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px #000a;
+}
+
+.menu-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+
+.menu-item:hover:not(:disabled),
+.menu-item:focus-visible {
+  background: var(--surface-hover);
+  outline: none;
+}
+
+.menu-item[aria-selected='true'] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+}
+
+.menu-title {
+  font-weight: 600;
+}
+
+.menu-desc {
+  font-size: 0.78rem;
+  line-height: 1.3;
+  color: var(--muted);
+}
+
+.progression-panel {
+  right: 0;
+  display: grid;
+  grid-template-columns: 11rem minmax(0, 1fr);
+  width: min(44rem, calc(100vw - 3rem));
+}
+
+.genres {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-right: 0.35rem;
+  border-right: 1px solid var(--border);
+}
+
+.genres .menu-item {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.genres .menu-item.active {
+  color: var(--bg);
+  font-weight: 600;
+  background: var(--accent);
+}
+
+.genres .menu-item.active .caret {
+  color: var(--bg);
+}
+
+.progressions {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 24rem;
+  padding-left: 0.35rem;
+  overflow-y: auto;
+}
+
+.progression-row {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.progression-row .menu-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.menu-foot {
+  grid-column: 1 / -1;
+  margin: 0.35rem 0 0;
+  padding: 0.45rem 0.4rem 0.1rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+}
+
+/* Groove panel: presets on the left, a three-part mixer on the right. Spans the toolbar. */
+.groove-menu {
+  position: static;
+}
+
+.groove-panel {
+  left: 0;
+  right: 0;
+  display: grid;
+  grid-template-columns: 15rem minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+.groove-presets {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 30rem;
+  padding-right: 0.5rem;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+}
+
+.mixer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.part {
+  display: grid;
+  grid-template-columns: 9rem minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.6rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.part-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.part-head .toggle {
+  min-width: 6rem;
+  font-weight: 600;
+}
+
+.part-head .volume {
+  width: 100%;
+}
+
+.part-pickers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem 0.8rem;
+}
+
+.part.off .part-pickers {
+  opacity: 0.45;
+}
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.picker label {
+  justify-content: space-between;
+  font-size: 0.85rem;
+}
+
+.picker select {
+  flex: 1;
+  min-width: 0;
+}
+
+.picker .menu-desc {
+  margin: 0;
+}
+
+.slider-row {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 5.5rem auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.slider-row input {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.groove-foot {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0 0.6rem;
+}
+
+.groove-foot .slider-row {
+  flex: 1;
+}
+
+/* Download MIDI opens upward (it's at the bottom of the page). */
+.midi-panel {
+  top: auto;
+  right: 0;
+  bottom: calc(100% + 6px);
+  width: 18rem;
+}
+
+/* Palette head: hint on the left, palette size and progressions on the right. */
+.palette-head .palette-hint {
+  margin-right: auto;
+}
+
+/* Home menu: key buttons over the mood list. */
+.home-panel {
+  right: 0;
+  width: 24rem;
+}
+
+.home-section-label {
+  margin: 0.4rem 0.4rem 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.home-keys {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.25rem;
+  padding: 0 0.3rem 0.3rem;
+}
+
+.home-keys button {
+  padding: 0.3rem 0;
+  font-size: 0.85rem;
+}
+
+.home-suggest {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin: 0.1rem 0.1rem 0.4rem;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.85rem;
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  border-radius: 8px;
+}
+
+.suggest-dot {
+  width: 7px;
+  height: 7px;
+  background: var(--accent);
+  border-radius: 50%;
+}
+
+/* After a home change: chords stayed put; offer to move them. */
+.home-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin: -0.5rem 0 1rem;
+  padding: 0.55rem 0.8rem;
+  font-size: 0.85rem;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 8px;
+}
+
+.palette-head {
+  position: relative;
+}
+
+/* In-key chords and spice side by side, as narrow "book" cards filling the width. */
+.chord-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.9rem;
+}
+
+@media (max-width: 900px) {
+  .chord-picker {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.picker-half {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.picker-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.spice .picker-label {
+  cursor: help;
+}
+
+.palette {
+  gap: 0.35rem;
+}
+
+.palette .chord,
+.spice-chord {
+  container-type: inline-size;
+  padding: 0.6rem 0.2rem;
+}
+
+.palette .chord .symbol,
+.spice-chord .symbol {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 1rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette .chord .notes {
+  white-space: normal;
+  text-align: center;
+  line-height: 1.25;
+  font-size: 0.68rem;
+}
+
+.spice-chords {
+  display: grid;
+  flex: 1;
+  gap: 0.35rem;
+}
+
+.spice-chord {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  min-width: 0;
+  border-top: 3px solid var(--tint);
+  border-radius: 10px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.spice-chord[data-diatonic='no'] {
+  --tint: #888;
+}
+
+.spice-tag {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 0.66rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--muted);
+}
+
+@container (max-width: 52px) {
+  .palette .chord .notes,
+  .palette .chord .roman,
+  .spice-chord .roman {
+    display: none;
+  }
+}
+
+/* Header: Home, Options, metronome. */
+header .controls {
+  gap: 0.6rem;
+}
+
+button.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 0.55rem;
+}
+
+.options-panel {
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: 17rem;
+  padding: 0.8rem;
+}
+
+.options-panel label {
+  justify-content: space-between;
+}
+
+.options-panel .custom-sig {
+  justify-content: flex-end;
+}
+
+.bpm {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* Narrow cards: room for the 1–7 hint above the name, and long names (Abmaj9) still fit. */
+.palette .chord {
+  padding-top: 0.95rem;
+}
+
+.palette .key-hint {
+  top: 3px;
+  left: 5px;
+  font-size: 0.6rem;
+}
+
+@container (max-width: 76px) {
+  .palette .chord .symbol,
+  .spice-chord .symbol {
+    font-size: 0.82rem;
+    letter-spacing: -0.01em;
+  }
+}
+
+.lane-bar > .octave + .octave {
+  margin-left: 0.6rem;
+}
+
+/* Random buttons: a die beside the Progressions and Groove menus. */
+button.dice {
+  margin-left: -0.15rem;
+}
+
+/* Empty clips: placeholders waiting for a chord. */
+.clip.empty {
+  background: repeating-linear-gradient(135deg, transparent 0 6px, #ffffff08 6px 12px), var(--bg);
+  border: 1px dashed var(--muted);
+}
+
+.clip.empty .symbol {
+  color: var(--muted);
+}
+
+.clip.empty .notes {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+/* Inspector rows for the voicing (inversion) and the bass note. */
+.voice-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.6rem;
+  font-size: 0.85rem;
+}
+
+.voice-label {
+  min-width: 4.6rem;
+  font-weight: 600;
+}
+
+.voice-hint {
+  flex-basis: 100%;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.voice-row select {
+  font-size: 0.8rem;
+}
+
+.voice-row select.active {
+  border-color: var(--accent);
+}
+
+.side-tabs {
+  align-self: flex-start;
+}
+
+/* Ideas for a spot (empty clips, and the "Ideas for this spot" tab). */
+.ideas {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.ideas-context {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.idea-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.idea-head {
+  font-size: 0.8rem;
+}
+
+.idea-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0.35rem;
+}
+
+.idea {
+  --tint: hsl(var(--hue, 0) 55% 60%);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  padding: 0.35rem 0.55rem;
+  text-align: left;
+  border-left: 3px solid var(--tint);
+}
+
+.idea[data-diatonic='no'] {
+  --tint: #888;
+}
+
+.idea.current {
+  border-color: var(--text);
+  background: var(--surface-hover);
+}
+
+.idea-name {
+  font-weight: 700;
+}
+
+.idea-name .roman {
+  margin-left: 0.25rem;
+  font-weight: 400;
+}
+
+.idea-why {
+  font-size: 0.72rem;
+  line-height: 1.3;
+  color: var(--muted);
+}
+
+.empty-clip .inspector-title {
+  border-left-style: dashed;
+}
+
+/* Sessions menu */
+.session-trigger .session-name {
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-panel {
+  left: 0;
+  width: 22rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.session-save {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.session-note {
+  margin: 0;
+  font-size: 0.75rem;
+}
+
+.session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  max-height: 18rem;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.session-list li {
+  display: flex;
+  gap: 0.2rem;
+}
+
+.session-item {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  padding: 0.35rem 0.55rem;
+  text-align: left;
+  border-color: transparent;
+  background: transparent;
+}
+
+.session-item span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-item .muted {
+  font-size: 0.72rem;
+}
+
+.session-item[aria-current='true'] {
+  border-color: var(--accent);
+  background: var(--surface-hover);
+}
+
+.session-action {
+  align-self: center;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
+/* The session menu sits next to the title; the controls stay on the right. */
+header > .dropdown {
+  margin-right: auto;
+}
+
+/* Details panel: a bar to collapse/expand it, like a DAW's detail view. */
+.panel-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: calc(100% + 2rem);
+  margin: -1rem -1rem 0.9rem;
+  padding: 0.45rem 1rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: left;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 10px 10px 0 0;
+}
+
+.panel-bar:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.panel-bar .muted {
+  font-weight: 400;
+}
+
+.panel.collapsed .panel-bar {
+  margin-bottom: -1rem;
+  border-bottom: none;
+  border-radius: 10px;
+}
+
+.chevron {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 120ms;
+}
+
+.panel.collapsed .chevron {
+  transform: rotate(-45deg);
+}
+
+/* The clip the details panel shows, when it isn't selected. */
+.clip.inspected {
+  outline: 1px dashed var(--text);
+  outline-offset: -1px;
+}
+
+/* Text-style buttons (e.g. Clear chord). */
+button.link {
+  padding: 0.1rem 0.3rem;
+  font-size: 0.8rem;
+  background: transparent;
+  border-color: transparent;
+}
+
+button.link.danger {
+  color: var(--tension-2);
+}
+
+button.link.danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--tension-2) 15%, transparent);
+  border-color: transparent;
+}
+
+.clear-chord {
+  margin-left: auto;
+  align-self: center;
+}
+
+/* White keys: the role sits just below the black keys (their tops are covered). */
+.key.white .key-role {
+  top: calc(58% + 3px);
+}
+
+/*
+ * The expanded details panel keeps one height, whatever is selected: the parts that
+ * vary (the description under the keyboard, the tab content on the right) scroll
+ * inside it when they're long.
+ */
+@media (min-width: 801px) {
+  .inspector {
+    height: 25rem;
+  }
+
+  .inspector-main,
+  .inspector-side {
+    min-height: 0;
+  }
+
+  .inspector-desc,
+  .side-content {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
+
+.inspector-desc {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding-top: 0.7rem;
+  border-top: 1px dotted var(--border);
+}
+
+.context-label {
+  font-weight: 600;
+  color: var(--muted);
+}
+
+ul.keyboard-hint {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  line-height: 1.45;
+}
+
+.side-heading {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.75rem;
+}
+
+/* Idea pages: one kind of idea at a time, arrows and page names underneath. */
+.idea-pager {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-top: 0.2rem;
+}
+
+.idea-pager .page-name {
+  padding: 0.1rem 0.45rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+}
+
+.idea-pager .page-name.current {
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }

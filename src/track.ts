@@ -1,3 +1,5 @@
+import { isChord } from './music/chord'
+import { parseChord } from './music/parse'
 import { MODES, type ModeName } from './music/theory'
 import { MAX_SIG_BEATS, NOTE_UNITS, type Clip, type TimeSignature } from './music/timeline'
 
@@ -26,7 +28,7 @@ const isClip = (v: unknown): v is Clip => {
     typeof c === 'object' &&
     c !== null &&
     typeof c.id === 'string' &&
-    typeof c.symbol === 'string' &&
+    (c.chord === null || isChord(c.chord)) &&
     isNumber(c.start) &&
     isNumber(c.length)
   )
@@ -57,4 +59,23 @@ export const isTrack = (v: unknown): v is Track => {
     (MODES as readonly string[]).includes(t.mode) &&
     isTimeSignature(t.sig)
   )
+}
+
+/**
+ * Bring stored tracks from older versions up to date before validating them, so saved
+ * work survives shape changes. Clips used to store a chord name (`symbol: "Dm7"`);
+ * now they store a chord description. Unreadable old chords are dropped.
+ */
+export function migrateTrack(v: unknown): unknown {
+  const t = v as { clips?: unknown }
+  if (typeof t !== 'object' || t === null || !Array.isArray(t.clips)) return v
+  const clips = t.clips.flatMap((c: unknown) => {
+    const old = c as { symbol?: unknown; chord?: unknown }
+    if (typeof old !== 'object' || old === null || old.chord !== undefined || typeof old.symbol !== 'string') return [c]
+    const chord = parseChord(old.symbol)
+    if (!chord) return []
+    const { symbol: _symbol, ...rest } = old
+    return [{ ...rest, chord }]
+  })
+  return { ...t, clips }
 }

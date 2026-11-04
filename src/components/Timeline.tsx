@@ -1,6 +1,9 @@
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type RefObject } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode, type RefObject } from 'react'
+import { analyzeChord } from '../music/analysis'
+import { canInvert, chordName, voicedNoteNames } from '../music/chord'
+import { freeKey } from '../platform'
 import { playheadTicks } from '../music/audio'
-import { chordInKey, chordNotes, type ModeName } from '../music/theory'
+import { rootDegree, type ModeName } from '../music/theory'
 import { clipEnd, snap, type Clip, type ClipChange } from '../music/timeline'
 
 type Props = {
@@ -15,6 +18,8 @@ type Props = {
   tonic: string
   mode: ModeName
   selectedIds: string[]
+  /** The clip the details panel shows (outlined when it isn't selected). */
+  inspectedId: string | null
   isPlaying: boolean
   /** Playhead position in ticks when not playing (while playing it follows the audio). */
   playhead: number
@@ -35,6 +40,12 @@ type Props = {
   onResizeStart: () => void
   onResize: (id: string, edge: 'start' | 'end', ticks: number) => void
   onRemove: (id: string) => void
+  /** Double-click on empty space: add an empty clip there. */
+  onCreateEmpty: (ticks: number) => void
+  /** Inversion buttons on a selected clip. */
+  onInvert: (id: string, dir: 1 | -1) => void
+  /** Rendered under the track (the notes lane); can use the `.playhead` class to follow the playhead. */
+  children?: ReactNode
 }
 
 const pct = (ticks: number, total: number) => `${(ticks / total) * 100}%`
@@ -49,8 +60,7 @@ const CHANGE_LABELS: Record<ClipChange, { icon: string; text: string }> = {
 
 export function Timeline(props: Props) {
   const { trackRef, clips, totalTicks, gridTicks, barTicks, tonic, mode, selectedIds, isPlaying } = props
-  const playheadRef = useRef<HTMLDivElement>(null)
-  const markerRef = useRef<HTMLDivElement>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
   const scrubbingRef = useRef(false)
   const resizeRef = useRef<{ id: string; edge: 'start' | 'end' } | null>(null)
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -71,7 +81,8 @@ export function Timeline(props: Props) {
     let raf = 0
     const frame = () => {
       const t = playheadTicks() % totalTicks
-      for (const el of [playheadRef.current, markerRef.current]) if (el) el.style.left = pct(t, totalTicks)
+      // Every playhead (ruler marker, track line, notes lane line) reads this variable.
+      rootRef.current?.style.setProperty('--playhead', pct(t, totalTicks))
       setActiveId(clips.find((c) => c.start <= t && t < clipEnd(c))?.id ?? null)
       raf = requestAnimationFrame(frame)
     }
@@ -88,7 +99,7 @@ export function Timeline(props: Props) {
   }
   const moveResize = (e: PointerEvent) => {
     const r = resizeRef.current
-    if (r) props.onResize(r.id, r.edge, snap(ticksAt(e.clientX), e.altKey ? 0 : gridTicks, 'round', barTicks))
+    if (r) props.onResize(r.id, r.edge, snap(ticksAt(e.clientX), freeKey(e) ? 0 : gridTicks, 'round', barTicks))
   }
   const endResize = () => {
     resizeRef.current = null
@@ -101,10 +112,10 @@ export function Timeline(props: Props) {
     scrubbingRef.current = true
     // Keep the grab cursor for the whole drag, even off the marker.
     e.currentTarget.classList.add('scrubbing')
-    props.onSeek(seekTicks(e.clientX, e.altKey))
+    props.onSeek(seekTicks(e.clientX, freeKey(e)))
   }
   const moveScrub = (e: PointerEvent) => {
-    if (scrubbingRef.current) props.onSeek(seekTicks(e.clientX, e.altKey))
+    if (scrubbingRef.current) props.onSeek(seekTicks(e.clientX, freeKey(e)))
   }
   const endScrub = (e: PointerEvent) => {
     scrubbingRef.current = false
@@ -116,9 +127,12 @@ export function Timeline(props: Props) {
   const lineTicks = gridTicks || props.beatTicks
   const trackClasses = ['track', !gridTicks && 'grid-off', props.dragging && 'dragging', props.invalid && 'invalid']
   const playheadLeft = pct(props.playhead, totalTicks)
+  // The chord after each clip, so "leading" chords can say whether they resolve.
+  const sorted = [...clips].sort((a, b) => a.start - b.start)
+  const nextChord = new Map(sorted.map((c, i) => [c.id, sorted[i + 1]?.chord]))
 
   return (
-    <div className="timeline">
+    <div ref={rootRef} className="timeline" style={{ '--playhead': playheadLeft } as CSSProperties}>
       <div
         className="ruler"
         onPointerDown={startScrub}
@@ -131,14 +145,18 @@ export function Timeline(props: Props) {
             {i + 1}
           </span>
         ))}
-        <div ref={markerRef} className="playhead-marker" style={{ left: playheadLeft }} />
+        <div className="playhead-marker" />
       </div>
       <div
         ref={trackRef}
         className={trackClasses.filter(Boolean).join(' ')}
         onPointerDown={(e) => {
           props.onSelect(null)
-          props.onSeek(seekTicks(e.clientX, e.altKey))
+          props.onSeek(seekTicks(e.clientX, freeKey(e)))
+        }}
+        onDoubleClick={(e) => {
+          if (e.target instanceof Element && e.target.closest('.clip')) return
+          props.onCreateEmpty(ticksAt(e.clientX))
         }}
       >
         {Array.from({ length: bars }, (_, i) => (
@@ -156,15 +174,25 @@ export function Timeline(props: Props) {
         ))}
 
         {clips.length === 0 && !props.dragging && (
-          <div className="track-empty">Drag chords here, or click them above</div>
+          <div className="track-empty">Drag chords here, or double-click for an empty clip with ideas</div>
         )}
 
         {clips.map((clip) => {
-          const info = chordInKey(clip.symbol, tonic, mode)
-          const notes = chordNotes(clip.symbol).join(' ')
+          const handle = (edge: 'start' | 'end') => (
+            <div className={`handle ${edge}`} onPointerDown={startResize(clip.id, edge)} onPointerMove={moveResize} onPointerUp={endResize} />
+          )
+          if (!clip.chord) return <EmptyClip key={clip.id} clip={clip} handle={handle} {...props} />
+          const chord = clip.chord
+          const degree = rootDegree(chord, tonic, mode)
+          const { fit, tension } = analyzeChord(chord, tonic, mode, nextChord.get(clip.id))
+          const name = chordName(chord)
+          const notes = voicedNoteNames(chord).join(' ')
+          const selected = selectedIds.includes(clip.id)
+          const tag = [fit.tag, tension.level === 2 && 'clash'].filter(Boolean).join(' · ')
           const classes = [
             'clip',
-            selectedIds.includes(clip.id) && 'selected',
+            selected && 'selected',
+            !selected && clip.id === props.inspectedId && 'inspected',
             isPlaying && clip.id === activeId && 'active',
             props.placingIds.includes(clip.id) && 'placing',
             props.liftedIds.includes(clip.id) && 'lifted',
@@ -173,15 +201,15 @@ export function Timeline(props: Props) {
           const style = {
             left: pct(clip.start, totalTicks),
             width: pct(clip.length, totalTicks),
-            '--hue': info ? (info.degree * 360) / 7 : undefined,
+            '--hue': degree === null ? undefined : (degree * 360) / 7,
           } as CSSProperties
           return (
             <div
               key={clip.id}
               className={classes.filter(Boolean).join(' ')}
-              data-diatonic={info ? 'yes' : 'no'}
+              data-diatonic={degree === null ? 'no' : 'yes'}
               style={style}
-              title={`${clip.symbol}: ${notes}`}
+              title={`${name}: ${notes}\n${fit.title}${tension.level ? ` · ${tension.label}` : ''}`}
               onPointerDown={(e) => {
                 e.stopPropagation()
                 props.onClipPointerDown(clip, e, ticksAt(e.clientX) - clip.start)
@@ -189,41 +217,108 @@ export function Timeline(props: Props) {
               // Ctrl+click is a multi-select gesture here, not a context menu.
               onContextMenu={(e) => e.preventDefault()}
             >
-              <div
-                className="handle start"
-                onPointerDown={startResize(clip.id, 'start')}
-                onPointerMove={moveResize}
-                onPointerUp={endResize}
-              />
+              {handle('start')}
               {change && (
                 <span className={`change-badge ${change}`}>
                   <span aria-hidden>{CHANGE_LABELS[change].icon}</span>
                   <span className="change-text">{CHANGE_LABELS[change].text}</span>
                 </span>
               )}
-              <span className="symbol">{clip.symbol}</span>
-              {info && <span className="roman">{info.roman}</span>}
+              {tag && !change && (
+                <span className={`fit-tag ${fit.kind}${tension.level === 2 ? ' clash' : ''}`}>
+                  <span className="fit-tag-text">{tag}</span>
+                </span>
+              )}
+              <span className="symbol">{name}</span>
+              <span className="roman">{fit.roman}</span>
               <span className="notes">{notes}</span>
+              {selected && (
+                <span className="invert" onPointerDown={(e) => e.stopPropagation()}>
+                  <button
+                    aria-label="Lower inversion"
+                    title="Lower inversion (↓)"
+                    disabled={!canInvert(chord, -1)}
+                    onClick={() => props.onInvert(clip.id, -1)}
+                  >
+                    ▾
+                  </button>
+                  <button
+                    aria-label="Higher inversion"
+                    title="Higher inversion (↑)"
+                    disabled={!canInvert(chord, 1)}
+                    onClick={() => props.onInvert(clip.id, 1)}
+                  >
+                    ▴
+                  </button>
+                </span>
+              )}
               <button
                 className="remove"
-                aria-label={`Remove ${clip.symbol}`}
+                aria-label={`Remove ${name}`}
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={() => props.onRemove(clip.id)}
               >
                 ×
               </button>
-              <div
-                className="handle end"
-                onPointerDown={startResize(clip.id, 'end')}
-                onPointerMove={moveResize}
-                onPointerUp={endResize}
-              />
+              {handle('end')}
             </div>
           )
         })}
 
-        <div ref={playheadRef} className="playhead" style={{ left: playheadLeft }} />
+        <div className="playhead" />
       </div>
+      {props.children}
+    </div>
+  )
+}
+
+/** An empty clip: a placeholder waiting for a chord (silent). Select it for ideas. */
+function EmptyClip({ clip, handle, ...props }: Props & { clip: Clip; handle: (edge: 'start' | 'end') => ReactNode }) {
+  const { totalTicks, selectedIds, trackRef } = props
+  const selected = selectedIds.includes(clip.id)
+  const ticksAt = (clientX: number) => {
+    const r = trackRef.current!.getBoundingClientRect()
+    return Math.min(Math.max((clientX - r.left) / r.width, 0), 1) * totalTicks
+  }
+  const change = props.changes?.get(clip.id)
+  const classes = [
+    'clip',
+    'empty',
+    selected && 'selected',
+    !selected && clip.id === props.inspectedId && 'inspected',
+    props.placingIds.includes(clip.id) && 'placing',
+    props.liftedIds.includes(clip.id) && 'lifted',
+  ]
+  return (
+    <div
+      className={classes.filter(Boolean).join(' ')}
+      data-diatonic="no"
+      style={{ left: pct(clip.start, totalTicks), width: pct(clip.length, totalTicks) }}
+      title="Empty clip: select it for chord ideas, or drop a chord on it"
+      onPointerDown={(e) => {
+        e.stopPropagation()
+        props.onClipPointerDown(clip, e, ticksAt(e.clientX) - clip.start)
+      }}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      {handle('start')}
+      {change && (
+        <span className={`change-badge ${change}`}>
+          <span aria-hidden>{CHANGE_LABELS[change].icon}</span>
+          <span className="change-text">{CHANGE_LABELS[change].text}</span>
+        </span>
+      )}
+      <span className="symbol">?</span>
+      <span className="notes">{selected ? 'pick a chord below' : 'empty'}</span>
+      <button
+        className="remove"
+        aria-label="Remove empty clip"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={() => props.onRemove(clip.id)}
+      >
+        ×
+      </button>
+      {handle('end')}
     </div>
   )
 }

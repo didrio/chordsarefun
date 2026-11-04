@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import type { HeldChord } from '../music/timeline'
+import { copyKey, freeKey } from '../platform'
 import type { ClickMods } from '../selection'
 
 export type DragState = {
@@ -8,8 +9,10 @@ export type DragState = {
   y: number
   /** Pointer position on the track in ticks, or null when not over the track. */
   overTicks: number | null
-  /** Alt held: ignore the grid. */
+  /** ⌘ (Mac) / Alt held: ignore the grid. */
   free: boolean
+  /** Option (Mac) / Ctrl held: copy existing clips instead of moving them. */
+  copy: boolean
 }
 
 type Options = {
@@ -52,7 +55,15 @@ export function useChordDrag(options: Options) {
 
     const move = (ev: PointerEvent) => {
       if (!state && Math.hypot(ev.clientX - originX, ev.clientY - originY) < DRAG_THRESHOLD_PX) return
-      state = { held, x: ev.clientX, y: ev.clientY, overTicks: overTicks(ev.clientX, ev.clientY), free: ev.altKey }
+      const x = ev.clientX
+      const y = ev.clientY
+      state = { held, x, y, overTicks: overTicks(x, y), free: freeKey(ev), copy: copyKey(ev) }
+      setDrag(state)
+    }
+    // Pressing or releasing a modifier mid-drag updates the preview without moving.
+    const onModifier = (ev: KeyboardEvent) => {
+      if (!state || !['Alt', 'Control', 'Meta'].includes(ev.key)) return
+      state = { ...state, free: freeKey(ev), copy: copyKey(ev) }
       setDrag(state)
     }
     const cleanup = () => {
@@ -60,6 +71,8 @@ export function useChordDrag(options: Options) {
       window.removeEventListener('pointerup', up)
       window.removeEventListener('pointercancel', cancel)
       window.removeEventListener('keydown', onKey, true)
+      window.removeEventListener('keydown', onModifier)
+      window.removeEventListener('keyup', onModifier)
       setDrag(null)
     }
     const up = () => {
@@ -78,6 +91,8 @@ export function useChordDrag(options: Options) {
     window.addEventListener('pointerup', up)
     window.addEventListener('pointercancel', cancel)
     window.addEventListener('keydown', onKey, true)
+    window.addEventListener('keydown', onModifier)
+    window.addEventListener('keyup', onModifier)
   }
 
   return { drag, begin }

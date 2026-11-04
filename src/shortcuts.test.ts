@@ -41,6 +41,10 @@ describe('shortcutFor', () => {
   it('maps editing keys', () => {
     expect(press('ArrowLeft')).toEqual({ type: 'step', dir: -1 })
     expect(press('ArrowRight')).toEqual({ type: 'step', dir: 1 })
+    expect(press('ArrowUp')).toEqual({ type: 'invert', dir: 1 })
+    expect(press('ArrowDown')).toEqual({ type: 'invert', dir: -1 })
+    expect(press('ArrowUp', { shiftKey: true })).toEqual({ type: 'octave', dir: 1 })
+    expect(press('ArrowDown', { shiftKey: true })).toEqual({ type: 'octave', dir: -1 })
     expect(press('Backspace')).toEqual({ type: 'remove' })
     expect(press('Delete')).toEqual({ type: 'remove' })
     expect(press('Escape')).toEqual({ type: 'deselect' })

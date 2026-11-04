@@ -9,6 +9,10 @@ export type Shortcut =
   | { type: 'chord'; index: number }
   /** Previous/next clip, or move the playhead when nothing is selected. */
   | { type: 'step'; dir: -1 | 1 }
+  /** Move the selected chords one inversion up/down. */
+  | { type: 'invert'; dir: -1 | 1 }
+  /** Move the selected chords (or all, with nothing selected) an octave up/down. */
+  | { type: 'octave'; dir: -1 | 1 }
   | { type: 'toggleLoop' }
   | { type: 'toggleMetronome' }
   | { type: 'remove' }
@@ -29,6 +33,11 @@ export function shortcutFor(e: Keys): Shortcut | null {
   if (/^[1-7]$/.test(key)) return { type: 'chord', index: Number(key) - 1 }
   if (key === 'arrowleft') return { type: 'step', dir: -1 }
   if (key === 'arrowright') return { type: 'step', dir: 1 }
+  // Shift+↑/↓ is octave transpose, as in Ableton's MIDI editor.
+  if (key === 'arrowup' && e.shiftKey) return { type: 'octave', dir: 1 }
+  if (key === 'arrowdown' && e.shiftKey) return { type: 'octave', dir: -1 }
+  if (key === 'arrowup') return { type: 'invert', dir: 1 }
+  if (key === 'arrowdown') return { type: 'invert', dir: -1 }
   if (key === 'l') return { type: 'toggleLoop' }
   if (key === 'm') return { type: 'toggleMetronome' }
   if (key === 'backspace' || key === 'delete') return { type: 'remove' }

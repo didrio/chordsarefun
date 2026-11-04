@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { makeChord } from './music/chord'
 import type { Clip } from './music/timeline'
 import { clickSelect, EMPTY_SELECTION, pruneSelection, selectAll } from './selection'
 
-const clips: Clip[] = ['a', 'b', 'c', 'd', 'e'].map((id, i) => ({ id, symbol: id, start: i * 100, length: 100 }))
+const clips: Clip[] = ['a', 'b', 'c', 'd', 'e'].map((id, i) => ({ id, chord: makeChord('C'), start: i * 100, length: 100 }))
 const plain = { shift: false, toggle: false }
 const shift = { shift: true, toggle: false }
 const toggle = { shift: false, toggle: true }
