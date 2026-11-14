@@ -738,8 +738,8 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
           </div>
 
         <Panel
-          title="More"
-          hint="voicings: inversions, octaves and each chord's notes"
+          title="Voicing"
+          hint="see every note and how chords connect"
           open={moreOpen}
           onToggle={() => setMoreOpen((o) => !o)}
         >

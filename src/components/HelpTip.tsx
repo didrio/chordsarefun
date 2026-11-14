@@ -58,24 +58,24 @@ export function HelpTip() {
         <h2>How it works</h2>
         <ol>
           <li>
-            <b>Pick a Home</b> (a key and mood). Chords are colored by how well they fit it, and anything outside it is
-            explained, never forbidden.
+            <b>Pick a Key</b> (top right): a home note and a mood. Chords are colored by how well they fit it, and
+            anything outside it is explained, never forbidden.
           </li>
           <li>
-            <b>Add chords.</b> Choose a <b>Progression</b> (the dice picks one for you), or press <b>+ New</b> (or
-            double-click empty space on the track) to add a spot and pick one of its chord ideas.
+            <b>Add chords.</b> Start from a <b>Progression</b> (the dice picks one for you), or press <b>+</b> (or
+            double-click empty space on the track) to add a spot and pick one of its ideas.
           </li>
           <li>
-            <b>Click a chord</b> to open its details: other flavors, inversions, the bass note, or type any chord
-            you like.
+            <b>Click a chord</b> to see what could go there instead (<b>Ideas</b>), other kinds of the same chord
+            (<b>Flavors</b>), or its notes, inversion and bass note (<b>Notes</b>). Or type any chord you like.
           </li>
           <li>
             <b>Arrange.</b> Drag chords to move them (the preview tells you what will happen), drag an edge to resize,
             hold {COPY_KEY} to copy.
           </li>
           <li>
-            <b>Choose a Groove</b> for the chords, bass and drums, then press Play. Key, tempo, time signature, length and
-            grid are in the <b>Config</b> menu.
+            <b>Choose a Groove</b> for the chords, bass and drums, then press Play. Tempo is next to the key; time
+            signature, length and grid are under <b>4/4 · 4 bars</b>.
           </li>
           <li>
             <b>Keep it.</b> Everything saves as you go. Name a session to keep it, and Download MIDI to take the chords

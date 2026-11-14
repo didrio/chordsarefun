@@ -46,7 +46,7 @@ export function HomeNotice({ from, to, outside, onMove, onDismiss }: Props) {
   return (
     <div className="home-notice" role="status">
       <span>
-        Home is now <strong>{toName}</strong>. Your chords stayed put
+        The key is now <strong>{toName}</strong>. Your chords stayed put
         {outside > 0 ? ` (${outside} ${outside === 1 ? 'is' : 'are'} now outside the key)` : ''}.
       </span>
       <span className="group">
