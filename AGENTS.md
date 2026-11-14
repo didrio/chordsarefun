@@ -96,7 +96,7 @@ colors, fit dots and plain-language reasons, always relative to Home.
 ### Adding chords
 
 - **The palette (7 in-key chords), the Spice row and the Triads/7ths/9ths toggle were
-  removed**: the inspector's Alternatives and Ideas cover chord ideas now. The 1–7
+  removed**: the inspector's Ideas and Flavors tabs cover chord ideas now. The 1–7
   shortcuts went with them. Chords get on the track via Progressions, double-click
   empty clips + Ideas / typing a chord in the inspector, and copy-drag of clips.
   `Palette.tsx` (+ `SpiceRow`), `spiceChords`, `diatonicChords` and the `.chord-picker`
@@ -114,34 +114,45 @@ colors, fit dots and plain-language reasons, always relative to Home.
 
 - The **details panel** under the track (like Ableton's detail view) is dismissable, not
   collapsible: an X at its top right closes it. It shows the **inspected clip**: the last
-  clip selected on its own. Selecting a clip, adding one (palette drop, double-click, copy)
+  clip selected on its own. Selecting a clip, adding one (double-click, + New, copy)
   or stepping with ←/→ switches it and shows the panel; clicking elsewhere or Esc only
   deselects (so nothing jumps). Selecting several clips (or none) hides it entirely; the
-  group voicing buttons are in More. The inspected clip gets a dashed outline on the track
+  group voicing buttons are in Voicing. The inspected clip gets a dashed outline on the track
   while it isn't selected.
-- Inspector (`ChordInspector.tsx`): **one layout for chords and empty clips**; rows hide
-  or show, nothing moves. The panel is **always the same height** (25rem on
-  desktop): the parts that vary scroll inside it.
-  - Left, fixed from the name down to the keyboard legend: ▶, name (or "Select a chord" for an empty one),
-    roman, notes (+ "bass E"), and a red **Clear chord** (the clip becomes empty, in
-    place) · Root picker (for an empty clip it sets a major chord) + "type any chord" ·
-    the one-octave keyboard (lit = in the chord; note names outside the key in yellow,
-    as a yellow pill on lit keys; each lit note's role (R, 3, b7…) small and gray
-    above its name; click to add/remove, min 2 notes; on an empty clip, two clicked
-    notes make the chord) and its three-line legend. Then, under a dotted line and
-    scrolling if long: the fit badge and "**Context:** …" explanation, theory term,
-    out-of-key notes, tension; for an empty clip, "Context: Between G and F."
-  - Right: for chords, the **Inversion** row ("1st inversion (E on the bottom)", ↓/↑ arrows,
-    "the bass note stays C") and the **Bass note** row (chord tones as buttons, root
-    first, plus "Other note…"; explains slash chords); then tabs **Alternatives**
-    (other flavors of the root: a three-row color legend on top, then **one flat list of
-    chips** whose 2px left edge shows the fit: green In key, then blue Borrowed &
-    leading, then orange Outside the key; within each color the most expected chords
-    come first (`flavors.ts`, and the note under the chips says so)) | **Ideas**. An empty clip just has an "Ideas" heading. Selecting
-    a different chord opens on Alternatives, an empty clip on Ideas; filling an empty
-    clip (or Clear chord) keeps you on Ideas.
-  - **Ideas are pages**, one per kind (Feel at home, Build tension, Flow smoothly, Add
-    color), with ‹ › and the page names (Home · Tension · Flow · Color) underneath.
+- Inspector (`ChordInspector.tsx`): **one layout for chords and empty clips**: a header
+  strip, then three tabs. The panel is **always the same height** (25rem on desktop):
+  the tab content scrolls inside it.
+  - **Header** (always visible): ▶, name ("Pick a chord" for an empty one), roman, notes
+    (+ "bass E"), and **one line** under the name: the fit badge, a tension badge only
+    when it bites, and the plain explanation (`analysis.fit.detail`, truncated, full text
+    on hover and in Notes); for an empty clip, where it sits ("After F, at the end…").
+    On the right: **Type a chord** (its reading shows in a popover under the box, so the
+    header never changes height), a quiet red **Clear** (the clip becomes empty, in
+    place) and the X.
+  - Tabs, in this order: **Ideas for this spot** (the songwriter's question, so first) |
+    **Flavors of {root}** (disabled on an empty clip: no root yet) | **Notes and bass**.
+    The spot's context ("Between C and Am.") sits at the right end of the tab bar.
+  - **The tab is sticky**: it stays on whatever you used last (saved per session, default
+    Ideas), like a DAW's device view. An empty clip on Flavors shows Ideas; Clear chord
+    on Flavors switches the saved tab to Ideas.
+  - **Ideas**: all four kinds side by side (Feel at home, Build tension, Flow smoothly,
+    Add color; two columns under 900px), each with its short hint and up to 3 cards (name,
+    numeral, plain why). A kind with nothing to offer keeps its column ("Nothing obvious
+    here."), so the layout never shifts.
+  - **Flavors**: other chords on the same root, under three fit headings (In key ·
+    Common moves · Outside the key, with the fit dot). Each card shows the name and its
+    **feel** in plain words (`ChordType.feel`: "Soft and dreamy"). Within each group the
+    most expected come first (`flavors.ts`); the first 6 per group show (plus the current
+    flavor wherever it ranks), "Show all N" reveals the rest.
+  - **Notes and bass**: left, the Root picker (for an empty clip it sets a major chord)
+    and the one-octave keyboard (lit = in the chord; note names outside the key in
+    yellow, as a yellow pill on lit keys; each lit note's role (R, 3, b7…) small and
+    gray above its name; click to add/remove, min 2 notes; on an empty clip, two clicked
+    notes make the chord) with a one-line legend. Right, for chords: the **Inversion** row
+    ("1st inversion (E on the bottom)", Lower/Higher; "the bass note stays C" is in the
+    tooltips), the **Bass note** row (chord tones as buttons, root first, plus "Other
+    note…"; the slash-chord explanation shows only when a slash bass is set), and **Why
+    it sounds like this**: fit badge, explanation, theory term, out-of-key notes, tension.
 - **Type any chord** (`parse.ts`, `readChordInput`) is forgiving and shows how it reads
   the text while typing ("→ C#m7 (C# E G# B)", "Those notes make C", "bVII in C major
   is Bb"); Enter sets it. It reads chord names in any common spelling (CM7, CΔ, C^7,
@@ -153,11 +164,11 @@ colors, fit dots and plain-language reasons, always relative to Home.
   A slash always sets the bass, never an inversion. Typed chords and ideas are moved to
   the octave nearest the other chords (like dropped chords; `fitOctave`); the inversion
   you chose is kept.
-- Notes lane (`NotesLane.tsx`, in the **Advanced** panel): a **display-only** piano roll on the
+- Notes lane (`NotesLane.tsx`, in the **Voicing** panel): a **display-only** piano roll on the
   track's time axis showing what the
   chords part plays for each clip (its voicing, plus a slash chord's low bass note when
   the Bass part is off; empty clips show nothing), out-of-key notes striped, lines from each note to the nearest note of
-  the next chord. Individual notes are edited only in the inspector; the Advanced buttons
+  the next chord. Individual notes are edited only in the inspector; the Voicing buttons
   adjust **whole chords**:
   - "Inversion ↓/↑" and "Octave ↓/↑" buttons (arrows with a shaft; keys ↓/↑ and Shift+↓/↑, `shiftOctave` = inversion ±
     note count) act on the selection, or every chord when nothing is selected; they
@@ -173,7 +184,7 @@ colors, fit dots and plain-language reasons, always relative to Home.
   centered nearest the average of all the other chords (`fitOctave`), in the drag preview
   too. With no other chords it centers around C4 (middle C), not C3.
   Existing chords are never re-voiced automatically (that's the Smooth voicing button).
-- "Progressions" (`ProgressionMenu.tsx`, in the main toolbar): a dropdown with genre
+- "Progressions" (`ProgressionMenu.tsx`, on the right of the main toolbar; its panel opens leftward): a dropdown with genre
   submenus (hover switches genre after a short delay; ←/→ between columns). ~180
   progressions (no two with the same chords in the same mood; a test enforces it),
   curated most common first within each genre (`progressions.ts`), genres and progressions ordered most common first.
@@ -184,7 +195,7 @@ colors, fit dots and plain-language reasons, always relative to Home.
   back; the seek happens when the new clips are scheduled); one chord per bar, repeated while it fits, or
   shared evenly on shorter tracks. ▶ previews without touching the track.
 - **Rich dropdowns** (`useDropdown.ts`): custom popovers instead of native selects where
-  options need descriptions (Scale, progressions). Click outside / Esc closes; ↑/↓
+  options need descriptions (Key, progressions, sessions, time/length/grid). Click outside / Esc closes; ↑/↓
   move; the app's shortcuts ignore keys inside `.dropdown`.
 - Clips show a fit tag ("borrowed", "→ Dm",
   "outside", "clash") when not plainly in key.
@@ -192,19 +203,27 @@ colors, fit dots and plain-language reasons, always relative to Home.
 ### Empty clips and ideas (`suggest.ts`)
 
 - **Wording: users never see the word "clip".** In the UI (labels, tooltips, the how-to)
-  it's always "chord"; an empty one is a "spot" ("Select a chord", "blank spot", "empty
+  it's always "chord"; an empty one is a "spot" ("Pick a chord", "blank spot", "empty
   spot"). "Clip" is only our internal name in code and in this file.
-- **+ New** (tinted button left of Undo, `addNextEmptyClip`) adds an empty spot in the
+- **+ New** (tinted + button above Undo, right of the track; also "Add a chord" on an
+  empty track; `addNextEmptyClip`) adds an empty spot in the
   first gap on the track, never longer than a bar even if the gap is bigger. With no gap
   it goes at the end, taking up to half of (and shortening) the last chord. It ignores
   the playhead on purpose (unexpected results). It's selected right away. **+ New
-  session** shares the tint (`button.tinted`).
+  session** (in the sessions menu) shares the tint (`button.tinted`).
+- **An empty track says where to start**: "Start your progression" with **Start from a
+  progression** (the one accent button; opens the Progressions menu through its
+  `ProgressionMenuHandle`) and **Add a chord** (+ New), plus "or double-click anywhere on
+  the track". The buttons are passed into `Timeline` as `emptyState` and don't seek or
+  add a spot when clicked. While the track is empty the Progressions trigger is
+  highlighted too.
 - **Double-click empty track space** to add an empty clip: the whole gap if it's a bar
   or less, else the part of the gap inside the clicked bar (`emptyClipSpan`). It's
   selected right away. Empty clips are dashed "?" clips: silent, resizable, movable,
   copyable, deletable; drop a chord on one to fill it.
-- The panel for an empty clip shows **ideas for the spot** plus the "type any chord"
-  box and the keyboard (click notes; two or more make the chord via `chordFromNotes`).
+- The panel for an empty clip shows **ideas for the spot** (Ideas tab) plus the "type a
+  chord" box, and the keyboard in Notes (click notes; two or more make the chord via
+  `chordFromNotes`).
 - `suggestForSpot` looks at the nearest chords before/after (empty clips skipped),
   whether it's the start or the end, and (at the end of a looping track) the chord the
   loop returns to. Four groups, up to 3 ideas each, never repeating a chord or the
@@ -282,9 +301,11 @@ one undo step.
 
 ### Grid, time signature, length
 
-- Tempo (Options): typed freely; a value in range (30–300) applies as soon as it's
+- Tempo (`TempoInput`, in the song bar next to the key): typed freely; a value in range (30–300) applies as soon as it's
   complete (so typing 127 works), and on blur/Enter out-of-range values are clamped and
   unreadable ones restored.
+- Time signature, length and grid live in one small popover in the song bar
+  (`TimingMenu`), whose trigger reads "4/4 · 4 bars".
 - Grid: 1 bar, 1/2, 1/4, 1/8, 1/16, Off. "1 bar" = the current bar length. The grid
   **restarts at every bar line** (`snap(..., barTicks)`), so odd meters stay aligned;
   bar lines are always snap points. Grid Off draws beat lines dotted.
@@ -296,9 +317,12 @@ one undo step.
 
 ### Home (`home.ts`, `HomeMenu.tsx`, `HomeNotice.tsx`)
 
-- One "Home" dropdown in the header: 12 key buttons over the moods (most common first:
-  Major, Minor, Dorian, Mixolydian, Lydian, Phrygian, Locrian), each described in plain
-  words (`MODE_INFO`). Picking a key keeps the menu open; picking a mood closes it.
+- **On screen it's called "Key"** (the word people walk in knowing); "home" is how the
+  app explains it ("C is home", "Home note") and what the code and this file call it.
+  One "Key C Major" dropdown in the song bar (`HomeMenu.tsx`): 12 "Home note" buttons
+  over the moods (most common first: Major, Minor, Dorian, Mixolydian, Lydian, Phrygian,
+  Locrian), each described in plain words (`MODE_INFO`). Picking a note keeps the menu
+  open; picking a mood closes it.
 - **Changing home only re-labels** (colors, numerals, fit); chords never change. Part of
   undo.
 - Right after, a notice offers to move the chords, worded for what it does
@@ -425,9 +449,9 @@ The (i) tooltip next to the logo (`HelpTip.tsx`: how it works + every shortcut, 
   grid, loop, metronome, palette size, notes lane, the selection, the inspected clip,
   the details panel (open/collapsed, tab) (`SESSION_KEYS`), so it reopens exactly as it was left.
 - You're always in one session and **every change is saved to it as you go**. The
-  "Your sessions:" menu in the header shows its name ("Unsaved session" for the scratch
-  session). **+ New session** (next to it, no confirm: everything is already saved)
-  makes an empty "Untitled session" and opens it. On the unsaved session only, a name
+  sessions menu next to the logo shows its name like a document title ("Unsaved
+  session" for the scratch session). **+ New session** (first in that menu, no confirm:
+  everything is already saved) makes an empty "Untitled session" and opens it. On the unsaved session only, a name
   box at the top of the list names it as a new session (the unsaved one starts over
   empty). The list opens any session (newest created first, so rows never reorder, with "4 chords · C
   major · 3 min ago"), and duplicates (⧉: adds "<name> copy", stays on the current
@@ -463,27 +487,38 @@ tracks; drums on channel 10 with General MIDI notes) or one part alone.
 
 ## Visual design
 
-- Dark UI. Layout top to bottom: header (the piano icon + "create a chord progression" in the
-  normal font, an (i) help tooltip headed "chords are fun"; right: "Your sessions:" menu, + New
-  session, a subtle Download MIDI) → **main toolbar** (dashed line above, solid below: Progressions
-  + die and Groove + die on the left, spaced apart; metronome + volume on the right; fixed-width
-  dropdowns, long text truncates) → home notice (after a home change) → **the timeline** (no panel around it, full width) →
-  two panels (`Panel.tsx`):
-  - The toolbar's right side: metronome + volume, then **Config:**, a dropdown (`ConfigMenu.tsx`)
-    showing "C major · 120 BPM · 4/4" and listing one setting per row, labels left, controls
-    lined up right: Song (Home; its picker opens over the list) and Timing (Tempo, Time,
-    Length, Grid).
-  - Timeline: icon-only side buttons (tooltips say what they do; no text) stretched to exactly the
-    timeline's height: Play/Pause, Stop, Loop on the left; + New (new chord), Undo, Redo on the right.
-  - **More** (collapsible, closed by default, saved per session as `moreOpen`): a row with the
-    notes-lane legend on the left and Inversion ↓/↑, Octave ↓/↑ and Smooth voicing on the right
-    (unusable until expanded; the ↑/↓ shortcuts still work), then the notes lane, lined up with the
-    timeline above (`--side` columns).
-  - **Chord details** (`DismissPanel`): not collapsible; it appears when one chord is selected or
-    stepped to, and goes away with the X at its top right (or when several chords are selected,
-    or none). Selecting a chord again brings it back.
+- Dark UI. The rule is **the song on top, then the chords, then one chord**. Top to bottom:
+  - **Song bar** (`header.song-bar`): the piano icon + "create a chord progression", the (i)
+    help tooltip headed "chords are fun", the sessions menu (reads like the document's
+    name); right: **Key C Major ▾**, the tempo field (BPM), **4/4 · 4 bars ▾** (time,
+    length, grid) and Download MIDI. On narrow windows the right group wraps under.
+  - **Main toolbar** (dashed line above, solid below), like Ableton's transport bar: Play
+    (accent tint), Stop, Loop, metronome + volume on the left; Progressions + die and
+    Groove + die on the right (fixed-width triggers, long text truncates).
+  - Home notice (after a key change).
+  - **The timeline** (no panel around it, full width) with icon-only buttons stretched to
+    its height on the right: + New (new chord, tinted), Undo, Redo.
+  - Two panels (`Panel.tsx`):
+    - **Voicing** (collapsible, closed by default, saved per session as `moreOpen`; hint "see
+      every note and how chords connect"): a row with the notes-lane legend on the left and
+      Inversion ↓/↑, Octave ↓/↑ and Smooth voicing on the right (unusable until expanded; the
+      ↑/↓ shortcuts still work), then the notes lane, lined up with the track above (the
+      lane runs to the panel's left edge, like the track; `--side` is the right column).
+    - **Chord details** (`section.details-panel`, no title bar): not collapsible; it appears
+      when one chord is selected or stepped to, and goes away with the X in its header (or
+      when several chords are selected, or none). Selecting a chord again brings it back.
   The playhead CSS variable lives on the `.panels` wrapper (`data-playhead-scope`), so the
   timeline and the notes lane share one playhead.
+- **Type scale**: every font size is one of six CSS variables in `:root` (`--fs-micro` 0.6rem
+  only for labels drawn inside graphics: keys, lane, tags on chords; then `--fs-xs` 0.75,
+  `--fs-sm` 0.85, `--fs-md` 1, `--fs-lg` 1.25 (chord names on the track), `--fs-xl` 1.6). Don't
+  add raw sizes.
+- **Three button weights**: accent (Play, + New, the empty track's "Start from a
+  progression"; at most one filled `button.primary` in view), bordered (the default: menus,
+  settings), ghost (dice, undo, redo: no border until hovered).
+- Helper text belongs in tooltips and the help popover, not always on screen: panels show
+  state, and a sentence appears only when it says something about *this* chord (e.g. the
+  slash-chord note).
 - There is no Clear button: start over with + New session.
 - **Chord color = scale degree of the root** (hue = degree × 360/7), identical in
   palette, clips, lane and progression menu, so Dm, Dm7 and D (V/V) in C share the "2" color; how
@@ -520,9 +555,19 @@ These were discussed and chosen deliberately; don't "fix" them without asking.
   slash chords are audible in "Just chords" too, while plain chords sound unchanged.
 - **Ableton's drag modifiers** (copy: Option/Ctrl; ignore grid: ⌘/Alt) rather than
   our own; on Mac this moved "ignore grid" from Alt to ⌘.
-- **The details panel never closes by itself** (only its X, or a multi-selection, hides it), chords and empty clips share one layout, the keyboard is anchored above
-  the (variable) description, and the panel has a fixed height with paged ideas, so
-  adding or switching clips never makes it jump.
+- **The details panel never closes by itself** (only its X, or a multi-selection, hides it), chords and empty clips share one layout (header + tabs), and the panel has a fixed
+  height with the tab content scrolling inside, so adding or switching clips never makes
+  it jump.
+- **The inspector shows the songwriter's answer first.** Ideas ("what could go here?") is
+  the first tab and the default; Flavors (same root, other kinds) second; hands-on notes,
+  inversion and bass third. The owner asked for the UI to make sense to musicians with no
+  theory; the expert controls are all still one click away. The tab is sticky (one rule)
+  rather than chosen per clip type.
+- **"Key" on screen, "home" in explanations and code.** Nobody walks in knowing the word
+  "home"; everyone knows "key". The Home paradigm itself is unchanged.
+- **Transport in a top bar, not beside the track** (Ableton puts play, loop, metronome and
+  tempo together); only + New, Undo and Redo stay beside the track. Changed in the
+  redesign that also split the old Config menu into Key, tempo and "4/4 · 4 bars".
 - **Ideas are clicked in, not dragged**: an empty clip's target is obvious, and the
   inspector keeps showing ideas so trying several is one click each (undo restores).
 - **Sessions autosave; naming is optional**, like a DAW project that never loses
@@ -532,14 +577,16 @@ These were discussed and chosen deliberately; don't "fix" them without asking.
   explicit, offered action. (Earlier, key changes rewrote the chords, which made
   C major → A minor turn C into Am despite identical notes.) Home and time signature
   are part of undo.
-- **Borrowing happens chord by chord** (Spice row, inspector), never by changing home.
+- **Borrowing happens chord by chord** (Ideas' Add color, Flavors), never by changing home.
 - **Chords are descriptions, not note lists**: keeps names readable, lets key changes
   keep roles, makes every edit one clear change. Note edits are pitch-class based; a
   name can't capture every voicing (Cadd9 with the D moved down still reads "Cadd9").
-- **Config menu** (`ConfigMenu.tsx`; `OptionsMenu.tsx` has the tempo/time/length/grid fields,
-  `HomeMenu.tsx` Home): defaults suit most sketching, so these live in one dropdown, out of the
-  way; the things used constantly (Progressions, Groove, metronome) stay in the toolbar.
-- **Timeline buttons are icons only** (tooltips explain them), so the side columns stay narrow.
+- **Song settings in the song bar** (`HomeMenu.tsx` for the key; `OptionsMenu.tsx` has
+  `TempoInput` and `TimingMenu` for time/length/grid): the key and tempo are read and
+  changed often, so they're always visible; time signature, length and grid are rarer, so
+  they share one small popover whose trigger shows the two you read most.
+- **Timeline and transport buttons are icons only** (tooltips explain them), so the
+  right-hand column stays narrow.
 - **Custom dropdowns only where native selects can't show enough** (descriptions,
   submenus); simple value pickers (Key, Length, Grid) stay native.
 - **The palette stays 7 chords**; extensions, sus, altered etc. are variations in the
@@ -587,7 +634,7 @@ them up.
   - `analysis.ts`: fit to the key (diatonic / borrowed / secondary dominant / passing
     diminished / tritone sub / outside) and tension, in plain words.
   - `voicing.ts`: `smoothVoicing` (voice leading via inversions), `fitOctave`.
-  - `flavors.ts`: Alternatives, grouped by fit and ordered most expected first.
+  - `flavors.ts`: the Flavors tab, grouped by fit and ordered most expected first.
   - `progressions.ts`: the progression library (genres) and its layout on a track.
   - `audio.ts`: Tone.js playback of the three parts (synths, drum kit, per-part
     volume, limiter), seeking, metronome. The only module touching Web Audio.
@@ -604,12 +651,17 @@ them up.
 - `src/shortcuts.ts`: key → action (`shortcutFor`); App executes actions.
 - `src/dropLabel.ts`: drag preview label (`describeDrop`, `heldName`).
 - `src/components/`
-  - `Timeline.tsx`: ruler + playhead, track, clips, resize handles, drag preview tags.
+  - `Timeline.tsx`: ruler + playhead, track, clips, resize handles, drag preview tags,
+    and the empty track's start buttons (passed in as `emptyState`).
     Converts pointer positions to ticks; holds no editing rules.
   - `Palette.tsx`: palette chords (pointer down starts a click-or-drag).
   - `useChordDrag.ts`: shared pointer drag (click vs drag threshold, Esc cancel,
     click modifiers).
   - `TimeSignatureControl.tsx`: preset menu + Custom pickers.
+  - `OptionsMenu.tsx`: `TempoInput` (the song bar's tempo field) and `TimingMenu`
+    ("4/4 · 4 bars": time signature, length, grid).
+  - `Panel.tsx`: the collapsible panel (Voicing). The chord details are a plain
+    `section.details-panel`; their X lives in the inspector's header.
   - `ChordInspector.tsx`, `NotesLane.tsx`, `ProgressionMenu.tsx`, `HomeMenu.tsx`,
     `HomeNotice.tsx`, `Palette.tsx` (+ `SpiceRow`), `SessionMenu.tsx`,
     `GrooveMenu.tsx`, `MidiMenu.tsx` (+ `useDropdown.ts`): see Behavior.
@@ -639,7 +691,7 @@ them up.
   --screenshot=out.png --window-size=1280,800 http://localhost:5173/`, or a
   `playwright-core` script (no browser download; `executablePath` = that Chrome) for
   clicks, drags, and keys. Use a scratch directory for these, not the repo. Wait for
-  `.palette .chord` before interacting. To screenshot a populated track, seed it
+  `.track` before interacting. To screenshot a populated track, seed it
   temporarily (e.g. edit `DEFAULT_TRACK`) and revert.
 - Audio (timing, sound, metronome feel) can't be verified by an agent; say so and ask
   the owner to listen.
