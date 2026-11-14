@@ -22,9 +22,11 @@ transport, keyboard shortcuts, multi-select. Where there's a DAW convention, fol
 unless it conflicts with the fixed-length model below.
 
 Static site only: no backend, no accounts. State is saved in the browser's
-localStorage, as sessions (see Sessions). Hosted on GitHub Pages via `.github/workflows/deploy.yml` (tests, builds,
-deploys on push to `main`) and on Cloudflare (Workers static assets: `wrangler.jsonc` serves
-`dist`; build command `npm run build`, deploy command `npx wrangler deploy`).
+localStorage, as sessions (see Sessions). Hosted on Cloudflare (Workers static assets:
+`wrangler.jsonc` serves `dist`; Workers Builds runs `npm run build` then `npx wrangler deploy`
+on every push to `main`). GitHub Actions only checks: `.github/workflows/ci.yml` runs
+`npm run check` on pushes to `main` and on pull requests. (GitHub Pages was never enabled;
+its deploy job was removed.)
 
 ## Working with the owner
 

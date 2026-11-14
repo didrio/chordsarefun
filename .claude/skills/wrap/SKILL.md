@@ -9,13 +9,14 @@ disable-model-invocation: true
 The next session starts with only `AGENTS.md`, `TICKETS.md` and git history. Make them enough.
 
 The user typing `/wrap` is the go-ahead to commit and push, including to `main`, which deploys the live site
-(the GitHub Pages workflow tests, builds and deploys on every push to `main`; Cloudflare builds from the repo
-too). Don't ask again; do say in the hand-off that it deployed.
+(Cloudflare Workers Builds builds and deploys every push to `main`; GitHub Actions runs `npm run check` as CI).
+Don't ask again; do say in the hand-off that it deployed.
 
 ## 1. Final pass
 
 - `npm run check` passes (lint, tests, typecheck + production build). Fix what it reports, or stop and tell the
-  user why you can't. Never push a red check: the deploy would fail (or ship something broken).
+  user why you can't. Never push a red check: CI would go red, and Cloudflare only runs the build (typecheck included),
+  so failing tests or lint wouldn't stop the deploy.
 - UI changed: look at the screens that changed in a real browser (the browser pane with `npm run dev`, or headless
   Chrome as in "Verifying" in `AGENTS.md`). Check that nothing jumps (fixed heights, anchored controls) and that a
   narrow window (~900px) still works. The user tries changes right after the session, so keep this quick.

@@ -31,6 +31,7 @@ See [AGENTS.md](AGENTS.md) for product behavior, design decisions, and architect
 
 ## Deploy
 
-Pushing to `main` runs `.github/workflows/deploy.yml`, which tests, builds, and
-deploys to GitHub Pages. One-time setup: in the repo's **Settings → Pages**, set
-**Source** to **GitHub Actions**.
+Pushing to `main` deploys to Cloudflare: Workers Builds runs `npm run build`, then
+`npx wrangler deploy` (`wrangler.jsonc` serves `dist`). GitHub Actions
+(`.github/workflows/ci.yml`) runs `npm run check` (lint, tests, typecheck, build) on
+every push to `main` and on pull requests; it doesn't deploy.
