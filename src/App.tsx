@@ -8,7 +8,7 @@ import { ArrowIcon } from './components/ArrowIcon'
 import { HelpTip } from './components/HelpTip'
 import { MidiMenu } from './components/MidiMenu'
 import { ConfigMenu } from './components/ConfigMenu'
-import { DismissPanel, Panel } from './components/Panel'
+import { Panel } from './components/Panel'
 import { LoopIcon, PauseIcon, PlayIcon, PlusIcon, RedoIcon, StopIcon, UndoIcon } from './components/Icons'
 import { SessionMenu } from './components/SessionMenu'
 import { Timeline } from './components/Timeline'
@@ -166,10 +166,11 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
   // `groove2`: volumes saved before the measured level pass would be badly balanced
   // against the new instrument trims, so everyone starts again from the default mix.
   const [groove, setGroove] = usePersistentState<GrooveSettings>(k('groove2'), DEFAULT_GROOVE, isGrooveSettings)
+  // The details panel's tab is sticky (like a DAW's device view): it stays on whatever you used last.
   const [inspectorTab, setInspectorTab] = usePersistentState<InspectorTab>(
     k('inspectorTab'),
-    'flavors',
-    (v) => v === 'flavors' || v === 'ideas',
+    'ideas',
+    (v) => v === 'ideas' || v === 'flavors' || v === 'notes',
   )
   // The details panel shows the inspected clip: the last one selected on its own. It
   // stays when you click elsewhere (deselect); only selecting another clip switches it.
@@ -246,19 +247,13 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
   }
   /**
    * Change the selection, and with it the details panel: one clip selected opens it on
-   * that clip (a different clip starts on "Other flavors", an empty one on ideas); several
-   * collapse it. Deselecting leaves it as it is.
+   * that clip (on the tab used last); several hide it. Deselecting leaves it as it is.
    */
-  const select = (next: Selection, within: Clip[] = clips) => {
+  const select = (next: Selection) => {
     setSelection(next)
     if (next.ids.length > 1) setPanelOpen(false)
     if (next.ids.length !== 1) return
-    const id = next.ids[0]
-    if (id !== inspectedId) {
-      setInspectedId(id)
-      const clip = within.find((c) => c.id === id)
-      setInspectorTab(clip && !clip.chord ? 'ideas' : 'flavors')
-    }
+    setInspectedId(next.ids[0])
     setPanelOpen(true)
   }
   const selectOnly = (id: string) => select({ ids: [id], anchor: id })
@@ -495,7 +490,7 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
     const next = addNextEmptyClip(clips, id, totalTicks, barTicks)
     if (!next) return
     setClips(() => next)
-    select({ ids: [id], anchor: id }, next)
+    select({ ids: [id], anchor: id })
   }
 
   const trackRef = useRef<HTMLDivElement>(null)
@@ -522,7 +517,7 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
       if (!result) return
       setClips(() => result.clips)
       // The dropped clip(s) end up selected, so the panel shows the chord just placed.
-      select({ ids: result.placedIds, anchor: result.placedId }, result.clips)
+      select({ ids: result.placedIds, anchor: result.placedId })
       const placed = result.clips.find((c) => c.id === result.placedId)?.chord ?? d.held.chord
       if (placed) previewChord(placed)
     },
@@ -715,7 +710,7 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
               const next = addEmptyClip(clips, id, ticks, totalTicks, barTicks)
               if (next === clips) return
               setClips(() => next)
-              select({ ids: [id], anchor: id }, next)
+              select({ ids: [id], anchor: id })
             }}
           />
               <div className="side-buttons">
@@ -814,7 +809,7 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
         </Panel>
 
         {panelOpen && !multiSelected && inspected && (
-          <DismissPanel title="Chord details" hint="how it fits, other flavors, notes and ideas" onDismiss={() => setPanelOpen(false)}>
+          <section className="panel details-panel" aria-label="Chord details">
             <ChordInspector
               key={inspected.id}
               chord={inspected.chord}
@@ -824,11 +819,13 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
               onChange={(chord, fresh) => setInspectedChord(inspected, chord, fresh)}
               onClear={() => {
                 setClips((c) => c.map((x) => (x.id === inspected.id ? { ...x, chord: null } : x)))
-                setInspectorTab('ideas')
+                // An empty spot has no flavors; land on its ideas (and stay there once it's filled).
+                setInspectorTab((t) => (t === 'flavors' ? 'ideas' : t))
               }}
               onPreview={(chord, fresh) => !isPlaying && previewChord(fresh ? fitOctave(chord, otherChords(inspected.id)) : chord)}
+              onClose={() => setPanelOpen(false)}
             />
-          </DismissPanel>
+          </section>
         )}
       </div>
 

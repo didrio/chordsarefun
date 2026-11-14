@@ -1,7 +1,8 @@
 import { useState, type CSSProperties } from 'react'
 import { Note } from 'tonal'
-import { analyzeChord } from '../music/analysis'
+import { analyzeChord, type Analysis } from '../music/analysis'
 import { ArrowIcon } from './ArrowIcon'
+import { PlayIcon } from './Icons'
 import { FIT_MARK, FIT_MARKS, flavorOptions, type FitMark } from '../music/flavors'
 import {
   bassNote,
@@ -23,11 +24,14 @@ import {
   type Chord,
 } from '../music/chord'
 import { chordFromNotes, readChordInput, type ParsedChord } from '../music/parse'
-import { spotContext, suggestForSpot, type Intent, type Spot } from '../music/suggest'
+import { INTENTS, spotContext, suggestForSpot, type Intent, type Spot } from '../music/suggest'
 import { KEYS, keyName, noteInKey, rootDegree, scaleNotes, type ModeName } from '../music/theory'
 
-/** Which view the inspector's side column shows for a chord: its other flavors, or ideas for its spot. */
-export type InspectorTab = 'flavors' | 'ideas'
+/**
+ * The inspector's tabs: chords that fit the spot (the songwriter's question, so it comes
+ * first), other flavors of the same root, and hands-on notes (keyboard, inversion, bass).
+ */
+export type InspectorTab = 'ideas' | 'flavors' | 'notes'
 
 type Props = {
   /** Null for an empty clip. */
@@ -45,6 +49,8 @@ type Props = {
   onClear: () => void
   /** Hear a chord. `fresh` = a new chord (an idea, typed), which the app plays in the track's octave, as it would place it. */
   onPreview: (chord: Chord, fresh?: boolean) => void
+  /** Close the details panel (it comes back when a chord is selected). */
+  onClose: () => void
 }
 
 const WHITE = [0, 2, 4, 5, 7, 9, 11]
@@ -55,9 +61,12 @@ const BLACK_AT: Record<number, number> = { 1: 1, 3: 2, 6: 4, 8: 5, 10: 6 }
 /** The three fit categories, with what each means. */
 const FIT_SECTIONS: Record<FitMark, { title: string; hint: string }> = {
   in: { title: 'In key', hint: 'every note is in the key' },
-  common: { title: 'Borrowed & leading', hint: 'outside the key, but a common move' },
+  common: { title: 'Common moves', hint: 'outside the key, but used all the time' },
   out: { title: 'Outside the key', hint: 'surprising, a bold choice' },
 }
+
+/** Flavors shown per fit group before "Show all": one row on a desktop-width panel. */
+const FLAVORS_PER_GROUP = 6
 
 /** Names for the 12 pitch classes: the key's spelling where it has one. */
 function pitchNames(tonic: string, mode: ModeName): string[] {
@@ -66,13 +75,12 @@ function pitchNames(tonic: string, mode: ModeName): string[] {
 }
 
 /**
- * The inspected clip, explained and editable, in one layout whether it has a chord or
- * is empty (rows hide/show, nothing moves):
- *   left:  title (▶, name, notes, Clear chord) · root + type any chord · what it is
- *          (fit, tension; for an empty clip, where it sits) · keyboard + legend
- *   right: inversion · bass note (chords only) · tabs: Ideas for this spot | Other flavors
+ * The inspected clip, in one layout whether it has a chord or is empty:
+ *   header: ▶, name, numeral, notes, and one plain sentence on how it fits · type a chord · Clear · X
+ *   tabs:   Ideas for this spot | Flavors of the root | Notes and bass
+ * The panel keeps one height; the tab content scrolls inside it when long.
  */
-export function ChordInspector({ chord, spot, tab, onTab, onChange, onClear, onPreview }: Props) {
+export function ChordInspector({ chord, spot, tab, onTab, onChange, onClear, onPreview, onClose }: Props) {
   const { tonic, mode, next } = spot
   const names = pitchNames(tonic, mode)
   const analysis = chord && analyzeChord(chord, tonic, mode, next ?? spot.loopTo)
@@ -93,13 +101,18 @@ export function ChordInspector({ chord, spot, tab, onTab, onChange, onClear, onP
     const built = nextPicked.length >= MIN_NOTES ? chordFromNotes(nextPicked) : null
     if (built) change(built)
   }
-  const roles: Map<number | undefined, string> = chord
-    ? new Map(chordIntervals(chord).map((i) => [Note.chroma(noteAt(chord.root, i)), intervalLabel(i)]))
-    : new Map(picked.map((n) => [Note.chroma(n), '']))
-  const spelled = analysis ? analysis.notes.map((n) => n.note) : picked
-  const outNotes = analysis ? analysis.notes.filter((n) => !n.inKey) : []
-  // An empty clip only has the ideas tab; a chord can switch between ideas and flavors.
-  const shownTab: InspectorTab = chord ? tab : 'ideas'
+  // An empty clip has no root yet, so no flavors: it shows its ideas instead.
+  const shownTab: InspectorTab = !chord && tab === 'flavors' ? 'ideas' : tab
+  const mark = analysis ? FIT_MARK[analysis.fit.kind] : null
+  const tabs: { id: InspectorTab; label: string; title: string }[] = [
+    { id: 'ideas', label: 'Ideas for this spot', title: 'Chords that fit here, and why' },
+    {
+      id: 'flavors',
+      label: chord ? `Flavors of ${chord.root}` : 'Flavors',
+      title: chord ? `Other kinds of ${chord.root} chord: 7ths, sus, minor…` : 'Pick a chord first',
+    },
+    { id: 'notes', label: 'Notes and bass', title: 'The notes on a keyboard, the inversion and the bass note' },
+  ]
 
   return (
     <div
@@ -107,311 +120,268 @@ export function ChordInspector({ chord, spot, tab, onTab, onChange, onClear, onP
       style={{ '--hue': hue } as CSSProperties}
       data-diatonic={degree === null || degree === undefined ? 'no' : 'yes'}
     >
-      <div className="inspector-main">
-        <div className="inspector-title">
-          <button
-            className="hear"
-            onClick={() => chord && onPreview(chord)}
-            disabled={!chord}
-            title="Hear it"
-            aria-label="Hear it"
-          >
-            ▶
-          </button>
-          {chord && analysis ? (
-            <>
-              <span className="inspector-name">{chordName(chord)}</span>
-              <span className="roman">{analysis.fit.roman}</span>
-              <span className="notes">
-                {voicedNoteNames(chord).join(' ')}
-                {isSlash(chord) && <span className="muted"> · bass {chord.bass}</span>}
-              </span>
-              <button className="link danger clear-chord" onClick={onClear} title="Remove this chord but keep its place, so you can pick another">
-                Clear chord
-              </button>
-            </>
+      <div className="insp-head">
+        <button
+          className="hear"
+          onClick={() => chord && onPreview(chord)}
+          disabled={!chord}
+          title="Hear it"
+          aria-label="Hear it"
+        >
+          <PlayIcon />
+        </button>
+        <div className="insp-title">
+          <div className="insp-name-row">
+            {chord && analysis ? (
+              <>
+                <span className="inspector-name">{chordName(chord)}</span>
+                <span className="roman">{analysis.fit.roman}</span>
+                <span className="notes">
+                  {voicedNoteNames(chord).join(' ')}
+                  {isSlash(chord) && <> · bass {chord.bass}</>}
+                </span>
+              </>
+            ) : (
+              <span className="inspector-name">Pick a chord</span>
+            )}
+          </div>
+          {chord && analysis && mark ? (
+            <p className={`insp-fit fit-${mark}`} title={analysis.fit.detail}>
+              <span className="fit-badge">{analysis.fit.title}</span>
+              {analysis.tension.level > 0 && (
+                <span className={`tension-badge tension-${analysis.tension.level}`}>{analysis.tension.label}</span>
+              )}
+              <span className="insp-fit-detail">{analysis.fit.detail}</span>
+            </p>
           ) : (
-            <>
-              <span className="inspector-name">Select a chord</span>
-              <span className="muted">Pick one for this spot</span>
-            </>
+            <p className="insp-fit">
+              <span className="insp-fit-detail">{spotContext(spot)} Pick an idea, type a chord, or click notes.</span>
+            </p>
           )}
         </div>
+        <TypeChord tonic={tonic} mode={mode} onSet={(p) => change(p.chord, p.from !== 'notes')} />
+        <span className="insp-actions">
+          {chord && (
+            <button className="link danger" onClick={onClear} title="Remove this chord but keep its place, so you can pick another">
+              Clear
+            </button>
+          )}
+          <button className="panel-close" aria-label="Close chord details" title="Close" onClick={onClose}>
+            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+              <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" />
+            </svg>
+          </button>
+        </span>
+      </div>
 
-        <div className="change-row">
-          <label>
-            Root
-            <select
-              value={chord ? Note.chroma(chord.root) : ''}
-              onChange={(e) => {
-                const root = names[Number(e.target.value)]
-                if (chord) change(withRoot(chord, root))
-                else change(makeChord(root), true)
-              }}
-            >
-              {!chord && <option value="">–</option>}
-              {names.map((n, c) => (
-                <option key={c} value={c}>
-                  {n}
-                  {noteInKey(n, tonic, mode) ? '' : ' (not in key)'}
-                </option>
-              ))}
-            </select>
-          </label>
-          <TypeChord tonic={tonic} mode={mode} onSet={(p) => change(p.chord, p.from !== 'notes')} />
-        </div>
+      <div className="insp-tabs" role="tablist" aria-label="Chord options">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            className="insp-tab"
+            role="tab"
+            aria-selected={shownTab === t.id}
+            disabled={t.id === 'flavors' && !chord}
+            title={t.title}
+            onClick={() => onTab(t.id)}
+          >
+            {t.label}
+          </button>
+        ))}
+        {chord && <span className="insp-context">{spotContext(spot)}</span>}
+      </div>
 
-        <div className="keyboard-block">
-          <NoteKeyboard
-            names={names}
-            tonic={tonic}
-            mode={mode}
-            roles={roles}
-            spelled={spelled}
-            disableLit={!!chord && chordIntervals(chord).length <= MIN_NOTES}
-            onToggle={toggleKey}
-          />
-          <ul className="keyboard-hint">
-            <li>
-              <span className="out-name">Yellow</span> names are outside {keyName(tonic, mode)}.
-            </li>
-            <li>Small gray labels are each note&apos;s role (R = root, 3 = 3rd, b7 = flat 7th…).</li>
-            <li>Click a key to add or remove it.</li>
-          </ul>
-        </div>
-
-        {/* Everything below the keyboard varies with the chord; it scrolls if it's long, so the panel keeps its height. */}
-        <div className="inspector-desc">
-          {chord && analysis ? (
-            <>
-              <div className={`fit fit-${FIT_MARK[analysis.fit.kind]}`}>
-                <p>
-                  <span className="fit-badge">{analysis.fit.title}</span>
-                </p>
-                <p className="fit-detail">
-                  <span className="context-label">Context:</span> {analysis.fit.detail}{' '}
-                  {analysis.fit.term && <span className="term">Theory: {analysis.fit.term}.</span>}
-                </p>
-                {outNotes.length > 0 && (
-                  <ul className="out-notes">
-                    {outNotes.map((n) => (
-                      <li key={n.note}>
-                        <strong>{n.note}</strong> ({n.role === 'bass' ? 'bass note' : n.role}): {n.why}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-              <div className={`tension tension-${analysis.tension.level}`}>
-                <span className="tension-badge">{analysis.tension.label}</span>
-                {analysis.tension.reasons.length === 0 ? (
-                  <span className="tension-detail">No notes rub against each other.</span>
-                ) : (
-                  <ul>
-                    {analysis.tension.reasons.map((r) => (
-                      <li key={r}>{r}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </>
-          ) : (
-            <div className="fit">
-              <p className="fit-detail">
-                <span className="context-label">Context:</span> {spotContext(spot)}
+      <div className="insp-body" role="tabpanel">
+        {shownTab === 'ideas' && <SpotIdeas spot={spot} current={chord} onPick={(c) => change(c, true)} />}
+        {shownTab === 'flavors' && chord && <Flavors chord={chord} spot={spot} onPick={(c) => change(c)} />}
+        {shownTab === 'notes' && (
+          <div className="notes-tab">
+            <div className="notes-keys">
+              <label className="root-pick">
+                Root
+                <select
+                  value={chord ? Note.chroma(chord.root) : ''}
+                  onChange={(e) => {
+                    const root = names[Number(e.target.value)]
+                    if (chord) change(withRoot(chord, root))
+                    else change(makeChord(root), true)
+                  }}
+                >
+                  {!chord && <option value="">–</option>}
+                  {names.map((n, c) => (
+                    <option key={c} value={c}>
+                      {n}
+                      {noteInKey(n, tonic, mode) ? '' : ' (not in key)'}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <NoteKeyboard
+                names={names}
+                tonic={tonic}
+                mode={mode}
+                roles={
+                  chord
+                    ? new Map(chordIntervals(chord).map((i) => [Note.chroma(noteAt(chord.root, i)), intervalLabel(i)]))
+                    : new Map(picked.map((n) => [Note.chroma(n), '']))
+                }
+                spelled={analysis ? analysis.notes.map((n) => n.note) : picked}
+                disableLit={!!chord && chordIntervals(chord).length <= MIN_NOTES}
+                onToggle={toggleKey}
+              />
+              <p className="keyboard-hint">
+                Click a key to add or remove it. <span className="out-name">Yellow</span> = outside {keyName(tonic, mode)}; small
+                labels = each note&apos;s role (R = root).
               </p>
             </div>
-          )}
-        </div>
-      </div>
-
-      <div className="inspector-side">
-        {chord && (
-          <>
-            <div className="voice-row">
-              <span className="voice-label">Inversion</span>
-              <span className="voice-value">
-                {inversionName(chord)} <span className="muted">({lowestNote(chord)} on the bottom)</span>
-              </span>
-              <span className="group">
-                <button
-                  className="small"
-                  onClick={() => change({ ...chord, inversion: chord.inversion - 1 })}
-                  disabled={!canInvert(chord, -1)}
-                  title="Lower inversion (↓)"
-                >
-                  <ArrowIcon dir="down" /> Lower
-                </button>
-                <button
-                  className="small"
-                  onClick={() => change({ ...chord, inversion: chord.inversion + 1 })}
-                  disabled={!canInvert(chord, 1)}
-                  title="Higher inversion (↑)"
-                >
-                  <ArrowIcon dir="up" /> Higher
-                </button>
-              </span>
-              <span className="voice-hint">Reshapes the chord. The bass note stays {bassNote(chord)}.</span>
+            <div className="notes-side">
+              {chord && analysis ? (
+                <>
+                  <InversionRow chord={chord} onChange={(c) => change(c)} />
+                  <BassRow chord={chord} names={names} tonic={tonic} mode={mode} onChange={(c) => change(c)} />
+                  <WhyItSounds analysis={analysis} />
+                </>
+              ) : (
+                <p className="muted">Click two or more keys to build a chord for this spot.</p>
+              )}
             </div>
-            <BassRow chord={chord} names={names} tonic={tonic} mode={mode} onChange={(c) => change(c)} />
-          </>
-        )}
-
-        {chord ? (
-          <div className="segmented side-tabs" role="tablist" aria-label="Chord options">
-            <button
-              className="toggle small"
-              role="tab"
-              aria-pressed={shownTab === 'flavors'}
-              aria-selected={shownTab === 'flavors'}
-              onClick={() => onTab('flavors')}
-              title={`Other flavors of ${chord.root}`}
-            >
-              Alternatives
-            </button>
-            <button
-              className="toggle small"
-              role="tab"
-              aria-pressed={shownTab === 'ideas'}
-              aria-selected={shownTab === 'ideas'}
-              onClick={() => onTab('ideas')}
-              title="Chords that fit this spot in the progression"
-            >
-              Ideas
-            </button>
           </div>
-        ) : (
-          <h3 className="side-heading">Ideas</h3>
         )}
-        <div className="side-content">
-          {chord && shownTab === 'flavors' ? (
-            <Flavors chord={chord} spot={spot} onPick={(c) => change(c)} />
-          ) : (
-            // For an empty clip the left side already says where it sits.
-            <SpotIdeas spot={spot} current={chord} showContext={!!chord} onPick={(c) => change(c, true)} />
-          )}
-        </div>
       </div>
     </div>
   )
 }
 
-/** Short names for the idea pages, shown under the arrows. */
-const PAGE_NAMES: Record<Intent, string> = { home: 'Home', tension: 'Tension', flow: 'Flow', color: 'Color' }
-
 /**
- * Chord ideas for a spot, one page per kind (Feel at home, Build tension, ...), so the
- * panel keeps its height. Arrows and page names underneath. Click an idea to use it.
+ * Chord ideas for a spot, all four kinds side by side (Feel at home, Build tension, Flow
+ * smoothly, Add color), each with up to three cards. A kind with nothing to offer keeps
+ * its column, so the layout never shifts. Click an idea to use it.
  */
-function SpotIdeas({
-  spot,
-  current,
-  showContext,
-  onPick,
-}: {
-  spot: Spot
-  current: Chord | null
-  showContext: boolean
-  onPick: (c: Chord) => void
-}) {
-  const { context, groups } = suggestForSpot(spot)
-  const [page, setPage] = useState(0)
-  const at = Math.min(page, groups.length - 1)
-  const g = groups[at]
+function SpotIdeas({ spot, current, onPick }: { spot: Spot; current: Chord | null; onPick: (c: Chord) => void }) {
+  const { groups } = suggestForSpot(spot)
+  const byIntent = new Map(groups.map((g) => [g.intent, g]))
   const currentName = current ? chordName({ ...current, inversion: 0 }) : null
-  if (!g) return null
   return (
-    <div className="ideas">
-      {showContext && <p className="ideas-context">{context}</p>}
-      <div className={`idea-group idea-${g.intent}`}>
-        <span className="idea-head">
-          <strong>{g.title}</strong> <span className="muted">· {g.hint}</span>
-        </span>
-        <div className="idea-list">
-          {g.ideas.map((idea) => {
-            const degree = rootDegree(idea.chord, spot.tonic, spot.mode)
-            const name = chordName(idea.chord)
-            return (
-              <button
-                key={name}
-                className={`idea${name === currentName ? ' current' : ''}`}
-                data-diatonic={degree === null ? 'no' : 'yes'}
-                style={{ '--hue': degree === null ? undefined : (degree * 360) / 7 } as CSSProperties}
-                aria-pressed={name === currentName}
-                onClick={() => onPick(idea.chord)}
-              >
-                <span className="idea-name">
-                  {name} <span className="roman">{idea.roman}</span>
-                </span>
-                <span className="idea-why">{idea.why}</span>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-      <div className="idea-pager" role="group" aria-label="Idea pages">
-        <button className="small" onClick={() => setPage(at - 1)} disabled={at === 0} aria-label="Previous ideas">
-          ‹
-        </button>
-        {groups.map((x, i) => (
-          <button
-            key={x.intent}
-            className={i === at ? 'page-name current' : 'page-name'}
-            aria-current={i === at}
-            onClick={() => setPage(i)}
-            title={x.title}
-          >
-            {PAGE_NAMES[x.intent]}
-          </button>
-        ))}
-        <button
-          className="small"
-          onClick={() => setPage(at + 1)}
-          disabled={at === groups.length - 1}
-          aria-label="Next ideas"
-        >
-          ›
-        </button>
-      </div>
+    <div className="ideas-grid">
+      {(Object.keys(INTENTS) as Intent[]).map((intent) => {
+        const g = byIntent.get(intent)
+        return (
+          <section key={intent} className={`idea-group idea-${intent}`}>
+            <h4 className="idea-head">
+              {INTENTS[intent].title} <span className="muted">{INTENTS[intent].hint}</span>
+            </h4>
+            {g ? (
+              g.ideas.map((idea) => {
+                const degree = rootDegree(idea.chord, spot.tonic, spot.mode)
+                const name = chordName(idea.chord)
+                return (
+                  <button
+                    key={name}
+                    className={`idea${name === currentName ? ' current' : ''}`}
+                    data-diatonic={degree === null ? 'no' : 'yes'}
+                    style={{ '--hue': degree === null ? undefined : (degree * 360) / 7 } as CSSProperties}
+                    aria-pressed={name === currentName}
+                    onClick={() => onPick(idea.chord)}
+                  >
+                    <span className="idea-name">
+                      {name} <span className="roman">{idea.roman}</span>
+                    </span>
+                    <span className="idea-why">{idea.why}</span>
+                  </button>
+                )
+              })
+            ) : (
+              <p className="idea-none">Nothing obvious here.</p>
+            )}
+          </section>
+        )
+      })}
     </div>
   )
 }
 
 /**
- * Other flavors of the same root as one list of chips. The left edge of each chip shows
- * its fit (the legend on top), and within a fit the most expected chords come first.
+ * Other flavors of the same root, grouped by how they fit the key, each with its feel in
+ * plain words. The most expected come first; "Show all" reveals the rest.
  */
 function Flavors({ chord, spot, onPick }: { chord: Chord; spot: Spot; onPick: (c: Chord) => void }) {
+  const [all, setAll] = useState(false)
   const options = flavorOptions(chord, spot.tonic, spot.mode, spot.next ?? spot.loopTo)
+  const isCurrent = (symbol: string) => chord.type === symbol && chord.add.length === 0 && chord.omit.length === 0
+  const groups = FIT_MARKS.map((mark) => {
+    const group = options.filter((o) => o.mark === mark)
+    // Collapsed: the first few, plus the current flavor wherever it ranks.
+    const shown = all ? group : group.filter((o, i) => i < FLAVORS_PER_GROUP || isCurrent(o.t.symbol))
+    return { mark, shown, hidden: group.length - shown.length }
+  }).filter((g) => g.shown.length > 0)
+  const hidden = groups.reduce((n, g) => n + g.hidden, 0)
   return (
-    <div className="variations">
-      <ul className="fit-legend">
-        {FIT_MARKS.map((mark) => (
-          <li key={mark} className={`fit-${mark}`}>
-            <span className="chip-dot" aria-hidden />
-            <b>{FIT_SECTIONS[mark].title}</b>
-            <span className="muted">{FIT_SECTIONS[mark].hint}</span>
-          </li>
-        ))}
-      </ul>
-      <div className="chips">
-        {options.map(({ t, c, a, mark }) => {
-          const current = chord.type === t.symbol && chord.add.length === 0 && chord.omit.length === 0
-          return (
-            <button
-              key={t.symbol}
-              className={`chip fit-${mark}${current ? ' current' : ''}`}
-              aria-pressed={current}
-              title={`${t.feel}. ${a.fit.title}${a.tension.level ? `; ${a.tension.label.toLowerCase()}` : ''}.`}
-              onClick={() => onPick(c)}
-            >
-              {chord.root}
-              {t.symbol}
-            </button>
-          )
-        })}
-      </div>
-      <p className="variations-note muted">Within each color, the most expected chords come first.</p>
+    <div className="flavors">
+      {groups.map(({ mark, shown }) => {
+        return (
+          <section key={mark} className={`flavor-group fit-${mark}`}>
+            <h4 className="flavor-head">
+              <span className="chip-dot" aria-hidden /> {FIT_SECTIONS[mark].title}{' '}
+              <span className="muted">{FIT_SECTIONS[mark].hint}</span>
+            </h4>
+            <div className="flavor-list">
+              {shown.map(({ t, c, a }) => (
+                <button
+                  key={t.symbol}
+                  className={`flavor fit-${mark}${isCurrent(t.symbol) ? ' current' : ''}`}
+                  aria-pressed={isCurrent(t.symbol)}
+                  title={`${chordName(c)}: ${t.feel}. ${a.fit.title}${a.tension.level ? `; ${a.tension.label.toLowerCase()}` : ''}.`}
+                  onClick={() => onPick(c)}
+                >
+                  <span className="flavor-name">
+                    {chord.root}
+                    {t.symbol}
+                  </span>
+                  <span className="flavor-feel">{t.feel}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )
+      })}
+      {(all || hidden > 0) && (
+        <button className="link show-all" onClick={() => setAll((a) => !a)}>
+          {all ? 'Show fewer' : `Show all ${options.length}`}
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** The inversion: which chord note is on the bottom of the hands. Never changes the name or the bass. */
+function InversionRow({ chord, onChange }: { chord: Chord; onChange: (c: Chord) => void }) {
+  const hint = `Reshapes the chord; the bass note stays ${bassNote(chord)}`
+  return (
+    <div className="voice-row">
+      <span className="voice-label" title={hint}>
+        Inversion
+      </span>
+      <span className="voice-value">
+        {inversionName(chord)} <span className="muted">({lowestNote(chord)} on the bottom)</span>
+      </span>
+      <span className="group">
+        <button
+          className="small"
+          onClick={() => onChange({ ...chord, inversion: chord.inversion - 1 })}
+          disabled={!canInvert(chord, -1)}
+          title={`Lower inversion (↓). ${hint}.`}
+        >
+          <ArrowIcon dir="down" /> Lower
+        </button>
+        <button
+          className="small"
+          onClick={() => onChange({ ...chord, inversion: chord.inversion + 1 })}
+          disabled={!canInvert(chord, 1)}
+          title={`Higher inversion (↑). ${hint}.`}
+        >
+          <ArrowIcon dir="up" /> Higher
+        </button>
+      </span>
     </div>
   )
 }
@@ -438,9 +408,12 @@ function BassRow({
   const toneChromas = new Set(tones.map((t) => Note.chroma(t.note)))
   const others = names.filter((n) => !toneChromas.has(Note.chroma(n)))
   const otherBass = !toneChromas.has(bass)
+  const example = chordName(withBass(chord, chordNotes(chord)[1] ?? chord.root))
   return (
     <div className="voice-row">
-      <span className="voice-label">Bass note</span>
+      <span className="voice-label" title={`The bass plays the root. Pick another note for a slash chord (like ${example}).`}>
+        Bass note
+      </span>
       <span className="segmented" role="group" aria-label="Bass note">
         {tones.map((t) => (
           <button
@@ -458,6 +431,7 @@ function BassRow({
         className={otherBass ? 'active' : undefined}
         value={otherBass ? String(bass) : ''}
         aria-label="Another bass note"
+        title={`Any note in the bass, for a slash chord (like ${example})`}
         onChange={(e) => e.target.value !== '' && onChange(withBass(chord, names[Number(e.target.value)]))}
       >
         <option value="">Other note…</option>
@@ -468,11 +442,49 @@ function BassRow({
           </option>
         ))}
       </select>
-      <span className="voice-hint">
-        {isSlash(chord)
-          ? `Slash chord: ${chord.root}${chord.type} over ${chord.bass}. The bass plays ${chord.bass}; the chord above stays the same.`
-          : `The bass plays the root. Pick another note for a slash chord (like ${chordName(withBass(chord, chordNotes(chord)[1] ?? chord.root))}).`}
-      </span>
+      {isSlash(chord) && (
+        <span className="voice-hint">
+          Slash chord: {chord.root}
+          {chord.type} over {chord.bass}. The bass plays {chord.bass}; the chord above stays the same.
+        </span>
+      )}
+    </div>
+  )
+}
+
+/** The fuller story behind the header's one line: the theory name, the notes outside the key, and what rubs. */
+function WhyItSounds({ analysis }: { analysis: Analysis }) {
+  const outNotes = analysis.notes.filter((n) => !n.inKey)
+  return (
+    <div className="why">
+      <h4 className="why-head">Why it sounds like this</h4>
+      <div className={`fit fit-${FIT_MARK[analysis.fit.kind]}`}>
+        <p className="fit-detail">
+          <span className="fit-badge">{analysis.fit.title}</span> {analysis.fit.detail}{' '}
+          {analysis.fit.term && <span className="term">Theory: {analysis.fit.term}.</span>}
+        </p>
+        {outNotes.length > 0 && (
+          <ul className="out-notes">
+            {outNotes.map((n) => (
+              <li key={n.note}>
+                <strong>{n.note}</strong> ({n.role === 'bass' ? 'bass note' : n.role}): {n.why}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <div className={`tension tension-${analysis.tension.level}`}>
+        <span className="tension-badge">{analysis.tension.label}</span>
+        {analysis.tension.reasons.length === 0 ? (
+          <span className="tension-detail">No notes rub against each other.</span>
+        ) : (
+          <ul>
+            {analysis.tension.reasons.map((r) => (
+              <li key={r}>{r}</li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   )
 }
@@ -529,8 +541,9 @@ function NoteKeyboard({
 }
 
 /**
- * "Type any chord": a chord name (loosely spelled), a list of notes, or a roman numeral
- * in the home key. Shows how it reads it while you type; Enter sets it.
+ * "Type a chord": a chord name (loosely spelled), a list of notes, or a roman numeral in
+ * the home key. Shows how it reads it while you type, in a popover under the box (so the
+ * header never changes height); Enter sets it.
  */
 function TypeChord({
   tonic,
@@ -558,25 +571,30 @@ function TypeChord({
         }
       }}
     >
-      <span className="type-row">
-        <input
-          type="text"
-          value={typed}
-          placeholder="Type any chord: F#m7b5, C E G, V7…"
-          aria-label="Type any chord"
-          aria-invalid={submitted && !parsed}
-          onChange={(e) => {
-            setTyped(e.target.value)
-            setSubmitted(false)
-          }}
-        />
-        <button type="submit" disabled={!parsed}>
-          Set
-        </button>
-      </span>
+      <input
+        type="text"
+        value={typed}
+        placeholder="Type a chord: Am7, C E G, IV…"
+        aria-label="Type any chord"
+        title="Type any chord: a name (F#m7b5, Cadd9, G/B), notes (C E G) or a numeral (IV, V7). Enter sets it."
+        aria-invalid={submitted && !parsed}
+        onChange={(e) => {
+          setTyped(e.target.value)
+          setSubmitted(false)
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') setTyped('')
+        }}
+      />
       {typed.trim() && (
-        <span className={parsed ? 'type-reading' : 'type-reading error'}>
-          {parsed ? reading : "Can't read that yet. Try a name (Am7, Cadd9, G/B), notes (C E G) or a numeral (IV, V7)."}
+        <span className={parsed ? 'type-reading' : 'type-reading error'} role="status">
+          {parsed ? (
+            <>
+              {reading} <span className="muted">· Enter to use it</span>
+            </>
+          ) : (
+            "Can't read that yet. Try a name (Am7, Cadd9, G/B), notes (C E G) or a numeral (IV, V7)."
+          )}
         </span>
       )}
     </form>

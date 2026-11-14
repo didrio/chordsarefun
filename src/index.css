@@ -1061,7 +1061,7 @@ h2 {
   }
 }
 
-/* Bottom panel: chord inspector, multi-selection, or a hint */
+/* Panels under the timeline (Voicing, chord details) */
 
 .panel {
   margin-top: 0.6rem;
@@ -1085,50 +1085,12 @@ h2 {
   margin: 0;
 }
 
-.inspector {
-  --tint: hsl(var(--hue, 0) 55% 60%);
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
-  gap: 1.5rem;
-}
 
-.inspector[data-diatonic='no'] {
-  --tint: #888;
-}
 
-@media (max-width: 800px) {
-  .inspector {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
 
-.inspector-main,
-.inspector-side {
-  display: flex;
-  flex-direction: column;
-  gap: 0.8rem;
-  min-width: 0;
-}
 
-.inspector-title {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.3rem 0.7rem;
-  padding-left: 0.6rem;
-  border-left: 3px solid var(--tint);
-}
 
-.inspector-name {
-  font-size: 1.5rem;
-  font-weight: 700;
-}
 
-button.hear {
-  align-self: center;
-  padding: 0.2rem 0.55rem;
-  font-size: 0.8rem;
-}
 
 .fit p,
 .tension ul,
@@ -1307,56 +1269,13 @@ button.hear {
   color: rgb(0 0 0 / 0.5);
 }
 
-.keyboard-block {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
 
-.keyboard-hint .out-name {
-  font-weight: 600;
-  color: var(--fit-out);
-}
 
-.keyboard-hint {
-  flex: 1;
-  min-width: 10rem;
-  margin: 0;
-  font-size: 0.75rem;
-  color: var(--muted);
-}
 
-.change-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  font-size: 0.85rem;
-}
 
-.type-chord {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 0.25rem;
-  min-width: 12rem;
-}
 
-.type-row {
-  display: flex;
-  gap: 0.4rem;
-}
 
-.type-reading {
-  font-size: 0.78rem;
-  color: var(--fit-in);
-}
 
-.type-reading.error {
-  margin: 0;
-  color: var(--tension-2);
-}
 
 input[type='text'] {
   flex: 1;
@@ -1379,67 +1298,16 @@ input[type='text'][aria-invalid='true'] {
   color: var(--tension-2);
 }
 
-.variations {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
 
-.fit-legend {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  margin: 0;
-  padding: 0;
-  font-size: 0.78rem;
-  list-style: none;
-}
 
-.fit-legend li {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
 
-.variations-note {
-  margin: 0;
-  font-size: 0.75rem;
-}
 
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
 
-/* A chip's left edge shows how the chord fits the key (same colors as the legend dots). */
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.25rem 0.6rem;
-  font-size: 0.8rem;
-  border-left: 2px solid var(--border);
-}
+/* Fit dots (in key / common move / outside), as in the flavor headings. */
 
-.chip.fit-in {
-  border-left-color: var(--fit-in);
-}
 
-.chip.fit-common {
-  border-left-color: var(--fit-common);
-}
 
-.chip.fit-out {
-  border-left-color: var(--fit-out);
-}
 
-.chip.current {
-  border-top-color: var(--text);
-  border-right-color: var(--text);
-  border-bottom-color: var(--text);
-  background: var(--surface-hover);
-}
 
 .chip-dot {
   display: inline-block;
@@ -2004,77 +1872,18 @@ button.dice {
   border-color: var(--accent);
 }
 
-.side-tabs {
-  align-self: flex-start;
-}
 
-/* Ideas for a spot (empty clips, and the "Ideas for this spot" tab). */
-.ideas {
-  display: flex;
-  flex-direction: column;
-  gap: 0.7rem;
-}
 
-.ideas-context {
-  margin: 0;
-  font-size: 0.85rem;
-  color: var(--muted);
-}
 
-.idea-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
 
-.idea-head {
-  font-size: 0.8rem;
-}
 
-.idea-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
-  gap: 0.35rem;
-}
 
-.idea {
-  --tint: hsl(var(--hue, 0) 55% 60%);
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.15rem;
-  padding: 0.35rem 0.55rem;
-  text-align: left;
-  border-left: 3px solid var(--tint);
-}
 
-.idea[data-diatonic='no'] {
-  --tint: #888;
-}
 
-.idea.current {
-  border-color: var(--text);
-  background: var(--surface-hover);
-}
 
-.idea-name {
-  font-weight: 700;
-}
 
-.idea-name .roman {
-  margin-left: 0.25rem;
-  font-weight: 400;
-}
 
-.idea-why {
-  font-size: 0.72rem;
-  line-height: 1.3;
-  color: var(--muted);
-}
 
-.empty-clip .inspector-title {
-  border-left-style: dashed;
-}
 
 /* Sessions menu */
 .session-trigger {
@@ -2257,87 +2066,23 @@ button.link.danger:hover:not(:disabled) {
   border-color: transparent;
 }
 
-.clear-chord {
-  margin-left: auto;
-  align-self: center;
-}
 
 /* White keys: the role sits just below the black keys (their tops are covered). */
 .key.white .key-role {
   top: calc(58% + 3px);
 }
 
-/*
- * The expanded details panel keeps one height, whatever is selected: the parts that
- * vary (the description under the keyboard, the tab content on the right) scroll
- * inside it when they're long.
- */
-@media (min-width: 801px) {
-  .inspector {
-    height: 25rem;
-  }
 
-  .inspector-main,
-  .inspector-side {
-    min-height: 0;
-  }
-
-  .inspector-desc,
-  .side-content {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-  }
-}
-
-.inspector-desc {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  padding-top: 0.7rem;
-  border-top: 1px dotted var(--border);
-}
 
 .context-label {
   font-weight: 600;
   color: var(--muted);
 }
 
-ul.keyboard-hint {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  line-height: 1.45;
-}
 
-.side-heading {
-  margin: 0;
-  font-size: 0.85rem;
-  line-height: 1.75rem;
-}
 
-/* Idea pages: one kind of idea at a time, arrows and page names underneath. */
-.idea-pager {
-  display: flex;
-  align-items: center;
-  gap: 0.2rem;
-  margin-top: 0.2rem;
-}
 
-.idea-pager .page-name {
-  padding: 0.1rem 0.45rem;
-  font-size: 0.75rem;
-  color: var(--muted);
-  background: transparent;
-  border-color: transparent;
-}
 
-.idea-pager .page-name.current {
-  color: var(--text);
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
 
 /* Buttons with an arrow icon and a label. */
 button:has(> svg) {
@@ -2356,14 +2101,7 @@ button.tinted:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 26%, var(--surface));
 }
 
-/* A panel that is dismissed with an X instead of collapsed (the chord details). */
-.panel-bar.static {
-  cursor: default;
-}
 
-.panel-bar.static:hover {
-  background: transparent;
-}
 
 .panel-close {
   display: inline-flex;
@@ -2381,4 +2119,430 @@ button.tinted:hover:not(:disabled) {
 .panel-close:hover {
   color: var(--text);
   background: var(--surface-hover);
+}
+
+/*
+ * Chord details: a header (name, notes, one plain line on how it fits, type a chord),
+ * tabs, and the tab's content. One fixed height on desktop: the content scrolls inside,
+ * so switching chords or tabs never moves anything.
+ */
+.details-panel {
+  padding: 0;
+}
+
+.inspector {
+  --tint: hsl(var(--hue, 0) 55% 60%);
+  display: flex;
+  flex-direction: column;
+}
+
+.inspector[data-diatonic='no'] {
+  --tint: #888;
+}
+
+.insp-head {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.9rem 0.8rem 0.8rem 1rem;
+}
+
+button.hear {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  padding: 0 0 0 2px;
+  border-color: var(--tint);
+  border-radius: 50%;
+}
+
+.insp-title {
+  flex: 1;
+  min-width: 0;
+  padding-left: 0.75rem;
+  border-left: 3px solid var(--tint);
+}
+
+.empty-clip .insp-title {
+  border-left-style: dashed;
+}
+
+.insp-name-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.inspector-name {
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.insp-name-row .notes {
+  overflow: hidden;
+  font-size: 0.85rem;
+  text-overflow: ellipsis;
+  letter-spacing: 0.04em;
+}
+
+.insp-fit {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  height: 1.35rem;
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.insp-fit .fit-badge,
+.insp-fit .tension-badge {
+  flex: none;
+  font-size: 0.75rem;
+}
+
+.insp-fit-detail {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tension-badge.tension-1 {
+  background: var(--tension-1);
+}
+
+.tension-badge.tension-2 {
+  background: var(--tension-2);
+}
+
+/* Type a chord: the reading shows in a popover under the box, so the header keeps its height. */
+.type-chord {
+  position: relative;
+  flex: 0 1 17rem;
+  min-width: 10rem;
+}
+
+.type-chord input {
+  width: 100%;
+}
+
+.type-reading {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  z-index: 20;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--fit-in);
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 0.4);
+}
+
+.type-reading.error {
+  margin: 0;
+  color: var(--tension-2);
+}
+
+.insp-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.insp-actions .panel-close {
+  margin: 0;
+}
+
+/* Tabs: underlined, so the selected one is obvious without boxes around everything. */
+.insp-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.25rem;
+  padding: 0 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+button.insp-tab {
+  margin-bottom: -1px;
+  padding: 0.45rem 0.7rem 0.5rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+}
+
+button.insp-tab:hover:not(:disabled) {
+  color: var(--text);
+  background: transparent;
+}
+
+button.insp-tab[aria-selected='true'] {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.insp-context {
+  min-width: 0;
+  margin-left: auto;
+  padding: 0 0 0.55rem 1rem;
+  overflow: hidden;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--muted);
+}
+
+.insp-body {
+  padding: 0.9rem 1rem 1rem;
+}
+
+@media (min-width: 801px) {
+  .inspector {
+    height: 25rem;
+  }
+
+  .insp-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
+
+/* Ideas: the four kinds side by side, up to three cards each. */
+.ideas-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+@media (max-width: 900px) {
+  .ideas-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.idea-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.idea-head {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 0.1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.idea-head .muted {
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.idea {
+  --tint: hsl(var(--hue, 0) 55% 60%);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+  border-left: 3px solid var(--tint);
+}
+
+.idea[data-diatonic='no'] {
+  --tint: #888;
+}
+
+.idea.current {
+  border-color: var(--text);
+  border-left-color: var(--tint);
+  background: var(--surface-hover);
+}
+
+.idea-name {
+  font-weight: 700;
+}
+
+.idea-name .roman {
+  margin-left: 0.25rem;
+  font-weight: 400;
+}
+
+.idea-why {
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.idea-none {
+  margin: 0;
+  padding: 0.4rem 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* Flavors: grouped by fit, each with its feel in plain words. */
+.flavors {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.flavor-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.flavor-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.flavor-head .muted {
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.flavor-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: 0.35rem;
+}
+
+button.flavor {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.05rem;
+  min-width: 0;
+  padding: 0.3rem 0.55rem;
+  text-align: left;
+  border-left: 3px solid var(--border);
+}
+
+.flavor.fit-in {
+  border-left-color: var(--fit-in);
+}
+
+.flavor.fit-common {
+  border-left-color: var(--fit-common);
+}
+
+.flavor.fit-out {
+  border-left-color: var(--fit-out);
+}
+
+.flavor.current {
+  border-top-color: var(--text);
+  border-right-color: var(--text);
+  border-bottom-color: var(--text);
+  background: var(--surface-hover);
+}
+
+.flavor-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.flavor-feel {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--muted);
+}
+
+button.show-all {
+  align-self: flex-start;
+  color: var(--accent);
+}
+
+/* Notes and bass: the keyboard on the left; inversion, bass note and the why on the right. */
+.notes-tab {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2rem;
+}
+
+@media (max-width: 800px) {
+  .notes-tab {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.notes-keys {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: 320px;
+  max-width: 100%;
+}
+
+.notes-keys .keyboard {
+  width: 100%;
+  height: 110px;
+}
+
+.root-pick {
+  font-size: 0.85rem;
+}
+
+.keyboard-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.keyboard-hint .out-name {
+  font-weight: 600;
+  color: var(--fit-out);
+}
+
+.notes-side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+.notes-side > .muted {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.why {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--border);
+}
+
+.why-head {
+  margin: 0;
+  font-size: 0.85rem;
 }
