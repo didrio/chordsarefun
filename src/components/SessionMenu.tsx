@@ -10,6 +10,8 @@ type Props = {
   onDuplicate: (id: string | null) => void
   /** Switch to a session (null = the unsaved one). */
   onOpen: (id: string | null) => void
+  /** Start a new, empty session (no confirm: the current one is already saved). */
+  onNew: () => void
 }
 
 /** "3 min ago", "yesterday", or a date. */
@@ -25,10 +27,11 @@ function ago(time: number): string {
 
 /**
  * Sessions, like DAW projects but always saved: you're in one session and every change
- * goes into it, undo history included. The list switches, renames, duplicates and
- * deletes; the unsaved session can be named from the box at the top.
+ * goes into it, undo history included. The trigger reads like the document's name, next
+ * to the logo. The menu starts a new session, switches, renames, duplicates and deletes;
+ * the unsaved session can be named from the box at the top.
  */
-export function SessionMenu({ sessions, onSaveAs, onDuplicate, onOpen }: Props) {
+export function SessionMenu({ sessions, onSaveAs, onDuplicate, onOpen, onNew }: Props) {
   const { open, setOpen, rootRef } = useDropdown()
   const [name, setName] = useState('')
   const { current, currentName } = sessions
@@ -41,12 +44,12 @@ export function SessionMenu({ sessions, onSaveAs, onDuplicate, onOpen }: Props) 
   }
 
   return (
-    <div className="dropdown" ref={rootRef}>
-      <span className="dropdown-label">Your sessions:</span>
+    <div className="dropdown session-menu" ref={rootRef}>
       <button
         className="dropdown-trigger session-trigger"
         aria-haspopup="dialog"
         aria-expanded={open}
+        aria-label={`Your sessions: ${currentName ?? 'Unsaved session'}`}
         title="Your sessions: everything saves automatically"
         onClick={() => setOpen((o) => !o)}
       >
@@ -57,6 +60,16 @@ export function SessionMenu({ sessions, onSaveAs, onDuplicate, onOpen }: Props) 
       </button>
       {open && (
         <div className="dropdown-panel session-panel" role="dialog" aria-label="Your sessions">
+          <button
+            className="tinted session-new"
+            title="Start a new, empty session. This one is already saved."
+            onClick={() => {
+              setOpen(false)
+              onNew()
+            }}
+          >
+            + New session
+          </button>
           {current === null && (
             <section>
               <form

@@ -1,10 +1,9 @@
 import { useState } from 'react'
-import { BAR_OPTIONS, GRIDS, type GridKey, type TimeSignature } from '../music/timeline'
+import { BAR_OPTIONS, GRIDS, sigLabel, type GridKey, type TimeSignature } from '../music/timeline'
 import { TimeSignatureControl } from './TimeSignatureControl'
+import { useDropdown } from './useDropdown'
 
-type Props = {
-  bpm: number
-  onBpm: (bpm: number) => void
+type TimingProps = {
   sig: TimeSignature
   onSig: (sig: TimeSignature) => void
   bars: number
@@ -14,43 +13,53 @@ type Props = {
 }
 
 /**
- * Tempo, time signature, length and grid, each with its own space in the Configuration
- * panel (they used to hide behind one dropdown).
+ * "4/4 · 4 bars" in the song bar: time signature, length and grid in one small popover,
+ * one setting per row. The trigger shows the two you read most, so you rarely open it.
  */
-export function OptionsFields({ bpm, onBpm, sig, onSig, bars, onBars, gridKey, onGrid }: Props) {
+export function TimingMenu({ sig, onSig, bars, onBars, gridKey, onGrid }: TimingProps) {
+  const { open, setOpen, rootRef } = useDropdown()
   return (
-    <>
-      <label className="field">
-        Tempo
-        <span className="bpm">
-          <TempoInput bpm={bpm} onBpm={onBpm} />
-          BPM
+    <div className="dropdown timing-menu" ref={rootRef}>
+      <button
+        className="dropdown-trigger"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        title="Time signature, length and grid"
+        onClick={() => setOpen((o) => !o)}
+      >
+        {sigLabel(sig)} · {bars} {bars === 1 ? 'bar' : 'bars'}
+        <span className="caret" aria-hidden>
+          ▾
         </span>
-      </label>
-      <span className="field field-time">
-        <TimeSignatureControl sig={sig} onChange={onSig} />
-      </span>
-      <label className="field">
-        Length
-        <select value={bars} onChange={(e) => onBars(Number(e.target.value))}>
-          {BAR_OPTIONS.map((n) => (
-            <option key={n} value={n}>
-              {n} {n === 1 ? 'bar' : 'bars'}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="field">
-        Grid
-        <select value={gridKey} onChange={(e) => onGrid(e.target.value as GridKey)}>
-          {GRIDS.map((g) => (
-            <option key={g.key} value={g.key}>
-              {g.label}
-            </option>
-          ))}
-        </select>
-      </label>
-    </>
+      </button>
+      {open && (
+        <div className="dropdown-panel timing-panel" role="dialog" aria-label="Time, length and grid">
+          <span className="field field-time">
+            <TimeSignatureControl sig={sig} onChange={onSig} />
+          </span>
+          <label className="field">
+            Length
+            <select value={bars} onChange={(e) => onBars(Number(e.target.value))}>
+              {BAR_OPTIONS.map((n) => (
+                <option key={n} value={n}>
+                  {n} {n === 1 ? 'bar' : 'bars'}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field" title="What chords snap to when you drag or resize them">
+            Grid
+            <select value={gridKey} onChange={(e) => onGrid(e.target.value as GridKey)}>
+              {GRIDS.map((g) => (
+                <option key={g.key} value={g.key}>
+                  {g.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -62,7 +71,7 @@ const MAX_BPM = 300
  * works even though "1" and "12" are too slow on the way), and on leaving the field
  * (or Enter) anything out of range is clamped and anything unreadable goes back.
  */
-function TempoInput({ bpm, onBpm }: { bpm: number; onBpm: (bpm: number) => void }) {
+export function TempoInput({ bpm, onBpm }: { bpm: number; onBpm: (bpm: number) => void }) {
   const [text, setText] = useState<string | null>(null)
   const commit = () => {
     if (text === null) return
@@ -76,6 +85,7 @@ function TempoInput({ bpm, onBpm }: { bpm: number; onBpm: (bpm: number) => void 
       min={MIN_BPM}
       max={MAX_BPM}
       value={text ?? bpm}
+      aria-label="Tempo (BPM)"
       onChange={(e) => {
         setText(e.target.value)
         const n = Number(e.target.value)

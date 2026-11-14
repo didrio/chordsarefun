@@ -7,7 +7,8 @@ import { GrooveMenu } from './components/GrooveMenu'
 import { ArrowIcon } from './components/ArrowIcon'
 import { HelpTip } from './components/HelpTip'
 import { MidiMenu } from './components/MidiMenu'
-import { ConfigMenu } from './components/ConfigMenu'
+import { HomeMenu } from './components/HomeMenu'
+import { TempoInput, TimingMenu } from './components/OptionsMenu'
 import { Panel } from './components/Panel'
 import { LoopIcon, PauseIcon, PlayIcon, PlusIcon, RedoIcon, StopIcon, UndoIcon } from './components/Icons'
 import { SessionMenu } from './components/SessionMenu'
@@ -573,17 +574,21 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
 
   return (
     <main>
-      <header>
+      {/* Row 1, the song: which session, its key, tempo and timing, and the way out (MIDI). */}
+      <header className="song-bar">
         <div className="logo">
           <img className="logo-icon" src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" width="22" height="22" />
           <h1>create a chord progression</h1>
           <HelpTip />
         </div>
-        <div className="header-actions">
-          <SessionMenu sessions={sessions} onSaveAs={onSaveAs} onDuplicate={onDuplicate} onOpen={sessions.open} />
-          <button className="tinted" onClick={onNew} title="Start a new, empty session. The current one is already saved.">
-            + New session
-          </button>
+        <SessionMenu sessions={sessions} onSaveAs={onSaveAs} onDuplicate={onDuplicate} onOpen={sessions.open} onNew={onNew} />
+        <div className="song-settings">
+          <HomeMenu home={{ tonic, mode }} suggestion={homeSuggestion} onChange={changeHome} />
+          <label className="tempo-field" title="Tempo in beats (quarter notes) per minute">
+            <TempoInput bpm={bpm} onBpm={setBpm} />
+            BPM
+          </label>
+          <TimingMenu sig={sig} onSig={changeSig} bars={bars} onBars={changeBars} gridKey={gridKey} onGrid={setGridKey} />
           <MidiMenu
             groove={groove}
             disabled={chordClips(clips).length === 0}
@@ -592,7 +597,44 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
         </div>
       </header>
 
+      {/* Row 2, play and create: the transport (as in a DAW), then the two ways to fill the track. */}
       <div className="main-toolbar">
+        <div className="toolbar-section transport">
+          <button className="play" onClick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'} title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}>
+            {isPlaying ? <PauseIcon /> : <PlayIcon />}
+          </button>
+          <button className="icon" onClick={stop} aria-label="Stop" title="Stop and return to the start (Shift+Space)">
+            <StopIcon />
+          </button>
+          <button className="toggle icon" aria-pressed={loop} onClick={() => setLoop((l) => !l)} aria-label="Loop" title="Loop (L)">
+            <LoopIcon />
+          </button>
+          <span className="metronome">
+            <button
+              className="toggle icon"
+              aria-pressed={metronomeOn}
+              aria-label="Metronome"
+              onClick={() => {
+                ensureAudio()
+                setMetronomeOn((m) => !m)
+              }}
+              title="Metronome (M)"
+            >
+              <MetronomeIcon />
+            </button>
+            <input
+              type="range"
+              className="volume"
+              min={0}
+              max={1}
+              step={0.01}
+              value={metronomeVolume}
+              onChange={(e) => setMetronomeVolume(Number(e.target.value))}
+              aria-label="Metronome volume"
+              title="Metronome volume"
+            />
+          </span>
+        </div>
         <div className="toolbar-section">
           <ProgressionMenu tonic={tonic} onUse={loadProgression} onPreview={hearProgression} onRandom={randomProgression} />
           <GrooveMenu
@@ -601,46 +643,6 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
             isPlaying={isPlaying}
             onTogglePlay={togglePlay}
             onRandom={randomGroove}
-          />
-        </div>
-        <div className="toolbar-section">
-        <span className="metronome">
-          <button
-            className="toggle icon"
-            aria-pressed={metronomeOn}
-            aria-label="Metronome"
-            onClick={() => {
-              ensureAudio()
-              setMetronomeOn((m) => !m)
-            }}
-            title="Metronome (M)"
-          >
-            <MetronomeIcon />
-          </button>
-          <input
-            type="range"
-            className="volume"
-            min={0}
-            max={1}
-            step={0.01}
-            value={metronomeVolume}
-            onChange={(e) => setMetronomeVolume(Number(e.target.value))}
-            aria-label="Metronome volume"
-            title="Metronome volume"
-          />
-        </span>
-          <ConfigMenu
-            home={{ tonic, mode }}
-            suggestion={homeSuggestion}
-            onChange={changeHome}
-            bpm={bpm}
-            onBpm={setBpm}
-            sig={sig}
-            onSig={changeSig}
-            bars={bars}
-            onBars={changeBars}
-            gridKey={gridKey}
-            onGrid={setGridKey}
           />
         </div>
       </div>
@@ -656,18 +658,7 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
       )}
 
       <div className="panels" data-playhead-scope>
-          <div className="timeline-row">
-            <div className="side-buttons">
-              <button className="play" onClick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'} title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}>
-                {isPlaying ? <PauseIcon /> : <PlayIcon />}
-              </button>
-              <button onClick={stop} aria-label="Stop" title="Stop and return to the start (Shift+Space)">
-                <StopIcon />
-              </button>
-              <button className="toggle" aria-pressed={loop} onClick={() => setLoop((l) => !l)} aria-label="Loop" title="Loop (L)">
-                <LoopIcon />
-              </button>
-            </div>
+        <div className="timeline-row">
           <Timeline
             trackRef={trackRef}
             clips={preview ? preview.clips : clips}
