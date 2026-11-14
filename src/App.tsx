@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { ChordInspector, type InspectorTab } from './components/ChordInspector'
 import { NotesLane } from './components/NotesLane'
-import { ProgressionMenu } from './components/ProgressionMenu'
+import { ProgressionMenu, type ProgressionMenuHandle } from './components/ProgressionMenu'
 import { HomeNotice } from './components/HomeNotice'
 import { GrooveMenu } from './components/GrooveMenu'
 import { ArrowIcon } from './components/ArrowIcon'
@@ -495,6 +495,7 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
   }
 
   const trackRef = useRef<HTMLDivElement>(null)
+  const progressionMenu = useRef<ProgressionMenuHandle>(null)
   /**
    * The drop plan for a drag. A new chord (from the palette or spice) is moved to the
    * octave nearest the other chords, so it lands in the register the track is already in.
@@ -636,7 +637,14 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
           </span>
         </div>
         <div className="toolbar-section">
-          <ProgressionMenu tonic={tonic} onUse={loadProgression} onPreview={hearProgression} onRandom={randomProgression} />
+          <ProgressionMenu
+            ref={progressionMenu}
+            tonic={tonic}
+            highlight={clips.length === 0}
+            onUse={loadProgression}
+            onPreview={hearProgression}
+            onRandom={randomProgression}
+          />
           <GrooveMenu
             groove={groove}
             onChange={setGroove}
@@ -696,6 +704,18 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
               if (selectedIds.includes(id)) removeSelected()
               else setClips((c) => removeClip(c, id))
             }}
+            emptyState={
+              <>
+                <span className="track-empty-title">Start your progression</span>
+                <span className="track-empty-actions">
+                  <button className="primary" onClick={() => progressionMenu.current?.open()}>
+                    Start from a progression
+                  </button>
+                  <button onClick={newChord}>Add a chord</button>
+                </span>
+                <span className="track-empty-hint">or double-click anywhere on the track</span>
+              </>
+            }
             onCreateEmpty={(ticks) => {
               const id = crypto.randomUUID()
               const next = addEmptyClip(clips, id, ticks, totalTicks, barTicks)

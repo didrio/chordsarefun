@@ -42,6 +42,8 @@ type Props = {
   onRemove: (id: string) => void
   /** Double-click on empty space: add an empty clip there. */
   onCreateEmpty: (ticks: number) => void
+  /** What an empty track shows: the ways to start (buttons), centered on the track. */
+  emptyState: ReactNode
 }
 
 const pct = (ticks: number, total: number) => `${(ticks / total) * 100}%`
@@ -187,7 +189,10 @@ export function Timeline(props: Props) {
         ))}
 
         {clips.length === 0 && !props.dragging && (
-          <div className="track-empty">Pick a Progression, press + New, or double-click here to add a chord</div>
+          // Its buttons don't move the playhead or add a spot (double-click) when clicked.
+          <div className="track-empty" onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+            {props.emptyState}
+          </div>
         )}
 
         {clips.map((clip) => {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
+import { useEffect, useImperativeHandle, useRef, useState, type CSSProperties, type KeyboardEvent, type Ref } from 'react'
 import { chordName } from '../music/chord'
 import { GENRES, PROGRESSIONS, progressionChords, type Genre, type Progression } from '../music/progressions'
 import { keyName, rootDegree } from '../music/theory'
@@ -11,7 +11,13 @@ type Props = {
   onPreview: (prog: Progression) => void
   /** Load a random progression. */
   onRandom: () => void
+  /** Stand out as the place to start (the one accent button, while the track is empty). */
+  highlight?: boolean
+  /** Lets the empty track's "Start from a progression" open this menu. */
+  ref?: Ref<ProgressionMenuHandle>
 }
+
+export type ProgressionMenuHandle = { open: () => void }
 
 /** Hovering a genre switches to it after this long, so moving across to its list doesn't flip genres. */
 const HOVER_DELAY_MS = 120
@@ -20,8 +26,9 @@ const HOVER_DELAY_MS = 120
  * "Progressions": genres on the left, that genre's progressions (in the
  * current key) on the right. Clicking one replaces the track; ▶ previews it.
  */
-export function ProgressionMenu({ tonic, onUse, onPreview, onRandom }: Props) {
+export function ProgressionMenu({ tonic, onUse, onPreview, onRandom, highlight = false, ref }: Props) {
   const { open, setOpen, rootRef } = useDropdown()
+  useImperativeHandle(ref, () => ({ open: () => setOpen(true) }), [setOpen])
   const [genre, setGenre] = useState<Genre>(GENRES[0])
   const hoverTimer = useRef<number | undefined>(undefined)
   const genresRef = useRef<HTMLDivElement>(null)
@@ -53,7 +60,13 @@ export function ProgressionMenu({ tonic, onUse, onPreview, onRandom }: Props) {
 
   return (
     <div className="dropdown progression-menu" ref={rootRef}>
-      <button className="dropdown-trigger" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <button
+        className={highlight ? 'dropdown-trigger accent' : 'dropdown-trigger'}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title="Start from a progression: over 180 by genre, most common first"
+        onClick={() => setOpen((o) => !o)}
+      >
         Progressions
         <span className="caret" aria-hidden>
           ▾
