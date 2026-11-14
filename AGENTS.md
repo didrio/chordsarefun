@@ -41,6 +41,23 @@ deploys on push to `main`) and on Cloudflare (Workers static assets: `wrangler.j
   long lists). Similar views (e.g. a chord vs an empty clip) share one layout.
 - Verify UI changes in a real browser before calling them done (see Verifying).
 
+## How work flows: tickets and sessions
+
+Work is planned in **`TICKETS.md`**, an ordered, living backlog (T1, T2, …), and done **one ticket per session**:
+
+1. **`/start T5`** (or `/start` to get a recommendation): read `TICKETS.md`, then only the files the ticket
+   points to, and work toward its **Done when** checklist.
+2. **`/ticket …`** at any point captures new ideas or scope creep as tickets instead of growing the current one.
+3. **`/wrap`**: `npm run check`, a quick look at changed UI, `AGENTS.md` kept current, `TICKETS.md` updated
+   (outcomes, handoff notes, new tickets, the **Next:** pick with recommended model, effort and plan mode), then
+   commit and push. **Pushing `main` deploys the live site**; the owner typing `/wrap` is the go-ahead for that.
+   The owner then runs `/clear` and starts the next session.
+
+Whoever wraps a session has the most context, so they write the handoff. That keeps every new session small,
+focused and cheap. The playbooks are plain Markdown in `.claude/skills/<name>/SKILL.md` (`start`, `wrap`,
+`ticket`): without slash commands, follow them when asked to start or wrap. Keep the owner oriented throughout:
+say what's done, and suggest the next step or command.
+
 ## The paradigm: Home, palette, chord
 
 Everything is organized around one **Home** (key + mood), in three layers:
@@ -596,12 +613,7 @@ These were discussed and chosen deliberately; don't "fix" them without asking.
 
 ## Planned / possible next
 
-- Nudging selected clips with the keyboard; ⌘D duplicate.
-- Hearing an idea in context (previous → idea → next) before using it.
-- Octave-specific note edits in the notes lane (e.g. doubling the bass), open/spread
-  voicings. Sampled instruments (real piano) if the synth presets aren't enough.
-- Per-clip pattern overrides, drum fills, more drum kits, humanize (timing/velocity).
-- Browser (Playwright) tests for drag/playhead flows once the UI settles.
+Lives in `TICKETS.md` (Up next, then Backlog), not here.
 
 ## Tech stack
 
@@ -672,8 +684,8 @@ them up.
 
 ## Conventions
 
-- Run `npm test`, `npm run build` (includes typecheck), and `npm run lint` before
-  calling work done.
+- Run `npm run check` (lint, tests, then typecheck + production build) before calling
+  work done. While working, `npm test` and `npx tsc -b` are the fast checks.
 - Any rule change gets a test next to its module (`*.test.ts`). `timeline.test.ts`
   checks invariants for **every** custom time signature; keep it passing when touching
   meters, snapping, or rescaling.
