@@ -728,6 +728,7 @@ them up.
     `GrooveMenu.tsx`, `MidiMenu.tsx` (+ `useDropdown.ts`): see Behavior.
     The lane renders inside `Timeline` and follows the playhead via the `--playhead`
     CSS variable set on `.timeline`.
+- `e2e/`: browser smoke tests (`harness.ts` starts Vite + Chrome and seeds tracks; `smoke.e2e.ts`).
 - `src/App.tsx`: `App` (the sessions shell) and `Workspace` (state: track history,
   settings, selection, play state, playhead; wiring and layout), keyed by session. Drag previews are `planDrop(...)` rendered in place of the clips.
 
@@ -735,6 +736,9 @@ them up.
 
 - Run `npm run check` (lint, tests, then typecheck + production build) before calling
   work done. While working, `npm test` and `npx tsc -b` are the fast checks.
+- `npm run e2e` runs the browser smoke tests (`e2e/*.e2e.ts`, `vitest.e2e.config.ts`): a real
+  headless Chrome drives drags, resize, the ruler and keyboard edits. Not in `npm run check`
+  or CI (not yet run on ubuntu); run it after touching drag, resize, playhead or shortcut code.
 - Any rule change gets a test next to its module (`*.test.ts`). `timeline.test.ts`
   checks invariants for **every** custom time signature; keep it passing when touching
   meters, snapping, or rescaling.
@@ -746,7 +750,11 @@ them up.
 
 ## Verifying
 
-- Unit tests cover the rules; they can't see layout or hear audio.
+- Unit tests cover the rules; they can't see layout or hear audio. `npm run e2e` (about 6 s)
+  covers the real-pointer flows: it starts its own Vite server on a free port, uses
+  `playwright-core` with the installed Chrome (`CHROME_PATH` overrides; Mac and Linux paths are
+  tried), seeds `chords:v1:track` in localStorage (`seedTrack` in `e2e/harness.ts`) and reads
+  clips from the DOM. Add a case there when a new pointer or keyboard flow lands.
 - For UI: run the dev server and drive the installed Chrome headlessly, e.g.
   `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new
   --screenshot=out.png --window-size=1280,800 http://localhost:5173/`, or a

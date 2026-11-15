@@ -4,7 +4,7 @@ Living, ordered backlog. One ticket per session: `/clear` → `/start Tn` → wo
 session updates this file and picks the next ticket, so each new session starts with a small, clear context.
 Rules: `.claude/skills/wrap/SKILL.md`. Capture ideas any time with `/ticket`.
 
-**Next:** T7 — Browser smoke tests · Sonnet · medium effort · plan mode off
+**Next:** T8 — Run the e2e smoke tests in CI · Sonnet · low effort · plan mode off
 
 ## In progress
 
@@ -12,31 +12,17 @@ _None._
 
 ## Up next
 
-### T7 — Browser smoke tests for drag, resize, playhead and keyboard editing
+### T8 — Run the e2e smoke tests in CI
 
 - **Status:** ready
-- **Session:** Sonnet · medium effort · plan mode off
-- **Goal:** A small, fast set of real-browser tests for the flows unit tests can't see (pointer drags,
-  resize handles, the ruler, keyboard shortcuts reaching the app), so regressions show up before the owner
-  finds them.
+- **Session:** Sonnet · low effort · plan mode off
+- **Goal:** `npm run e2e` runs on every push/PR so drag, resize and shortcut regressions are caught.
 - **Done when:**
-  - [ ] `playwright-core` is a devDependency (no browser download); tests drive the installed Chrome
-        (`/Applications/Google Chrome.app/Contents/MacOS/Google Chrome` on a Mac, `google-chrome` on Linux; an
-        env var like `CHROME_PATH` overrides). They start their own `vite preview` (or dev server) on a free port.
-  - [ ] `npm run e2e` runs them (a separate Vitest config, e.g. `vitest.e2e.config.ts` with `e2e/**/*.e2e.ts`,
-        so `npm test` stays unit-only and fast). Not part of `npm run check` yet.
-  - [ ] Covered, each starting from a seeded track (write `chords:v1:track` etc. to localStorage before load;
-        see `persist.ts` / `track.ts` for the shape) and checked through the DOM (`.clip` `style.left/width`,
-        `.selected`): drag a chord onto another's edge (reorder) and middle (swap); Option/Ctrl-drag copies;
-        resize trims the neighbor; click the ruler moves the playhead; ⌘D duplicates; ⌥→ / Ctrl+→ nudges;
-        ⌘Z undoes; double-click empty space adds a spot; the idea ▶ doesn't change the track.
-  - [ ] `AGENTS.md` ("Verifying", "Conventions") says how to run them; optionally a CI job in
-        `.github/workflows/ci.yml` (ubuntu has Chrome at `google-chrome`) if it's reliable.
-- **Context:** "Verifying" in `AGENTS.md` describes the headless setup that was used by hand. Wait for `.track`
-  before interacting. Pointer drags need real mouse moves (`page.mouse.down/move/up` with several steps; the
-  drag threshold is 4px, `useChordDrag.ts`). Modifiers: the app picks Mac vs other keys from
-  `navigator.platform` (`platform.ts`), so assert with the platform the test runs on. Audio needs a user
-  gesture and can't be checked; ignore it. Keep the suite under ~20 s.
+  - [ ] A job in `.github/workflows/ci.yml` runs `npm ci` and `npm run e2e` on ubuntu (Chrome is at
+        `/usr/bin/google-chrome`; set `CHROME_PATH` if not found) and is green on a pushed branch/PR.
+  - [ ] `AGENTS.md` ("Conventions") no longer says e2e is not in CI.
+- **Context:** `e2e/harness.ts` (`chromePath`, `COPY`/`NUDGE`/`CMD` pick keys by `process.platform`, so Linux uses
+  Ctrl). Watch for flakiness (pointer-drag tests); if it flakes, fix the test, don't retry blindly.
 
 ## Backlog
 
@@ -56,6 +42,9 @@ _None._
 
 ## Done
 
+- T7 — Browser smoke tests — 2026-11-14 — `npm run e2e`: 9 real-Chrome tests (reorder, swap, copy-drag, resize
+  trims neighbor, ruler click, ⌘D + ⌘Z, nudge, double-click adds a spot, idea ▶ leaves the track alone), ~6 s.
+  Not in `npm run check` or CI: the ubuntu CI job wasn't added since it can't be verified from a Mac.
 - T2 — Hear an idea in context — 2026-11-14 — ▶ on every idea and flavor card plays previous → it → next
   (`inContext`), without touching the track; any new preview replaces a running one; Play stops previews.
 - T3 — Duplicate and nudge — 2026-11-14 — ⌘D/Ctrl+D (`planDuplicate`, the copy-drag rule) and ⌥←/→ (Mac) /
