@@ -737,8 +737,9 @@ them up.
 - Run `npm run check` (lint, tests, then typecheck + production build) before calling
   work done. While working, `npm test` and `npx tsc -b` are the fast checks.
 - `npm run e2e` runs the browser smoke tests (`e2e/*.e2e.ts`, `vitest.e2e.config.ts`): a real
-  headless Chrome drives drags, resize, the ruler and keyboard edits. Not in `npm run check`
-  or CI (not yet run on ubuntu); run it after touching drag, resize, playhead or shortcut code.
+  headless Chrome drives drags, resize, the ruler and keyboard edits. Not in `npm run check`,
+  but CI runs it as its own `e2e` job (ubuntu, `CHROME_PATH=/usr/bin/google-chrome`); run it
+  locally after touching drag, resize, playhead or shortcut code.
 - Any rule change gets a test next to its module (`*.test.ts`). `timeline.test.ts`
   checks invariants for **every** custom time signature; keep it passing when touching
   meters, snapping, or rescaling.

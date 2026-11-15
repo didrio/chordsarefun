@@ -4,7 +4,7 @@ Living, ordered backlog. One ticket per session: `/clear` → `/start Tn` → wo
 session updates this file and picks the next ticket, so each new session starts with a small, clear context.
 Rules: `.claude/skills/wrap/SKILL.md`. Capture ideas any time with `/ticket`.
 
-**Next:** T8 — Run the e2e smoke tests in CI · Sonnet · low effort · plan mode off
+**Next:** none queued. First check the `e2e` job is green on GitHub; if it flakes, fix the test. Then promote a Backlog item with `/ticket`.
 
 ## In progress
 
@@ -12,17 +12,7 @@ _None._
 
 ## Up next
 
-### T8 — Run the e2e smoke tests in CI
-
-- **Status:** ready
-- **Session:** Sonnet · low effort · plan mode off
-- **Goal:** `npm run e2e` runs on every push/PR so drag, resize and shortcut regressions are caught.
-- **Done when:**
-  - [ ] A job in `.github/workflows/ci.yml` runs `npm ci` and `npm run e2e` on ubuntu (Chrome is at
-        `/usr/bin/google-chrome`; set `CHROME_PATH` if not found) and is green on a pushed branch/PR.
-  - [ ] `AGENTS.md` ("Conventions") no longer says e2e is not in CI.
-- **Context:** `e2e/harness.ts` (`chromePath`, `COPY`/`NUDGE`/`CMD` pick keys by `process.platform`, so Linux uses
-  Ctrl). Watch for flakiness (pointer-drag tests); if it flakes, fix the test, don't retry blindly.
+_None. Pick from Backlog (or `/ticket` something new)._
 
 ## Backlog
 
@@ -42,6 +32,7 @@ _None._
 
 ## Done
 
+- T8 — e2e in CI — 2026-11-14 — separate `e2e` job in `ci.yml` (ubuntu, `CHROME_PATH=/usr/bin/google-chrome`). Pushed straight to `main`, so its first run is unverified: check it on GitHub; if it flakes, fix the test, don't retry.
 - T7 — Browser smoke tests — 2026-11-14 — `npm run e2e`: 9 real-Chrome tests (reorder, swap, copy-drag, resize
   trims neighbor, ruler click, ⌘D + ⌘Z, nudge, double-click adds a spot, idea ▶ leaves the track alone), ~6 s.
   Not in `npm run check` or CI: the ubuntu CI job wasn't added since it can't be verified from a Mac.
