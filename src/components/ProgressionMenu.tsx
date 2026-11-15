@@ -2,6 +2,7 @@ import { useEffect, useImperativeHandle, useRef, useState, type CSSProperties, t
 import { chordName } from '../music/chord'
 import { GENRES, PROGRESSIONS, progressionChords, type Genre, type Progression } from '../music/progressions'
 import { keyName, rootDegree } from '../music/theory'
+import { UNDO_KEY } from '../platform'
 import { DiceIcon } from './DiceIcon'
 import { arrowNav, useDropdown } from './useDropdown'
 
@@ -102,13 +103,19 @@ export function ProgressionMenu({ tonic, onUse, onPreview, onRandom, highlight =
                 <button
                   className="menu-item"
                   role="menuitem"
-                  title={`${prog.feel}. Click to use it (replaces the track).`}
+                  title="Use it (replaces the track)"
                   onClick={() => {
                     onUse(prog)
                     setOpen(false)
                   }}
                 >
-                  <span className="menu-title">{prog.name}</span>
+                  {/* Plain words first: the name, the chords and how it feels. The numerals are extra info. */}
+                  <span className="progression-title">
+                    <span className="menu-title">{prog.name}</span>
+                    <span className="menu-desc">
+                      {prog.numerals.join(' – ')} · {keyName(tonic, prog.mode)}
+                    </span>
+                  </span>
                   <span className="bank-chords">
                     {progressionChords(prog, tonic).map((c, i) => {
                       const degree = rootDegree(c, tonic, prog.mode)
@@ -124,9 +131,7 @@ export function ProgressionMenu({ tonic, onUse, onPreview, onRandom, highlight =
                       )
                     })}
                   </span>
-                  <span className="menu-desc">
-                    {prog.numerals.join(' – ')} · {keyName(tonic, prog.mode)}
-                  </span>
+                  <span className="progression-feel">{prog.feel}</span>
                 </button>
                 <button className="hear" aria-label={`Hear ${prog.name}`} title="Hear it (doesn't change the track)" onClick={() => onPreview(prog)}>
                   ▶
@@ -135,8 +140,8 @@ export function ProgressionMenu({ tonic, onUse, onPreview, onRandom, highlight =
             ))}
           </div>
           <p className="menu-foot">
-            Shown in {tonic}. Using one replaces the track and switches to its scale; undo with ⌘Z. Hover for how it
-            sounds.
+            Shown in {tonic}. ▶ plays one; clicking it replaces your chords and switches to its scale ({UNDO_KEY} to
+            undo).
           </p>
         </div>
       )}

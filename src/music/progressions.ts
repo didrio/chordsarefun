@@ -13,7 +13,7 @@ export type Progression = {
   id: string
   name: string
   genre: Genre
-  /** What it sounds like, in a few plain words (shown on hover). */
+  /** What it sounds like, in a few plain words (shown under its chords in the menu). */
   feel: string
   /** The scale it lives in; loading it switches the track to this scale. */
   mode: ModeName

@@ -119,3 +119,48 @@ describe('adding and previewing', () => {
     expect((await clips(p)).map((c) => [c.left, c.right])).toEqual(before.map((c) => [c.left, c.right]))
   })
 })
+
+describe('layout at every width', () => {
+  // Phones (smallest first), the widths between phone and desktop (where the toolbar wraps), tablet, laptop.
+  for (const width of [320, 360, 375, 430, 600, 640, 768, 1024, 1280]) {
+    it(`${width}px: nothing runs off-screen, the Progressions menu included`, async () => {
+      const p = await start(full())
+      await p.setViewportSize({ width, height: 900 })
+      // As a string: this file is type-checked for Node, which has no `document`.
+      const overflow = () => p.evaluate<number>('document.documentElement.scrollWidth - window.innerWidth')
+      expect(await overflow()).toBeLessThanOrEqual(0)
+      await p.locator('.progression-menu .dropdown-trigger').click()
+      const panel = await p.locator('.progression-panel').boundingBox()
+      if (!panel) throw new Error('No Progressions panel')
+      expect(panel.x).toBeGreaterThanOrEqual(0)
+      expect(panel.x + panel.width).toBeLessThanOrEqual(width)
+      expect(await overflow()).toBeLessThanOrEqual(0)
+    })
+  }
+})
+
+describe('phone header', () => {
+  it('is three rows that never re-wrap: logo, session + MIDI, key + tempo + timing', async () => {
+    const p = await start(full())
+    for (const width of [320, 360, 375, 430, 600]) {
+      await p.setViewportSize({ width, height: 800 })
+      const top = async (selector: string) => Math.round((await p.locator(selector).boundingBox())!.y)
+      const [session, midi] = [await top('.session-trigger'), await top('.midi-menu .dropdown-trigger')]
+      const [key, tempo, timing] = [await top('.home-menu .dropdown-trigger'), await top('.tempo-field'), await top('.timing-menu .dropdown-trigger')]
+      expect(Math.abs(session - midi), `${width}px: session and MIDI share a row`).toBeLessThan(4)
+      expect(Math.abs(key - tempo), `${width}px: key and tempo share a row`).toBeLessThan(4)
+      expect(Math.abs(key - timing), `${width}px: key and timing share a row`).toBeLessThan(4)
+      expect(key, `${width}px: the key row is under the session row`).toBeGreaterThan(session + 20)
+    }
+  })
+})
+
+describe('finding the next step', () => {
+  it('with no chord open, the details area says to click one; clicking one opens its ideas', async () => {
+    const p = await start(full())
+    await p.locator('.details-hint').waitFor()
+    await p.mouse.click(...(await pointIn(p, 1, 0.5)))
+    await p.locator('.details-panel .ideas-grid').waitFor()
+    expect(await p.locator('.details-hint').count()).toBe(0)
+  })
+})

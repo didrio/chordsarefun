@@ -311,6 +311,13 @@ function SpotIdeas({ spot, current, onPick, onHear }: CardProps & { current: Cho
                       data-diatonic={degree === null ? 'no' : 'yes'}
                       style={{ '--hue': degree === null ? undefined : (degree * 360) / 7 } as CSSProperties}
                       aria-pressed={name === currentName}
+                      title={
+                        name === currentName
+                          ? `${name} is the chord here now`
+                          : currentName
+                            ? `Use ${name} here instead of ${currentName}`
+                            : `Use ${name} here`
+                      }
                       onClick={() => onPick(idea.chord)}
                     >
                       <span className="idea-name">

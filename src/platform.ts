@@ -22,3 +22,9 @@ export const nudgeKey = (e: Mods, mac = IS_MAC) =>
 export const COPY_KEY = IS_MAC ? '⌥ Option' : 'Ctrl'
 export const NUDGE_KEY = IS_MAC ? '⌥ Option' : 'Ctrl'
 export const FREE_KEY = IS_MAC ? '⌘ Cmd' : 'Alt'
+/** "Tap" on a touch screen, "Click" with a mouse: the verb on-screen hints use. */
+export const TAP =
+  typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches ? 'Tap' : 'Click'
+/** Shortcuts as written in on-screen hints. */
+export const UNDO_KEY = IS_MAC ? '⌘Z' : 'Ctrl+Z'
+export const DUPLICATE_KEY = IS_MAC ? '⌘D' : 'Ctrl+D'

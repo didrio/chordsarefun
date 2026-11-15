@@ -36,7 +36,7 @@ export function HomeMenu({ home, suggestion, onChange }: Props) {
         onClick={() => setOpen((o) => !o)}
       >
         <span className="trigger-label">Key</span>
-        {title(home)}
+        <span className="trigger-value">{title(home)}</span>
         {suggestion && <span className="suggest-dot" aria-label="(suggestion available)" />}
         <span className="caret" aria-hidden>
           ▾

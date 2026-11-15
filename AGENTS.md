@@ -143,6 +143,11 @@ colors, fit dots and plain-language reasons, always relative to Home.
   deselects (so nothing jumps). Selecting several clips (or none) hides it entirely; the
   group voicing buttons are in Voicing. The inspected clip gets a dashed outline on the track
   while it isn't selected.
+- **While no chord's details are open** (and the track has chords), a dashed one-line hint
+  sits where the panel would be (`p.details-hint` in `App.tsx`): "Click a chord to hear it and
+  see ideas for that spot" ("Tap" on touch screens, `TAP` in `platform.ts`), or, with several
+  chords selected, what a selection can do (drag, copy-drag, duplicate, inversion, delete). An
+  empty track shows nothing there: the track itself says where to start.
 - Inspector (`ChordInspector.tsx`): **one layout for chords and empty clips**: a header
   strip, then three tabs. The panel is **always the same height** (25rem on desktop):
   the tab content scrolls inside it.
@@ -217,12 +222,15 @@ colors, fit dots and plain-language reasons, always relative to Home.
   centered nearest the average of all the other chords (`fitOctave`), in the drag preview
   too. With no other chords it centers around C4 (middle C), not C3.
   Existing chords are never re-voiced automatically (that's the Smooth voicing button).
-- "Progressions" (`ProgressionMenu.tsx`, on the right of the main toolbar; its panel opens leftward): a dropdown with genre
+- "Progressions" (`ProgressionMenu.tsx`, on the right of the main toolbar; its panel hangs from the toolbar's right edge, like Groove's, so it stays on screen at every width): a dropdown with genre
   submenus (hover switches genre after a short delay; ←/→ between columns). ~180
   progressions (no two with the same chords in the same mood; a test enforces it),
   curated most common first within each genre (`progressions.ts`), genres and progressions ordered most common first.
   They arrive **an octave up** (around C4, root position; `progressionChords`); numerals relative to the major scale (♭VII etc.), shown in the current
-  tonic, with the plain "feel" as a hover tooltip. Clicking one replaces the track and
+  tonic. Each row reads plain words first: name, chords, then its "feel" ("Sweet '50s nostalgia");
+  the numerals and scale sit quietly at the right of the name. The list scrolls (a genre has up
+  to ~30): it's cut mid-row and fades out at the bottom so that's visible without a scrollbar.
+  Clicking one replaces the track and
   switches to its scale (one undo step); the playhead returns to the start and, if
   playing, playback continues from there (so progressions can be auditioned back to
   back; the seek happens when the new clips are scheduled); one chord per bar, repeated while it fits, or
@@ -554,8 +562,8 @@ tracks; drums on channel 10 with General MIDI notes) or one part alone.
   - **The timeline** (no panel around it, full width) with icon-only buttons stretched to
     its height on the right: + New (new chord, tinted), Undo, Redo.
   - Two panels (`Panel.tsx`):
-    - **Voicing** (collapsible, closed by default, saved per session as `moreOpen`; hint "see
-      every note and how chords connect"): a row with the notes-lane legend on the left and
+    - **Voicing** (collapsible, closed by default, saved per session as `moreOpen`; hint "every
+      note and how chords connect"): a row with the notes-lane legend on the left and
       Inversion ↓/↑, Octave ↓/↑ and Smooth voicing on the right (unusable until expanded; the
       ↑/↓ shortcuts still work), then the notes lane, lined up with the track above (the
       lane runs to the panel's left edge, like the track; `--side` is the right column).
@@ -587,13 +595,25 @@ tracks; drums on channel 10 with General MIDI notes) or one part alone.
   container queries.
 - On/off settings (Loop, Metronome, the Groove parts) are toggle buttons that light up,
   not checkboxes. Avoid explanatory text that isn't needed; prefer showing state.
-- **Phones (≤ 600px)**, one media block at the end of `index.css`: the song bar and toolbar
-  wrap (Progressions and Groove share a full-width row), every dropdown (and the help
+- **Phones (≤ 600px)**, one media block at the end of `index.css`: the song bar is three
+  rows that never re-wrap, whatever the key or session is called: the logo; the session (takes
+  the room left) and Download MIDI; then key (takes the room left), tempo and timing. To get
+  there `.song-settings` becomes `display: contents` and its items are placed with `order`; the
+  session's flex-basis is "the row minus MIDI", which forces the break after MIDI; "BPM" sits
+  inside the tempo field (`.tempo-unit`); and the "Key" label hides while the key button is
+  narrower than 11rem (a container query: about every phone under 400px), so the longest name
+  ("F# Mixolydian") fits. Long names shorten with an ellipsis rather than move anything. The
+  toolbar wraps (Progressions and Groove share a full-width row), the Voicing bar stays one
+  line, every dropdown (and the help
   popover) opens as a sheet spanning its bar instead of hanging off its trigger, the
   Groove panel stacks (presets above, one column per part), the chord details header puts
   "Type a chord" on its own row, and the tabs scroll sideways instead of wrapping (the
-  spot's context is hidden). No horizontal page scroll at 375px. Tablets (768px) use the
-  desktop layout. Touch drags are untested on a real device.
+  spot's context is hidden). No horizontal page scroll down to 320px. Touch drags are untested
+  on a real device.
+- **Narrow windows and small tablets (≤ 800px)**: the main toolbar wraps, Progressions and
+  Groove sharing a full-width row under the transport (its two halves need ~750px side by
+  side). Otherwise tablets use the desktop layout. `e2e` checks nine widths from 320 to 1280px
+  for sideways overflow and an off-screen Progressions menu, and the phone header's rows.
 
 ## Design decisions (and why)
 
@@ -659,6 +679,13 @@ These were discussed and chosen deliberately; don't "fix" them without asking.
   still uses it (one click, undo restores), the ▶ only listens.
 - **Loading a progression switches the scale** to the progression's, so its chords
   read as in key rather than all borrowed.
+- **The hint under the track is an empty state, not always-on help**: it exists only while
+  no chord's details are open, which is exactly when a newcomer has no next step on screen
+  (right after loading a progression). It's one line and dashed, like an empty spot, and it
+  leaves as soon as a chord is clicked.
+- **The progression menu leads with the feel, not the numerals**: people who can't read
+  "I – V – vi – IV" choose by "Uplifting and familiar"; the numerals stay visible for those
+  who can.
 
 ## Planned / possible next
 
@@ -755,7 +782,9 @@ them up.
   covers the real-pointer flows: it starts its own Vite server on a free port, uses
   `playwright-core` with the installed Chrome (`CHROME_PATH` overrides; Mac and Linux paths are
   tried), seeds `chords:v1:track` in localStorage (`seedTrack` in `e2e/harness.ts`) and reads
-  clips from the DOM. Add a case there when a new pointer or keyboard flow lands.
+  clips from the DOM. Add a case there when a new pointer or keyboard flow lands. It also
+  checks the layout at nine widths (no sideways scroll, the Progressions menu on screen) and
+  that the phone header keeps its three rows.
 - For UI: run the dev server and drive the installed Chrome headlessly, e.g.
   `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new
   --screenshot=out.png --window-size=1280,800 http://localhost:5173/`, or a

@@ -20,6 +20,7 @@ import { useHistory } from './history'
 import { usePersistentState } from './persist'
 import { clickSelect, EMPTY_SELECTION, pruneSelection, selectAll, type ClickMods, type Selection } from './selection'
 import { shortcutFor } from './shortcuts'
+import { COPY_KEY, DUPLICATE_KEY, TAP } from './platform'
 import { DEFAULT_TRACK, isTrack, migrateTrack } from './track'
 import {
   ensureAudio,
@@ -598,7 +599,7 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
           <HomeMenu home={{ tonic, mode }} suggestion={homeSuggestion} onChange={changeHome} />
           <label className="tempo-field" title="Tempo in beats (quarter notes) per minute">
             <TempoInput bpm={bpm} onBpm={setBpm} />
-            BPM
+            <span className="tempo-unit">BPM</span>
           </label>
           <TimingMenu sig={sig} onSig={changeSig} bars={bars} onBars={changeBars} gridKey={gridKey} onGrid={setGridKey} />
           <MidiMenu
@@ -750,7 +751,7 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
 
         <Panel
           title="Voicing"
-          hint="see every note and how chords connect"
+          hint="every note and how chords connect"
           open={moreOpen}
           onToggle={() => setMoreOpen((o) => !o)}
         >
@@ -830,7 +831,7 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
           </div>
         </Panel>
 
-        {panelOpen && !multiSelected && inspected && (
+        {panelOpen && !multiSelected && inspected ? (
           <section className="panel details-panel" aria-label="Chord details">
             <ChordInspector
               key={inspected.id}
@@ -849,6 +850,23 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
               onClose={() => setPanelOpen(false)}
             />
           </section>
+        ) : (
+          // No chord's details are open: say what the next move is, where the details would be.
+          // (An empty track says it on the track itself.)
+          clips.length > 0 && (
+            <p className="details-hint">
+              {multiSelected ? (
+                <>
+                  <b>{selectedClips.length} chords selected.</b> Drag them to move them together (hold {COPY_KEY} to
+                  copy), {DUPLICATE_KEY} duplicates them, ↑&nbsp;↓ changes their inversion, Delete removes them.
+                </>
+              ) : (
+                <>
+                  <b>{TAP} a chord</b> to hear it and see ideas for that spot.
+                </>
+              )}
+            </p>
+          )
         )}
       </div>
 

@@ -1418,12 +1418,19 @@ input[type='text'][aria-invalid='true'] {
   color: var(--muted);
 }
 
-/* Progressions sits on the right of the toolbar: its panel opens leftward from there. */
+/*
+ * Progressions sits on the right of the toolbar. Its panel hangs from the toolbar's right
+ * edge (like Groove's, not from the trigger), so it can't run off-screen at any width.
+ */
+.progression-menu {
+  position: static;
+}
+
 .progression-panel {
   right: 0;
   display: grid;
   grid-template-columns: 11rem minmax(0, 1fr);
-  width: min(44rem, calc(100vw - 3rem));
+  width: min(44rem, 100%);
 }
 
 .genres {
@@ -1451,13 +1458,37 @@ input[type='text'][aria-invalid='true'] {
   color: var(--bg);
 }
 
+/*
+ * A genre has up to ~30 progressions and the list scrolls. So that's visible without a
+ * scrollbar (macOS hides them), the height cuts a row in half and the bottom edge fades
+ * out; the padding lets the last row scroll clear of the fade.
+ */
 .progressions {
+  --fade: 2.5rem;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  max-height: 24rem;
-  padding-left: 0.35rem;
+  max-height: min(27.5rem, calc(100vh - 16rem));
+  padding: 0 0 var(--fade) 0.35rem;
   overflow-y: auto;
+  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--fade)), transparent);
+}
+
+/* Name on the left; the numerals (extra info) quietly on the right, wrapping under it when tight. */
+.progression-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0 0.75rem;
+  width: 100%;
+}
+
+/* How it feels, in plain words: the line a newcomer chooses by. */
+.progression-feel {
+  font-size: var(--fs-sm);
+  line-height: 1.3;
+  color: var(--muted);
 }
 
 .progression-row {
@@ -1976,6 +2007,27 @@ button.tinted:hover:not(:disabled) {
 }
 
 /*
+ * Where the chord details go while none are open: one line on the next move. Dashed, like
+ * an empty spot on the track: a place waiting for something.
+ */
+.details-hint {
+  margin: 0.6rem 0 0;
+  padding: 1.4rem 1rem;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  text-align: center;
+  text-wrap: balance;
+  color: var(--muted);
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+}
+
+.details-hint b {
+  font-weight: 600;
+  color: var(--text);
+}
+
+/*
  * Chord details: a header (name, notes, one plain line on how it fits, type a chord),
  * tabs, and the tab's content. One fixed height on desktop: the content scrolls inside,
  * so switching chords or tabs never moves anything.
@@ -2472,6 +2524,39 @@ button.dice:hover:not(:disabled),
 }
 
 /*
+ * Narrow windows and small tablets (up to 800px): the toolbar's two halves no longer fit on
+ * one row, so Progressions and Groove get a row of their own and share it evenly.
+ */
+@media (max-width: 800px) {
+  .main-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .toolbar-section {
+    gap: 0.5rem;
+  }
+
+  /* min-width: on the smallest phones (320px) the triggers shrink instead of widening the page. */
+  .toolbar-section:not(.transport) {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .main-toolbar .dropdown {
+    flex: 1;
+    min-width: 0;
+    gap: 0.25rem;
+  }
+
+  .main-toolbar .progression-menu .dropdown-trigger,
+  .main-toolbar .groove-menu .dropdown-trigger {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+  }
+}
+
+/*
  * Phones (up to ~600px): the bars wrap instead of overflowing, every menu opens as a sheet
  * spanning its bar (anchored to the bar, not the trigger, so it never runs off-screen), and
  * the chord details' header puts "Type a chord" on its own row.
@@ -2511,40 +2596,119 @@ button.dice:hover:not(:disabled),
     max-height: calc(100vh - 6rem);
   }
 
+  /*
+   * The song bar in three rows that never re-wrap: the logo; the session (takes the room
+   * left) and Download MIDI; then key (takes the room left), tempo and timing. The settings
+   * group dissolves so its items can sit in those rows.
+   */
+  .song-bar {
+    --midi-width: 9.5rem;
+    --bar-gap: 0.4rem;
+    gap: 0.5rem var(--bar-gap);
+  }
+
   .song-settings {
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-left: 0;
+    display: contents;
   }
 
   .song-bar .dropdown-trigger {
+    gap: 0.35rem;
+    padding-inline: 0.55rem;
     white-space: nowrap;
   }
 
-  .main-toolbar {
-    flex-wrap: wrap;
-    padding-inline: 0;
-  }
-
-  .toolbar-section {
-    gap: 0.5rem;
-  }
-
-  .toolbar-section:not(.transport) {
-    flex: 1 1 100%;
-  }
-
-  .main-toolbar .dropdown {
-    flex: 1;
+  /* Session + MIDI fill their row exactly (to within 2px), so the key always starts the next one. */
+  .song-bar .session-menu {
+    order: 1;
+    flex: 1 1 calc(100% - var(--midi-width) - var(--bar-gap) - 2px);
     min-width: 0;
-    gap: 0.25rem;
   }
 
-  .main-toolbar .progression-menu .dropdown-trigger,
-  .main-toolbar .groove-menu .dropdown-trigger {
+  .session-menu .session-trigger {
     flex: 1;
     width: auto;
     min-width: 0;
+  }
+
+  .song-bar .midi-menu {
+    order: 2;
+    flex: none;
+  }
+
+  .midi-menu .dropdown-trigger {
+    justify-content: space-between;
+    width: var(--midi-width);
+    overflow: hidden;
+  }
+
+  /* The key takes what tempo and timing leave: its width never depends on the key's name. */
+  .song-bar .home-menu {
+    order: 3;
+    flex: 1 1 0;
+    min-width: 0;
+    container-type: inline-size;
+  }
+
+  /* On most phones that's too little for "Key" plus the longest name, so the label steps aside. */
+  @container (max-width: 11rem) {
+    .home-menu .trigger-label {
+      display: none;
+    }
+  }
+
+  .home-menu .dropdown-trigger {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* A long key name ("F# Mixolydian") shortens with an ellipsis instead of pushing the row apart. */
+  .home-menu .trigger-value {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-align: left;
+    text-overflow: ellipsis;
+  }
+
+  /* Tempo: "BPM" sits inside the field, so the three settings fit side by side. */
+  .song-bar .tempo-field {
+    position: relative;
+    order: 4;
+    flex: none;
+  }
+
+  .tempo-field input[type='number'] {
+    width: 4.6rem;
+    padding: 0.4rem 2.2rem 0.4rem 0.55rem;
+  }
+
+  .tempo-field .tempo-unit {
+    position: absolute;
+    right: 0.55rem;
+    font-size: var(--fs-xs);
+    pointer-events: none;
+  }
+
+  .song-bar .timing-menu {
+    order: 5;
+    flex: none;
+  }
+
+  /* The Voicing bar stays one line: its hint goes a size down, and is cut rather than wrapped. */
+  .panel-bar > span:not(.muted) {
+    flex: none;
+  }
+
+  .panel-bar .muted {
+    min-width: 0;
+    overflow: hidden;
+    font-size: var(--fs-xs);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .main-toolbar {
+    padding-inline: 0;
   }
 
   .progression-panel {
