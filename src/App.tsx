@@ -134,7 +134,7 @@ const isSelection = (v: unknown) => {
 }
 
 /** Elements whose clicks don't clear the clip selection. */
-const KEEPS_SELECTION = '.clip, button, input, select, label, summary, .ruler, .panel, .notes-lane, .dropdown'
+const KEEPS_SELECTION = '.clip, button, input, select, label, summary, .ruler, .panel, .notes-lane, .dropdown, .home-notice'
 
 /** Chord size for ideas. The Triads/7ths/9ths toggle is gone with the palette, so ideas use triads. */
 const flavor: PaletteFlavor = 'triads'

@@ -385,7 +385,7 @@ one undo step.
   open; picking a mood closes it.
 - **Changing home only re-labels** (colors, numerals, fit); chords never change. Part of
   undo.
-- Right after, a notice offers to move the chords, worded for what it does
+- Right after, a notice (`HomeNotice`, a floating bar pinned bottom-center of the window, `position: fixed`, so showing or dismissing it never moves the page; z-index 15; clicking it keeps the selection) offers to move the chords, worded for what it does
   (`homeMove`): "Transpose chords to D major" (same mood), "Reshape chords for Dorian"
   (same key), "Move chords to D Dorian" (both). It uses `chordToKey`: chords all in the
   old key keep their scale degree (V stays V, Em in C major → E♭ in C minor; sizes,
@@ -558,7 +558,6 @@ tracks; drums on channel 10 with General MIDI notes) or one part alone.
   - **Main toolbar** (dashed line above, solid below), like Ableton's transport bar: Play
     (accent tint), Stop, Loop, metronome + volume on the left; Progressions + die and
     Groove + die on the right (fixed-width triggers, long text truncates).
-  - Home notice (after a key change).
   - **The timeline** (no panel around it, full width) with icon-only buttons stretched to
     its height on the right: + New (new chord, tinted), Undo, Redo.
   - Two panels (`Panel.tsx`):

@@ -1683,10 +1683,20 @@ input[type='text'][aria-invalid='true'] {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem 1rem;
-  margin: -0.5rem 0 1rem;
+  /* Floats over the page (pinned bottom-center) so showing or dismissing it never moves
+     the track. Above the page, below dropdowns (20), the help tip (30) stays on top. */
+  position: fixed;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 15;
+  width: min(56rem, calc(100vw - 2rem));
+  box-sizing: border-box;
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.45);
   padding: 0.55rem 0.8rem;
   font-size: var(--fs-sm);
-  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  background: var(--surface);
+  background-image: linear-gradient(color-mix(in srgb, var(--accent) 12%, transparent), color-mix(in srgb, var(--accent) 12%, transparent));
   border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
   border-radius: 8px;
 }

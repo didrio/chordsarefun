@@ -4,7 +4,7 @@ Living, ordered backlog. One ticket per session: `/clear` → `/start Tn` → wo
 session updates this file and picks the next ticket, so each new session starts with a small, clear context.
 Rules: `.claude/skills/wrap/SKILL.md`. Capture ideas any time with `/ticket`.
 
-**Next:** T10 — Key-change notice without moving the track · Sonnet · medium · plan mode off. (T8's `e2e` job was green on GitHub. T9 added layout tests that have only run on a Mac: if the `e2e` job is red after T9's push, fix that first.)
+**Next:** none ticketed. Pick from the Backlog (promote one with `/ticket`) or capture something new. T10's e2e case and T9's layout cases have only run on a Mac: if the `e2e` job is red after the push, fix that first.
 
 ## In progress
 
@@ -12,39 +12,7 @@ _None._
 
 ## Up next
 
-### T10 — Key-change notice without moving the track
-
-**Session:** Sonnet · medium · plan mode off
-
-**Why:** changing the key shows the "The key is now C minor… Reshape chords / Keep them" notice between the
-toolbar and the timeline, which pushes the track and everything under it down ~44px, and back up when it's
-dismissed. That breaks the app's own rule (AGENTS.md, "Layouts must not jump"). Found in T9's UI/UX pass.
-
-**Goal:** the notice appears and leaves without anything else on the page moving, and it's still obviously about
-the key change you just made.
-
-**Recommended approach (owner may prefer another):** a floating bar pinned to the bottom-center of the window
-(`position: fixed`), same text and the same two buttons. Nothing reflows, and it's visible wherever the page is
-scrolled (on phones the track may be off-screen when the Key sheet closes). Alternatives considered: reserving
-an always-empty row above the track (wastes 44px for a notice that's rarely there); showing it in the dashed
-`details-hint` slot (usually hidden, since a chord's details are open most of the time).
-
-**Where:** `src/components/HomeNotice.tsx`; where it's rendered in `src/App.tsx` (`activeOffer && <HomeNotice …>`,
-between `.main-toolbar` and `.panels`); `.home-notice` in `src/index.css`. The offer logic (`homeOffer`,
-`activeOffer`, `moveChordsHome`) doesn't change.
-
-**Done when:**
-- [ ] Changing the key doesn't move the track, the Voicing panel or the chord details by a pixel (compare
-      `.track`'s `getBoundingClientRect().top` before and after; add that as an `e2e` case).
-- [ ] The notice never covers the chord details' header or the track on a 1280x800 window; on a 375px phone it
-      spans the width with both buttons reachable.
-- [ ] It still goes away when the chords are edited, the offer is taken, or "Keep them" is clicked (unchanged
-      rules), and clicking it doesn't deselect the chord (`KEEPS_SELECTION` in `App.tsx` covers `button` only:
-      check the bar's own background).
-- [ ] `AGENTS.md` (Home, Visual design) says where the notice lives now.
-
-**Pitfall:** don't let it sit on top of the drag ghost or dropdown panels (`z-index`: dropdowns are 20, the help
-tip 30, the drag ghost 10).
+_None. Promote Backlog items here with `/ticket`._
 
 ## Backlog
 
@@ -68,6 +36,7 @@ tip 30, the drag ghost 10).
 
 ## Done
 
+- T10 — Key-change notice without moving the track — 2026-11-15 — `HomeNotice` is a fixed bottom-center bar (z-index 15), so the track never moves; clicking it keeps the selection; `e2e` case checks `.track` top before/after.
 - T9 — UI/UX pass — 2026-11-15 — Progressions menu stays on screen at every width, leads with each progression's
   feel and shows that it scrolls; toolbar wraps at ≤800px (it overflowed 600–800px); a one-line hint where the
   chord details go while none are open; phone header in five rows instead of six, no sideways scroll down to

@@ -164,3 +164,26 @@ describe('finding the next step', () => {
     expect(await p.locator('.details-hint').count()).toBe(0)
   })
 })
+
+describe('key-change notice', () => {
+  it('floats: showing and dismissing it never moves the track, and clicking it keeps the selection', async () => {
+    const p = await start(full())
+    await p.mouse.click(...(await pointIn(p, 1, 0.5)))
+    const top = () => p.evaluate<number>("document.querySelector('.track').getBoundingClientRect().top")
+    const before = await top()
+    await p.locator('.home-menu .dropdown-trigger').click()
+    await p.locator('.home-keys button', { hasText: /^D$/ }).click()
+    await p.keyboard.press('Escape')
+    const notice = p.locator('.home-notice')
+    await notice.waitFor()
+    expect(await top()).toBe(before)
+    // Clicking the bar's own background must not deselect the chord.
+    const box = await notice.boundingBox()
+    if (!box) throw new Error('No notice')
+    await p.mouse.click(box.x + 6, box.y + box.height / 2)
+    expect((await clips(p)).filter((c) => c.selected).length).toBe(1)
+    await notice.locator('button', { hasText: 'Keep them' }).click()
+    expect(await notice.count()).toBe(0)
+    expect(await top()).toBe(before)
+  })
+})
