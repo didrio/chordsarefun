@@ -24,7 +24,7 @@ import {
   type Chord,
 } from '../music/chord'
 import { chordFromNotes, readChordInput, type ParsedChord } from '../music/parse'
-import { INTENTS, spotContext, suggestForSpot, type Intent, type Spot } from '../music/suggest'
+import { inContext, INTENTS, spotContext, suggestForSpot, type Intent, type Spot } from '../music/suggest'
 import { KEYS, keyName, noteInKey, rootDegree, scaleNotes, type ModeName } from '../music/theory'
 
 /**
@@ -49,6 +49,11 @@ type Props = {
   onClear: () => void
   /** Hear a chord. `fresh` = a new chord (an idea, typed), which the app plays in the track's octave, as it would place it. */
   onPreview: (chord: Chord, fresh?: boolean) => void
+  /**
+   * Hear a chord where it would sit (the chord before, it, the chord after) without
+   * changing the track. `fresh` as in onPreview.
+   */
+  onHearInContext: (chord: Chord, fresh?: boolean) => void
   /** Close the details panel (it comes back when a chord is selected). */
   onClose: () => void
 }
@@ -80,7 +85,7 @@ function pitchNames(tonic: string, mode: ModeName): string[] {
  *   tabs:   Ideas for this spot | Flavors of the root | Notes and bass
  * The panel keeps one height; the tab content scrolls inside it when long.
  */
-export function ChordInspector({ chord, spot, tab, onTab, onChange, onClear, onPreview, onClose }: Props) {
+export function ChordInspector({ chord, spot, tab, onTab, onChange, onClear, onPreview, onHearInContext, onClose }: Props) {
   const { tonic, mode, next } = spot
   const names = pitchNames(tonic, mode)
   const analysis = chord && analyzeChord(chord, tonic, mode, next ?? spot.loopTo)
@@ -192,8 +197,12 @@ export function ChordInspector({ chord, spot, tab, onTab, onChange, onClear, onP
       </div>
 
       <div className="insp-body" role="tabpanel">
-        {shownTab === 'ideas' && <SpotIdeas spot={spot} current={chord} onPick={(c) => change(c, true)} />}
-        {shownTab === 'flavors' && chord && <Flavors chord={chord} spot={spot} onPick={(c) => change(c)} />}
+        {shownTab === 'ideas' && (
+          <SpotIdeas spot={spot} current={chord} onPick={(c) => change(c, true)} onHear={(c) => onHearInContext(c, true)} />
+        )}
+        {shownTab === 'flavors' && chord && (
+          <Flavors chord={chord} spot={spot} onPick={(c) => change(c)} onHear={(c) => onHearInContext(c)} />
+        )}
         {shownTab === 'notes' && (
           <div className="notes-tab">
             <div className="notes-keys">
@@ -253,11 +262,32 @@ export function ChordInspector({ chord, spot, tab, onTab, onChange, onClear, onP
 }
 
 /**
+ * The small ▶ in a card's corner: hear the chord between its neighbors (inContext) without
+ * using it, so ideas can be compared before picking one. Clicking the card itself uses it.
+ */
+function HearInPlace({ chord, spot, onHear }: { chord: Chord; spot: Spot; onHear: (c: Chord) => void }) {
+  const steps = inContext(spot, chord).map((c) => chordName(c))
+  const what = steps.length > 1 ? `Hear it in place: ${steps.join(' → ')}` : 'Hear it'
+  return (
+    <button
+      className="card-hear"
+      aria-label={`Hear ${chordName(chord)} in place`}
+      title={`${what} (doesn't change the track)`}
+      onClick={() => onHear(chord)}
+    >
+      <PlayIcon />
+    </button>
+  )
+}
+
+type CardProps = { spot: Spot; onPick: (c: Chord) => void; onHear: (c: Chord) => void }
+
+/**
  * Chord ideas for a spot, all four kinds side by side (Feel at home, Build tension, Flow
  * smoothly, Add color), each with up to three cards. A kind with nothing to offer keeps
- * its column, so the layout never shifts. Click an idea to use it.
+ * its column, so the layout never shifts. Click an idea to use it; its ▶ plays it in place.
  */
-function SpotIdeas({ spot, current, onPick }: { spot: Spot; current: Chord | null; onPick: (c: Chord) => void }) {
+function SpotIdeas({ spot, current, onPick, onHear }: CardProps & { current: Chord | null }) {
   const { groups } = suggestForSpot(spot)
   const byIntent = new Map(groups.map((g) => [g.intent, g]))
   const currentName = current ? chordName({ ...current, inversion: 0 }) : null
@@ -275,19 +305,21 @@ function SpotIdeas({ spot, current, onPick }: { spot: Spot; current: Chord | nul
                 const degree = rootDegree(idea.chord, spot.tonic, spot.mode)
                 const name = chordName(idea.chord)
                 return (
-                  <button
-                    key={name}
-                    className={`idea${name === currentName ? ' current' : ''}`}
-                    data-diatonic={degree === null ? 'no' : 'yes'}
-                    style={{ '--hue': degree === null ? undefined : (degree * 360) / 7 } as CSSProperties}
-                    aria-pressed={name === currentName}
-                    onClick={() => onPick(idea.chord)}
-                  >
-                    <span className="idea-name">
-                      {name} <span className="roman">{idea.roman}</span>
-                    </span>
-                    <span className="idea-why">{idea.why}</span>
-                  </button>
+                  <div key={name} className="card">
+                    <button
+                      className={`idea${name === currentName ? ' current' : ''}`}
+                      data-diatonic={degree === null ? 'no' : 'yes'}
+                      style={{ '--hue': degree === null ? undefined : (degree * 360) / 7 } as CSSProperties}
+                      aria-pressed={name === currentName}
+                      onClick={() => onPick(idea.chord)}
+                    >
+                      <span className="idea-name">
+                        {name} <span className="roman">{idea.roman}</span>
+                      </span>
+                      <span className="idea-why">{idea.why}</span>
+                    </button>
+                    <HearInPlace chord={idea.chord} spot={spot} onHear={onHear} />
+                  </div>
                 )
               })
             ) : (
@@ -302,9 +334,10 @@ function SpotIdeas({ spot, current, onPick }: { spot: Spot; current: Chord | nul
 
 /**
  * Other flavors of the same root, grouped by how they fit the key, each with its feel in
- * plain words. The most expected come first; "Show all" reveals the rest.
+ * plain words. The most expected come first; "Show all" reveals the rest. Click one to
+ * use it; its ▶ plays it in place.
  */
-function Flavors({ chord, spot, onPick }: { chord: Chord; spot: Spot; onPick: (c: Chord) => void }) {
+function Flavors({ chord, spot, onPick, onHear }: CardProps & { chord: Chord }) {
   const [all, setAll] = useState(false)
   const options = flavorOptions(chord, spot.tonic, spot.mode, spot.next ?? spot.loopTo)
   const isCurrent = (symbol: string) => chord.type === symbol && chord.add.length === 0 && chord.omit.length === 0
@@ -326,19 +359,21 @@ function Flavors({ chord, spot, onPick }: { chord: Chord; spot: Spot; onPick: (c
             </h4>
             <div className="flavor-list">
               {shown.map(({ t, c, a }) => (
-                <button
-                  key={t.symbol}
-                  className={`flavor fit-${mark}${isCurrent(t.symbol) ? ' current' : ''}`}
-                  aria-pressed={isCurrent(t.symbol)}
-                  title={`${chordName(c)}: ${t.feel}. ${a.fit.title}${a.tension.level ? `; ${a.tension.label.toLowerCase()}` : ''}.`}
-                  onClick={() => onPick(c)}
-                >
-                  <span className="flavor-name">
-                    {chord.root}
-                    {t.symbol}
-                  </span>
-                  <span className="flavor-feel">{t.feel}</span>
-                </button>
+                <div key={t.symbol} className="card">
+                  <button
+                    className={`flavor fit-${mark}${isCurrent(t.symbol) ? ' current' : ''}`}
+                    aria-pressed={isCurrent(t.symbol)}
+                    title={`${chordName(c)}: ${t.feel}. ${a.fit.title}${a.tension.level ? `; ${a.tension.label.toLowerCase()}` : ''}.`}
+                    onClick={() => onPick(c)}
+                  >
+                    <span className="flavor-name">
+                      {chord.root}
+                      {t.symbol}
+                    </span>
+                    <span className="flavor-feel">{t.feel}</span>
+                  </button>
+                  <HearInPlace chord={c} spot={spot} onHear={onHear} />
+                </div>
               ))}
             </div>
           </section>

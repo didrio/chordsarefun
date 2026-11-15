@@ -12,7 +12,7 @@ A browser app that helps musicians come up with chord progressions. It must be
 there to help, never required: always show the plain chord name and the actual notes,
 and treat roman numerals / theory labels as extra info, never the only info.
 
-It's also a **brainstorming tool**: guided by default (palette, progression library,
+It's also a **brainstorming tool**: guided by default (ideas for each spot, progression library,
 variations that fit the key), free when you want (any chord, any note, inversions).
 Going outside the key is information, never an error: the app says what a chord is
 and how it's used, in plain words.
@@ -65,12 +65,12 @@ say what's done, and suggest the next step or command.
 Everything is organized around one **Home** (key + mood), in three layers:
 
 - **Song**: Home and Groove, the context everything is measured against.
-- **Palette**: chord options around home (7 home chords, the Spice row, palette size,
-  progressions).
+- **Palette**: chord options around home (the inspector's Ideas and Flavors, the
+  progression library).
 - **Chord**: one chord up close (the inspector).
 
 **Home is context, not content: nothing on the track changes unless you ask.** Every
-chord anywhere (palette, spice, track, inspector, progression menu) uses the same
+chord anywhere (track, ideas, flavors, inspector, progression menu) uses the same
 colors, fit dots and plain-language reasons, always relative to Home.
 
 ## Explaining theory
@@ -117,9 +117,10 @@ colors, fit dots and plain-language reasons, always relative to Home.
 - **The palette (7 in-key chords), the Spice row and the Triads/7ths/9ths toggle were
   removed**: the inspector's Ideas and Flavors tabs cover chord ideas now. The 1–7
   shortcuts went with them. Chords get on the track via Progressions, double-click
-  empty clips + Ideas / typing a chord in the inspector, and copy-drag of clips.
-  `Palette.tsx` (+ `SpiceRow`), `spiceChords`, `diatonicChords` and the `.chord-picker`
-  CSS are now unused by the UI (kept, tested; delete when sure they're not coming back).
+  empty clips + Ideas / typing a chord in the inspector, copy-drag of clips and ⌘D.
+  The palette's code (`Palette.tsx`, `SpiceRow`, `diatonicChords`, `addChord`/`dropChord`,
+  its CSS) was deleted in T4; it's in git history before that commit if it's ever wanted.
+  `spiceChords` stays: it feeds the "Add color" ideas.
 - Ideas use triads (the size toggle is gone; `flavor` is a constant in `App.tsx`).
 - Previews of a **new** chord (an idea, a typed chord, a picked root) are played in the octave
   it would be placed in (`fitOctave`: nearest the chords on the track, around C4 on an empty
@@ -127,7 +128,11 @@ colors, fit dots and plain-language reasons, always relative to Home.
   (clicking them, ▶, flavor/bass/inversion edits) play their real voicing.
 - Previews (clicking a chord anywhere) play it as the track would: the chord on the
   chord instrument plus its bass note on the bass instrument when the Bass part is on.
-- `useChordDrag` can still drag a *new* chord in (palette-style) but nothing in the UI starts one.
+- **Every preview replaces the one still running** (a chord preview cuts off the rest of a
+  progression or in-place preview: `previewChord` calls `stopPreview`), and pressing Play
+  stops a running preview so it never plays over the track.
+- The drop rules (`planDrop`) still accept a *new* chord dragged in (`held.existing`
+  false: insert or replace), but nothing in the UI starts one since the palette went.
 
 ### Chord inspector, notes lane, progressions
 
@@ -163,6 +168,15 @@ colors, fit dots and plain-language reasons, always relative to Home.
     **feel** in plain words (`ChordType.feel`: "Soft and dreamy"). Within each group the
     most expected come first (`flavors.ts`); the first 6 per group show (plus the current
     flavor wherever it ranks), "Show all N" reveals the rest.
+  - **Hear it in place** (T2): every idea and flavor card has a small ▶ in its top-right
+    corner (inside the card's padding, so cards keep their size; muted until the card is
+    hovered, its own tab stop). It plays the chord before the spot, the card's chord, then
+    the chord after (`inContext` in `suggest.ts`: empty spots skipped, nothing before at the
+    start, the loop's first chord after the end of a looping track), without touching the
+    track. Each chord sounds as long as in a progression preview (a bar, at most 1.5 s);
+    ideas play in the track's octave (`fitOctave`), flavors in the clip's own voicing. Like
+    other previews it does nothing while the track plays. The tooltip spells the sequence
+    out ("Hear it in place: C → G → Am"). Clicking the card itself still uses the chord.
   - **Notes and bass**: left, the Root picker (for an empty clip it sets a major chord)
     and the one-octave keyboard (lit = in the chord; note names outside the key in
     yellow, as a yellow pill on lit keys; each lit note's role (R, 3, b7…) small and
@@ -251,14 +265,13 @@ colors, fit dots and plain-language reasons, always relative to Home.
     and its relative major/minor as a softer landing (a deceptive cadence after the V).
   - **Build tension**: the V of the next chord (or of the loop's first chord, or home:
     a half cadence at the end), the diminished chord a half step below it, the tritone
-    sub (7ths/9ths palette), the sus4 V. If the plain V is already beside the spot, its
+    sub (7ths/9ths ideas only), the sus4 V. If the plain V is already beside the spot, its
     7th is offered (C _ F → C7).
   - **Flow smoothly**: key chords sharing the most notes with both neighbors
     (diminished chords ranked last, chords sharing nothing left out); IV/V/vi on an
     empty track.
-  - **Add color**: Spice chords, the ones that pull into or share notes with the next
-    chord first.
-- Ideas use the palette size (Triads/7ths/9ths).
+  - **Add color**: Spice chords (`spiceChords`), the ones that pull into or share notes
+    with the next chord first.
 
 ### Selection (`src/selection.ts`)
 
@@ -266,14 +279,15 @@ colors, fit dots and plain-language reasons, always relative to Home.
   playhead: opening a chord to work on it shouldn't jump the song.
 - Shift+click: range from the anchor (last plain/⌘-clicked clip) to the clicked one.
 - ⌘/Ctrl+click: toggle one clip. ⌘A/Ctrl+A: select all. Esc: deselect.
-- Clicking anywhere non-interactive (anything but clips, palette chords, controls,
-  the ruler) deselects. Ctrl+click's context menu is suppressed on clips.
+- Clicking anywhere non-interactive (anything but clips, controls, panels, the ruler)
+  deselects. Ctrl+click's context menu is suppressed on clips.
 - Delete/Backspace, or the × on any selected clip, removes all selected clips (× on
   an unselected clip removes just that one).
 
 ### Dragging (`useChordDrag` + `planDrop` / `planGroupDrop`)
 
-One pointer-based drag system for palette chords and clips, with a **live preview**:
+One pointer-based drag system for clips (the rules also handle a new chord dragged in,
+called "palette chord" below, though nothing in the UI starts one now), with a **live preview**:
 the track renders the planned result (other clips slide out of the way) before
 release. The dragged chip shows a plain-words label ("Swap C ⇄ Am", "Move C after Am",
 "Move 3 chords after F", "Add Em before G", "Replace F with Em", "No room here",
@@ -317,6 +331,25 @@ width, independent of the grid):
 Drag a clip's edge. Neighbors in the direction of travel are trimmed; once at minimum
 length (1/32 note) they're pushed; nothing leaves the track. A whole resize drag is
 one undo step.
+
+### Duplicate and nudge from the keyboard (T3)
+
+- **⌘D / Ctrl+D** duplicates the selection (`planDuplicate`): exactly a copy-drag dropped
+  on the right edge of the last selected chord. One chord inserts right after itself and
+  makes room (`insertClip`: push into gaps, then shrink the copy to a grid step, then
+  squeeze the right-hand chords), so on a full track the copy is short; several chords are
+  copied as one block after the last of them and must fit at full length. No room: nothing
+  happens. The copies end up selected (one copy: inspected). One undo step. The browser's
+  bookmark shortcut is prevented.
+- **⌥←/→ (Mac) / Ctrl+←/→ (Windows/Linux)** nudges the selection (`nudgeClips`): all
+  selected chords move together, keeping their spacing, by one grid step measured from the
+  first of them (to the previous/next grid point, bar lines included, like `stepGrid`; one
+  beat with the grid off). Into empty space only: if any would overlap a chord that isn't
+  moving or leave the track, nothing happens; nothing is pushed. One undo step per press.
+  Not Alt on Windows (Alt+← is the browser's Back) nor ⌘ on a Mac (⌘← is Back too):
+  `nudgeKey` in `platform.ts`.
+- `stepGrid` (playhead nudge, chord nudge) steps by bars when the grid is coarser than a bar
+  (a 1/4 grid in 1/8), so it never jumps over a bar line.
 
 ### Grid, time signature, length
 
@@ -457,6 +490,8 @@ browser.
 | ↑ / ↓ | Selected chords (or all) one inversion higher/lower |
 | Shift+↑ / Shift+↓ | Selected chords (or all) an octave up/down |
 | Delete/Backspace · Esc | Remove selected · deselect |
+| ⌘D / Ctrl+D | Duplicate the selected chords right after them |
+| ⌥← / ⌥→ (Mac) · Ctrl+← / Ctrl+→ | Nudge the selected chords one grid step (into empty space only) |
 | ⌘A / Ctrl+A | Select all |
 | ⌘Z · ⇧⌘Z / Ctrl+Y | Undo · redo |
 
@@ -465,7 +500,7 @@ The (i) tooltip next to the logo (`HelpTip.tsx`: how it works + every shortcut, 
 ### Sessions (`src/session.ts`, `SessionMenu.tsx`)
 
 - A session is the whole workspace: the Track with its undo history, BPM, groove,
-  grid, loop, metronome, palette size, notes lane, the selection, the inspected clip,
+  grid, loop, metronome, notes lane, the selection, the inspected clip,
   the details panel (open/collapsed, tab) (`SESSION_KEYS`), so it reopens exactly as it was left.
 - You're always in one session and **every change is saved to it as you go**. The
   sessions menu next to the logo shows its name like a document title ("Unsaved
@@ -485,15 +520,16 @@ The (i) tooltip next to the logo (`HelpTip.tsx`: how it works + every shortcut, 
 
 Everything is saved to localStorage under `chords:v1:*` (per session, see above): the
 Track **with its full undo/redo history** (debounced, and flushed on page hide, on
-unmount and on demand), BPM, grid, loop, palette size, notes-lane toggle, metronome
+unmount and on demand), BPM, grid, loop, notes-lane toggle, metronome
 on/off and volume, the selection, panels, and the groove settings
 (`groove2`: renamed after the level pass, so old, now-unbalanced volumes are dropped). Loaded data is validated (`isTrack`, type checks; note
 names via `isNoteName`, since Tonal returns NaN, not undefined, for nonsense);
 invalid or corrupt data falls back to defaults, and storage errors are ignored. On
 shape changes, **migrate old data on load** so saved work survives (`migrateTrack`
 turns old `symbol: "Dm7"` clips into chords, across the whole undo history); bump
-`VERSION` in `persist.ts` only for changes that can't be migrated. Palette size
-(`flavor`, seeded from the old `sevenths` setting) is saved too. Old chords have no
+`VERSION` in `persist.ts` only for changes that can't be migrated. The old palette size
+key (`flavor`) is no longer read; it stays in `SESSION_KEYS` so copying and deleting
+sessions still cleans it up. Old chords have no
 `bass`, so they read as their root (inverted chords once named "F/C" are now plain F,
 as intended). Playhead and play state are not saved.
 
@@ -540,7 +576,7 @@ tracks; drums on channel 10 with General MIDI notes) or one part alone.
   slash-chord note).
 - There is no Clear button: start over with + New session.
 - **Chord color = scale degree of the root** (hue = degree × 360/7), identical in
-  palette, clips, lane and progression menu, so Dm, Dm7 and D (V/V) in C share the "2" color; how
+  ideas, flavors, clips, lane and progression menu, so Dm, Dm7 and D (V/V) in C share the "2" color; how
   far a chord strays is shown by its fit tag, not its color. Roots outside the key are
   gray.
 - Fit colors: green in key, blue common move (borrowed/leading), orange outside;
@@ -549,8 +585,15 @@ tracks; drums on channel 10 with General MIDI notes) or one part alone.
   track edge never touch; this is visual only, the times are unchanged.
 - Clips show chord name, roman numeral, and notes; narrow clips hide details via
   container queries.
-- On/off settings (Loop, 7ths, Metronome) are toggle buttons that light up, not
-  checkboxes. Avoid explanatory text that isn't needed; prefer showing state.
+- On/off settings (Loop, Metronome, the Groove parts) are toggle buttons that light up,
+  not checkboxes. Avoid explanatory text that isn't needed; prefer showing state.
+- **Phones (≤ 600px)**, one media block at the end of `index.css`: the song bar and toolbar
+  wrap (Progressions and Groove share a full-width row), every dropdown (and the help
+  popover) opens as a sheet spanning its bar instead of hanging off its trigger, the
+  Groove panel stacks (presets above, one column per part), the chord details header puts
+  "Type a chord" on its own row, and the tabs scroll sideways instead of wrapping (the
+  spot's context is hidden). No horizontal page scroll at 375px. Tablets (768px) use the
+  desktop layout. Touch drags are untested on a real device.
 
 ## Design decisions (and why)
 
@@ -608,8 +651,12 @@ These were discussed and chosen deliberately; don't "fix" them without asking.
   right-hand column stays narrow.
 - **Custom dropdowns only where native selects can't show enough** (descriptions,
   submenus); simple value pickers (Key, Length, Grid) stay native.
-- **The palette stays 7 chords**; extensions, sus, altered etc. are variations in the
-  inspector so the palette stays readable.
+- **⌘D reuses the copy-drag rule** (a copy dropped on the last chord's right edge)
+  instead of a new insert rule, and **nudge only moves into empty space** (never pushes):
+  one rule each, the same as with the mouse. On a full track ⌘D makes a short copy and
+  squeezes the end, as a copy-drag would.
+- **Hearing an idea in place is a separate ▶, not a different click**: the card click
+  still uses it (one click, undo restores), the ▶ only listens.
 - **Loading a progression switches the scale** to the progression's, so its chords
   read as in key rather than all borrowed.
 
@@ -633,18 +680,19 @@ them up.
 - `src/music/` (framework-free)
   - `timeline.ts`: track model and **all editing rules** as pure functions
     `(clips, ...) => clips`: resize, insert, reorder, drop planning (single and group),
-    add/replace/remove, fit/rescale; time signatures (`sigBarTicks`, `sigBeatTicks`),
+    duplicate (`planDuplicate`), nudge (`nudgeClips`), add/replace/remove, fit/rescale; time signatures (`sigBarTicks`, `sigBeatTicks`),
     grids (`gridStep`, `snap`, `stepGrid`), `playbackEnd`, `metronomeClicks`.
     Clips treat their chord as opaque; `planGroupDrop` is an internal helper of `planDrop`.
   - `chord.ts`: the chord model: types, names, notes, voicing/inversions, slash bass
     (`withBass`, `bassNote`, `soundingNotes`), note toggling (`fromIntervals` canonicalizes).
   - `parse.ts`: reading typed chords: names (`parseChord`), note lists
     (`chordFromNotes`), roman numerals (`parseNumeral`), all via `readChordInput`.
-  - `suggest.ts`: ideas for a spot in the progression (`suggestForSpot`).
-  - `theory.ts`: scales/modes (`MODE_INFO`), diatonic chords per palette size,
-    `romanNumeral`, `rootDegree`, `chordToKey`, `stackChord` (chords from any scale).
+  - `suggest.ts`: ideas for a spot in the progression (`suggestForSpot`), and the chords
+    heard around it (`inContext`).
+  - `theory.ts`: scales/modes (`MODE_INFO`), the key's chords (`degreeChord`, sizes in
+    `FLAVORS`), `romanNumeral`, `rootDegree`, `chordToKey`, `stackChord` (chords from any scale).
   - `home.ts`: Home: what a home change means (`homeMove`, `sameNotes`), detection
-    (`detectHome`, `suggestHome`), and the Spice row (`spiceChords`).
+    (`detectHome`, `suggestHome`), and Spice chords (`spiceChords`, for "Add color").
   - `analysis.ts`: fit to the key (diatonic / borrowed / secondary dominant / passing
     diminished / tritone sub / outside) and tension, in plain words.
   - `voicing.ts`: `smoothVoicing` (voice leading via inversions), `fitOctave`.
@@ -660,7 +708,7 @@ them up.
 - `src/history.ts`: undo/redo (pure transitions + `useHistory`, optionally persisted).
 - `src/persist.ts`: localStorage helpers + `usePersistentState`, `copyKeys`/`removeKeys`.
 - `src/session.ts`: sessions (keys, list, save as, summaries; `useSessions`).
-- `src/platform.ts`: Mac vs Windows drag modifiers (`copyKey`, `freeKey`).
+- `src/platform.ts`: Mac vs Windows modifiers (`copyKey`, `freeKey`, `nudgeKey`).
 - `src/selection.ts`: selection rules (`clickSelect`, `selectAll`, `pruneSelection`).
 - `src/shortcuts.ts`: key → action (`shortcutFor`); App executes actions.
 - `src/dropLabel.ts`: drag preview label (`describeDrop`, `heldName`).
@@ -668,16 +716,15 @@ them up.
   - `Timeline.tsx`: ruler + playhead, track, clips, resize handles, drag preview tags,
     and the empty track's start buttons (passed in as `emptyState`).
     Converts pointer positions to ticks; holds no editing rules.
-  - `Palette.tsx`: palette chords (pointer down starts a click-or-drag).
-  - `useChordDrag.ts`: shared pointer drag (click vs drag threshold, Esc cancel,
-    click modifiers).
+  - `useChordDrag.ts`: pointer drag for clips (click vs drag threshold, Esc cancel,
+    click modifiers, live copy/free modifiers).
   - `TimeSignatureControl.tsx`: preset menu + Custom pickers.
   - `OptionsMenu.tsx`: `TempoInput` (the song bar's tempo field) and `TimingMenu`
     ("4/4 · 4 bars": time signature, length, grid).
   - `Panel.tsx`: the collapsible panel (Voicing). The chord details are a plain
     `section.details-panel`; their X lives in the inspector's header.
   - `ChordInspector.tsx`, `NotesLane.tsx`, `ProgressionMenu.tsx`, `HomeMenu.tsx`,
-    `HomeNotice.tsx`, `Palette.tsx` (+ `SpiceRow`), `SessionMenu.tsx`,
+    `HomeNotice.tsx`, `SessionMenu.tsx`,
     `GrooveMenu.tsx`, `MidiMenu.tsx` (+ `useDropdown.ts`): see Behavior.
     The lane renders inside `Timeline` and follows the playhead via the `--playhead`
     CSS variable set on `.timeline`.

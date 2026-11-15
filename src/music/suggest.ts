@@ -70,6 +70,15 @@ export function spotContext({ prev, next, loopTo }: Spot): string {
   return 'Nothing around it yet: good chords to start from.'
 }
 
+/**
+ * A chord heard where it would sit: the chord before the spot, the chord itself, then the
+ * chord after it, or, at the end of a looping track, the chord the loop goes back to.
+ * Empty spots are already skipped in `spot`; at the start there's nothing before.
+ */
+export function inContext({ prev, next, loopTo }: Pick<Spot, 'prev' | 'next' | 'loopTo'>, chord: Chord): Chord[] {
+  return [prev, chord, next ?? loopTo].filter((c): c is Chord => c !== null)
+}
+
 export function suggestForSpot(spot: Spot): { context: string; groups: IdeaGroup[] } {
   const { prev, next, loopTo, tonic, mode, flavor } = spot
   const size = FLAVORS.find((f) => f.key === flavor)?.size ?? 3

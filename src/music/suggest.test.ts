@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { chordName } from './chord'
 import { parseChord } from './parse'
-import { pullsInto, suggestForSpot, type Intent, type Spot } from './suggest'
+import { inContext, pullsInto, suggestForSpot, type Intent, type Spot } from './suggest'
 
 const c = (n: string) => parseChord(n)!
 const spot = (over: Partial<Spot>): Spot => ({ prev: null, next: null, loopTo: null, tonic: 'C', mode: 'ionian', flavor: 'triads', ...over })
@@ -16,6 +16,21 @@ describe('pullsInto', () => {
     expect(pullsInto(c('Bdim'), c('C'))).toBe(true)
     expect(pullsInto(c('Gm'), c('C'))).toBe(false)
     expect(pullsInto(c('F'), c('C'))).toBe(false)
+  })
+})
+
+describe('inContext', () => {
+  const names = (s: Spot, chord: string) => inContext(s, c(chord)).map(chordName)
+  it('plays the chord between its neighbors', () => {
+    expect(names(spot({ prev: c('C'), next: c('Am') }), 'G')).toEqual(['C', 'G', 'Am'])
+  })
+  it('has nothing before it at the start, nothing after at the end of a one-shot track', () => {
+    expect(names(spot({ next: c('F') }), 'C')).toEqual(['C', 'F'])
+    expect(names(spot({ prev: c('F') }), 'G')).toEqual(['F', 'G'])
+    expect(names(spot({}), 'C')).toEqual(['C'])
+  })
+  it('goes back to the top of the loop at the end of a looping track', () => {
+    expect(names(spot({ prev: c('F'), loopTo: c('C') }), 'G')).toEqual(['F', 'G', 'C'])
   })
 })
 

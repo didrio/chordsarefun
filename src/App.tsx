@@ -38,6 +38,7 @@ import {
 import { canInvert, invert, shiftOctave, type Chord } from './music/chord'
 import { downloadMidi } from './music/midi'
 import { suggestHome, type Home } from './music/home'
+import { inContext } from './music/suggest'
 import { PROGRESSIONS, progressionChords, progressionClips, type Progression } from './music/progressions'
 import {
   applyGroove,
@@ -63,7 +64,9 @@ import {
   fitToLength,
   gridStep,
   GRIDS,
+  nudgeClips,
   planDrop,
+  planDuplicate,
   playbackEnd,
   rescaleClips,
   removeClip,
@@ -293,6 +296,7 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
   const togglePlay = () => {
     if (isPlaying) return pause()
     const from = pastEnd(playheadPos) ? 0 : playheadPos
+    stopPreview() // a preview still going would play over the track
     ensureAudio() // must be kicked off inside the user gesture
     startPlayback(from)
     setPlayhead(from)
@@ -308,6 +312,21 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
       seekPlayback(t)
     }
     setPlayhead(t)
+  }
+
+  /** ⌘D / Ctrl+D: copies of the selected chords right after them (planDuplicate), selected. */
+  const duplicateSelected = () => {
+    const copyIds = Object.fromEntries(selectedIds.map((id) => [id, crypto.randomUUID()]))
+    const result = planDuplicate(clips, selectedIds, copyIds, totalTicks, gridTicks, barTicks)
+    if (!result) return
+    setClips(() => result.clips)
+    select({ ids: result.placedIds, anchor: result.placedId })
+  }
+
+  /** ⌥←/→ (Mac) or Ctrl+←/→: the selected chords one grid step into empty space (nudgeClips). */
+  const nudgeSelected = (dir: -1 | 1) => {
+    const moved = nudgeClips(clips, selectedIds, dir, gridTicks, totalTicks, beatTicks, barTicks)
+    if (moved) setClips(() => moved)
   }
 
   const removeSelected = () => {
@@ -358,12 +377,6 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
     chordClips(sortedClips)
       .filter((c) => c.id !== exceptId)
       .map((c) => c.chord)
-
-  /**
-   * Clicking a palette or spice chord only plays it (over the track, if it's playing), so
-   * you can try chords in context without touching the track. Dragging places them.
-   */
-  const hearChord = (chord: Chord) => previewChord(fitOctave(chord, otherChords()))
 
   /** Change the chords of clips `ids` (one undo step) and play the first result. */
   const editChords = (ids: string[], update: (chord: Chord) => Chord) => {
@@ -435,9 +448,18 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
 
   const randomProgression = () => loadProgression(pickRandom(PROGRESSIONS, lastProgression.current))
   const randomGroove = () => setGroove(applyGroove(groove, pickRandom(RANDOM_GROOVES, matchingGroove(groove))))
-  const hearProgression = (prog: Progression) => {
-    const barSeconds = (barTicks / TICKS_PER_BEAT) * (60 / bpm)
-    previewProgression(progressionChords(prog, tonic), Math.min(barSeconds, MAX_PREVIEW_SECONDS))
+  /** How long each chord sounds in a preview of several chords: a bar, capped so previews stay quick. */
+  const previewSeconds = Math.min((barTicks / TICKS_PER_BEAT) * (60 / bpm), MAX_PREVIEW_SECONDS)
+  const hearProgression = (prog: Progression) => previewProgression(progressionChords(prog, tonic), previewSeconds)
+  /**
+   * Hear a chord where it would sit in the inspected clip's spot (the chord before, it, the
+   * chord after), without touching the track. A fresh chord (an idea) is played in the
+   * octave it would be placed in. Like other previews, it waits while the track plays.
+   */
+  const hearInContext = (clip: Clip, chord: Chord, fresh = false) => {
+    if (isPlaying) return
+    const voiced = fresh ? fitOctave(chord, otherChords(clip.id)) : chord
+    previewProgression(inContext(spotOf(clip.id), voiced), previewSeconds)
   }
 
   useEffect(() => {
@@ -479,6 +501,10 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
           return clearSelection()
         case 'selectAll':
           return select(selectAll(clips, selection))
+        case 'duplicate':
+          return duplicateSelected()
+        case 'nudge':
+          return nudgeSelected(shortcut.dir)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -496,20 +522,9 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
 
   const trackRef = useRef<HTMLDivElement>(null)
   const progressionMenu = useRef<ProgressionMenuHandle>(null)
-  /**
-   * The drop plan for a drag. A new chord (from the palette or spice) is moved to the
-   * octave nearest the other chords, so it lands in the register the track is already in.
-   */
-  const plan = (d: DragState) => {
-    // Option/Ctrl turns a move into a copy, live, as in a DAW.
-    const held = d.held.existing ? { ...d.held, copy: d.copy } : d.held
-    const p = d.overTicks === null ? null : planDrop(clips, held, d.overTicks, totalTicks, d.free ? 0 : gridTicks, barTicks)
-    if (!p || d.held.existing) return p
-    const chord = p.clips.find((c) => c.id === p.placedId)?.chord
-    if (!chord) return p
-    const fitted = fitOctave(chord, chordClips(p.clips).filter((c) => c.id !== p.placedId).map((c) => c.chord))
-    return { ...p, clips: p.clips.map((c) => (c.id === p.placedId ? { ...c, chord: fitted } : c)) }
-  }
+  /** The drop plan for a drag of clips on the track. Option/Ctrl turns a move into a copy, live, as in a DAW. */
+  const plan = (d: DragState) =>
+    d.overTicks === null ? null : planDrop(clips, { ...d.held, copy: d.copy }, d.overTicks, totalTicks, d.free ? 0 : gridTicks, barTicks)
 
   const { drag, begin: beginDrag } = useChordDrag({
     trackRef,
@@ -524,12 +539,8 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
       if (placed) previewChord(placed)
     },
     onClick: (held, mods) => {
-      if (held.existing) {
-        const clip = clips.find((c) => c.id === held.id)
-        if (clip) selectClip(clip, mods)
-      } else if (held.chord) {
-        hearChord(held.chord)
-      }
+      const clip = clips.find((c) => c.id === held.id)
+      if (clip) selectClip(clip, mods)
     },
   })
   const preview = drag ? plan(drag) : null
@@ -834,6 +845,7 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
                 setInspectorTab((t) => (t === 'flavors' ? 'ideas' : t))
               }}
               onPreview={(chord, fresh) => !isPlaying && previewChord(fresh ? fitOctave(chord, otherChords(inspected.id)) : chord)}
+              onHearInContext={(chord, fresh) => hearInContext(inspected, chord, fresh)}
               onClose={() => setPanelOpen(false)}
             />
           </section>

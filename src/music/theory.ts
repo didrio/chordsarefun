@@ -37,19 +37,13 @@ export function keyName(tonic: string, mode: ModeName): string {
   return `${tonic} ${mode[0].toUpperCase()}${mode.slice(1)}`
 }
 
-/** How big the palette chords are: plain triads, 7ths, or 9ths. */
+/** Chord size for ideas and Spice chords: plain triads, 7ths, or 9ths (ideas use triads). */
 export type PaletteFlavor = 'triads' | '7ths' | '9ths'
 export const FLAVORS: { key: PaletteFlavor; label: string; size: number; title: string }[] = [
   { key: 'triads', label: 'Triads', size: 3, title: 'Simple 3-note chords' },
   { key: '7ths', label: '7ths', size: 4, title: 'Richer 4-note chords (7th chords)' },
   { key: '9ths', label: '9ths', size: 5, title: 'Lush 5-note chords (9th chords, where they sound good)' },
 ]
-
-export type ChordSpec = {
-  chord: Chord
-  /** Roman numeral relative to the current key, e.g. "ii7". */
-  roman: string
-}
 
 export const scaleNotes = (tonic: string, mode: ModeName): string[] => Mode.notes(mode, tonic)
 
@@ -95,15 +89,6 @@ export function stackChord(scale: string[], degree: number, size: number): Chord
     intervals.push(ivl)
   }
   return fromIntervals(root, intervals)
-}
-
-/** The seven chords of a key/mode, at the palette's size. */
-export function diatonicChords(tonic: string, mode: ModeName, flavor: PaletteFlavor = 'triads'): ChordSpec[] {
-  const size = FLAVORS.find((f) => f.key === flavor)?.size ?? 3
-  return Array.from({ length: 7 }, (_, d) => {
-    const chord = degreeChord(tonic, mode, d, size)
-    return { chord, roman: romanNumeral(chord, tonic, mode) }
-  })
 }
 
 const NUMERALS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII']

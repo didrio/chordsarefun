@@ -198,7 +198,7 @@ export async function ensureAudio() {
  * its bass note on the bass instrument when the bass part is on (so bass choices are
  * audible). Parts that are off stay silent, except that chords always sound.
  */
-export async function previewChord(chord: Chord, seconds = 0.8) {
+async function soundChord(chord: Chord, seconds: number) {
   await ensureAudio()
   getGraph()
   const notes = chordPartVoicing(chord, groove.bass.on)
@@ -208,17 +208,23 @@ export async function previewChord(chord: Chord, seconds = 0.8) {
 
 let previewTimers: number[] = []
 
-/** Stop a progression preview started by previewProgression. */
+/** Stop a preview of several chords (previewProgression) before its next chord. */
 export function stopPreview() {
   previewTimers.forEach(clearTimeout)
   previewTimers = []
+}
+
+/** Hear one chord now (see soundChord). Like every preview, it replaces a running one. */
+export function previewChord(chord: Chord, seconds = 0.8) {
+  stopPreview()
+  return soundChord(chord, seconds)
 }
 
 /** Play chords one after another (outside the track), `seconds` each. Replaces any running preview. */
 export function previewProgression(chords: Chord[], seconds: number) {
   stopPreview()
   ensureAudio()
-  previewTimers = chords.map((chord, i) => window.setTimeout(() => previewChord(chord, seconds * 0.95), i * seconds * 1000))
+  previewTimers = chords.map((chord, i) => window.setTimeout(() => soundChord(chord, seconds * 0.95), i * seconds * 1000))
 }
 
 export function setBpm(bpm: number) {

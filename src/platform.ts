@@ -12,5 +12,13 @@ export const copyKey = (e: Mods, mac = IS_MAC) => (mac ? e.altKey : e.ctrlKey)
 /** Ignore the grid while dragging, resizing or moving the playhead. */
 export const freeKey = (e: Mods, mac = IS_MAC) => (mac ? e.metaKey : e.altKey)
 
+/**
+ * Nudge the selected chords with ←/→: Option on a Mac (⌘← is the browser's Back there),
+ * Ctrl elsewhere (Alt+← is Back there). Only that modifier, so other combos stay the browser's.
+ */
+export const nudgeKey = (e: Mods, mac = IS_MAC) =>
+  mac ? e.altKey && !e.metaKey && !e.ctrlKey : e.ctrlKey && !e.altKey && !e.metaKey
+
 export const COPY_KEY = IS_MAC ? '⌥ Option' : 'Ctrl'
+export const NUDGE_KEY = IS_MAC ? '⌥ Option' : 'Ctrl'
 export const FREE_KEY = IS_MAC ? '⌘ Cmd' : 'Alt'

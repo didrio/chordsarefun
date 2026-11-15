@@ -37,8 +37,8 @@ export const MIN_CLIP_TICKS = TICKS_PER_BEAT / 8
 /** Positioning resolution when the grid is off (a 1/64 note). */
 export const FREE_RESOLUTION = TICKS_PER_BEAT / 16
 /**
- * A click-added chord only fills a gap at least this long: a quarter note, or a whole
- * bar in meters whose bars are shorter than that (e.g. 3/16).
+ * A new chord dropped into a gap only fills it if it's at least this long: a quarter note,
+ * or a whole bar in meters whose bars are shorter than that (e.g. 3/16).
  */
 const minFillGap = (barTicks: number) => Math.min(TICKS_PER_BEAT, barTicks)
 
@@ -80,13 +80,6 @@ export const chordClips = (clips: Clip[]): ChordClip[] => clips.filter((c): c is
 
 const sortClips = (clips: Clip[]) => [...clips].sort((a, b) => a.start - b.start)
 
-const newClip = (chord: Chord | null, start: number, length: number): Clip => ({
-  id: crypto.randomUUID(),
-  chord,
-  start,
-  length,
-})
-
 /**
  * Snap a tick position to the grid (or the free resolution when grid is 0). The grid
  * restarts at every bar line, so odd meters (e.g. 7/8 with a 1/4 grid) still snap to bars.
@@ -111,7 +104,8 @@ export function snap(
  * count as grid points, so stepping never skips one in odd meters.
  */
 export function stepGrid(ticks: number, dir: -1 | 1, gridTicks: number, barTicks: number = TICKS_PER_BAR) {
-  const step = gridTicks || FREE_RESOLUTION
+  // A grid coarser than the bar (a 1/4 grid in 1/8) would jump over bar lines: step by bars.
+  const step = Math.min(gridTicks || FREE_RESOLUTION, barTicks)
   return dir > 0 ? snap(ticks + step, step, 'floor', barTicks) : snap(ticks - 1, step, 'floor', barTicks)
 }
 
@@ -230,68 +224,6 @@ export function addNextEmptyClip(clips: Clip[], id: string, total: number, barTi
     ...sorted.map((c) => (c.id === last.id ? { ...c, length: last.length - length } : c)),
     { id, chord: null, start: clipEnd(last) - length, length },
   ])
-}
-
-/**
- * Drop a chord at `pos`:
- * - in empty space: fill from `pos` up to the next clip (max 1 bar)
- * - inside a clip: split it; the new chord takes the remainder
- * - on a clip's very start: replace that clip's chord
- */
-export function dropChord(
-  clips: Clip[],
-  chord: Chord,
-  pos: number,
-  total: number,
-  barTicks: number = TICKS_PER_BAR,
-): Clip[] {
-  const sorted = sortClips(clips)
-  const hit = sorted.find((c) => c.start <= pos && pos < clipEnd(c))
-
-  if (hit) {
-    if (pos - hit.start < MIN_CLIP_TICKS || clipEnd(hit) - pos < MIN_CLIP_TICKS) {
-      return replaceChord(sorted, hit.id, chord)
-    }
-    const trimmed = sorted.map((c) => (c.id === hit.id ? { ...c, length: pos - c.start } : c))
-    return sortClips([...trimmed, newClip(chord, pos, clipEnd(hit) - pos)])
-  }
-
-  const next = sorted.find((c) => c.start > pos)
-  const end = Math.min(next ? next.start : total, pos + barTicks)
-  if (end - pos < MIN_CLIP_TICKS) return clips
-  return sortClips([...sorted, newClip(chord, pos, end - pos)])
-}
-
-/**
- * Add a chord without a specific position: fill the first gap (max 1 bar),
- * or if the track is full, split the longest clip (the later one on ties) in half.
- */
-export function addChord(
-  clips: Clip[],
-  chord: Chord,
-  total: number,
-  gridTicks: number,
-  barTicks: number = TICKS_PER_BAR,
-): Clip[] {
-  const sorted = sortClips(clips)
-
-  let cursor = 0
-  for (const c of [...sorted, null]) {
-    const gapEnd = c ? c.start : total
-    if (gapEnd - cursor >= minFillGap(barTicks)) {
-      return sortClips([...sorted, newClip(chord, cursor, Math.min(gapEnd - cursor, barTicks))])
-    }
-    if (c) cursor = clipEnd(c)
-  }
-
-  if (sorted.length === 0) return clips
-  const longest = sorted.reduce((a, b) => (b.length >= a.length ? b : a))
-  let split = snap(longest.start + longest.length / 2, gridTicks, 'round', barTicks)
-  if (split - longest.start < MIN_CLIP_TICKS || clipEnd(longest) - split < MIN_CLIP_TICKS) {
-    split = snap(longest.start + longest.length / 2, 0)
-  }
-  if (split - longest.start < MIN_CLIP_TICKS || clipEnd(longest) - split < MIN_CLIP_TICKS) return clips
-  return dropChord(sorted, chord, split, total, barTicks)
 }
 
 /**
@@ -736,6 +668,66 @@ function planCopyDrop(
     placedIds: copies.map((c) => c.id),
     action,
   }
+}
+
+/**
+ * Duplicate (⌘D / Ctrl+D): copies of clips `ids` right after the last of them, exactly as
+ * if they were copy-dragged onto that clip's right edge (planDrop with `copy`). One clip
+ * inserts and makes room (insertClip); several go as one block that must fit at full
+ * length. `copyIds` gives the copies' ids by original id. Null if there's no room.
+ */
+export function planDuplicate(
+  clips: Clip[],
+  ids: string[],
+  copyIds: Record<string, string>,
+  total: number,
+  gridTicks: number,
+  barTicks: number = TICKS_PER_BAR,
+): DropPlan | null {
+  const group = sortClips(clips.filter((c) => ids.includes(c.id)))
+  const last = group.at(-1)
+  if (!last) return null
+  const held: HeldChord = {
+    id: last.id,
+    chord: last.chord,
+    existing: true,
+    grabOffset: 0,
+    groupIds: group.length > 1 ? group.map((c) => c.id) : undefined,
+    copy: true,
+    copyIds,
+  }
+  // The pointer just inside the last clip's end: its right edge zone, i.e. "after it".
+  return planDrop(clips, held, clipEnd(last) - 1, total, gridTicks, barTicks)
+}
+
+/**
+ * Nudge (⌥←/→ on a Mac, Ctrl+←/→ elsewhere): move clips `ids` together one grid step
+ * left or right, keeping their spacing. The step is measured from the first of them, to
+ * the previous/next grid point (bar lines count, as in stepGrid); with the grid off it's
+ * one beat. Into empty space only: null if any of them would leave the track or overlap
+ * a clip that isn't moving. Nothing is pushed.
+ */
+export function nudgeClips(
+  clips: Clip[],
+  ids: string[],
+  dir: -1 | 1,
+  gridTicks: number,
+  total: number,
+  beatTicks: number,
+  barTicks: number = TICKS_PER_BAR,
+): Clip[] | null {
+  const moving = new Set(ids)
+  const first = sortClips(clips.filter((c) => moving.has(c.id)))[0]
+  if (!first) return null
+  const delta = gridTicks ? stepGrid(first.start, dir, gridTicks, barTicks) - first.start : dir * beatTicks
+  const moved = clips.map((c) => (moving.has(c.id) ? { ...c, start: c.start + delta } : c))
+  const staying = moved.filter((c) => !moving.has(c.id))
+  const fits = moved.every(
+    (c) =>
+      !moving.has(c.id) ||
+      (c.start >= 0 && clipEnd(c) <= total && staying.every((o) => clipEnd(o) <= c.start || clipEnd(c) <= o.start)),
+  )
+  return fits ? moved : null
 }
 
 export type ClipChange = 'swap' | 'replace' | 'left' | 'right' | 'squeeze'

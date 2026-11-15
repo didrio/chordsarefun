@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { shortcutFor } from './shortcuts'
 
-const press = (key: string, mods: Partial<{ shiftKey: boolean; metaKey: boolean; ctrlKey: boolean; altKey: boolean }> = {}) =>
-  shortcutFor({ key, shiftKey: false, metaKey: false, ctrlKey: false, altKey: false, ...mods })
+type Mods = Partial<{ shiftKey: boolean; metaKey: boolean; ctrlKey: boolean; altKey: boolean }>
+const press = (key: string, mods: Mods = {}, mac = true) =>
+  shortcutFor({ key, shiftKey: false, metaKey: false, ctrlKey: false, altKey: false, ...mods }, mac)
 
 describe('shortcutFor', () => {
   it('maps transport keys', () => {
@@ -30,10 +31,26 @@ describe('shortcutFor', () => {
     expect(press('a')).toBeNull()
   })
 
+  it('maps duplicate on both platforms', () => {
+    expect(press('d', { metaKey: true })).toEqual({ type: 'duplicate' })
+    expect(press('D', { ctrlKey: true }, false)).toEqual({ type: 'duplicate' })
+    expect(press('d')).toBeNull()
+  })
+
+  it('nudges with Option+arrows on a Mac and Ctrl+arrows elsewhere', () => {
+    expect(press('ArrowLeft', { altKey: true })).toEqual({ type: 'nudge', dir: -1 })
+    expect(press('ArrowRight', { altKey: true })).toEqual({ type: 'nudge', dir: 1 })
+    expect(press('ArrowRight', { ctrlKey: true }, false)).toEqual({ type: 'nudge', dir: 1 })
+    // ⌘← on a Mac and Alt+← elsewhere are the browser's Back: left alone.
+    expect(press('ArrowLeft', { metaKey: true })).toBeNull()
+    expect(press('ArrowLeft', { altKey: true }, false)).toBeNull()
+    expect(press('ArrowLeft', { ctrlKey: true })).toBeNull()
+  })
+
   it('leaves other modifier combos to the browser', () => {
     expect(press('1', { metaKey: true })).toBeNull()
     expect(press('l', { ctrlKey: true })).toBeNull()
-    expect(press('ArrowLeft', { altKey: true })).toBeNull()
+    expect(press('ArrowUp', { altKey: true })).toBeNull()
   })
 
   it('maps editing keys', () => {

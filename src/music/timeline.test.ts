@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
-  addChord,
   clipEnd,
-  dropChord,
   fitToLength,
   insertClip,
   metronomeClicks,
+  nudgeClips,
+  planDuplicate,
   playbackEnd,
   stepGrid,
   dropChanges,
@@ -39,50 +39,6 @@ const clip = (id: string, start: number, length: number, label = id): Clip => ({
 const layout = (clips: Clip[]) => clips.map((c) => [c.chord!.root, c.start, c.length])
 
 const fourBars = () => [clip('C', 0, BAR), clip('G', BAR, BAR), clip('Am', 2 * BAR, BAR), clip('F', 3 * BAR, BAR)]
-
-describe('addChord', () => {
-  it('fills the first gap with up to one bar', () => {
-    const one = addChord([], ch('C'), TOTAL, BEAT)
-    expect(layout(one)).toEqual([['C', 0, BAR]])
-    expect(layout(addChord(one, ch('G'), TOTAL, BEAT))).toEqual([
-      ['C', 0, BAR],
-      ['G', BAR, BAR],
-    ])
-  })
-
-  it('splits the last longest clip when the track is full, keeping total length', () => {
-    const out = addChord(fourBars(), ch('Dm'), TOTAL, BEAT)
-    expect(layout(out)).toEqual([
-      ['C', 0, BAR],
-      ['G', BAR, BAR],
-      ['Am', 2 * BAR, BAR],
-      ['F', 3 * BAR, BAR / 2],
-      ['Dm', 3.5 * BAR, BAR / 2],
-    ])
-  })
-})
-
-describe('dropChord', () => {
-  it('splits a clip at the drop point (flavor chord before the 3rd chord)', () => {
-    const out = dropChord(fourBars(), ch('D7'), 2 * BAR - BEAT / 2, TOTAL)
-    expect(layout(out)).toEqual([
-      ['C', 0, BAR],
-      ['G', BAR, BAR - BEAT / 2],
-      ['D7', 2 * BAR - BEAT / 2, BEAT / 2],
-      ['Am', 2 * BAR, BAR],
-      ['F', 3 * BAR, BAR],
-    ])
-  })
-
-  it('replaces a clip when dropped on its start', () => {
-    expect(layout(dropChord(fourBars(), ch('Em'), BAR, TOTAL))[1]).toEqual(['Em', BAR, BAR])
-  })
-
-  it('fills empty space up to the next clip', () => {
-    const out = dropChord([clip('C', 0, BAR), clip('G', 2 * BAR, BAR)], ch('F'), BAR + BEAT, TOTAL)
-    expect(layout(out)[1]).toEqual(['F', BAR + BEAT, 3 * BEAT])
-  })
-})
 
 describe('resizeClip', () => {
   it('trims the neighbor when extending into it', () => {
@@ -345,6 +301,13 @@ describe('stepGrid', () => {
     expect(stepGrid(BEAT + 10, 1, BEAT)).toBe(2 * BEAT)
     expect(stepGrid(BEAT + 10, -1, BEAT)).toBe(BEAT)
   })
+
+  it('steps by bars when the grid is coarser than a bar', () => {
+    // 1/8 bar = half a quarter: a 1/4 grid would jump over every other bar line.
+    const bar18 = sigBarTicks({ beats: 1, unit: 8 })
+    expect(stepGrid(0, 1, BEAT, bar18)).toBe(bar18)
+    expect(stepGrid(2 * bar18, -1, BEAT, bar18)).toBe(bar18)
+  })
 })
 
 describe('playbackEnd', () => {
@@ -389,16 +352,16 @@ describe('every custom time signature', () => {
     for (const p of TIME_SIGNATURES) expect(all).toContainEqual(p)
   })
 
-  it.each(all)('$beats/$unit has whole-tick bars, one click per beat, and click-to-add works', (sig) => {
+  it.each(all)('$beats/$unit has whole-tick bars, one click per beat, and editing stays inside the track', (sig) => {
     const bar = sigBarTicks(sig)
     expect(Number.isInteger(bar)).toBe(true)
     expect(bar).toBe(sig.beats * sigBeatTicks(sig))
     const total = 4 * bar
     expect(metronomeClicks(total, sig)).toHaveLength(4 * sig.beats)
-    // Clicking a chord into an empty track always adds it, at most one bar long.
-    const added = addChord([], ch('C'), total, BEAT, bar)
+    // + New on an empty track always adds a spot, one bar long.
+    const added = addNextEmptyClip([], 'n', total, bar)!
     expect(added).toHaveLength(1)
-    expect(added[0].length).toBe(Math.min(bar, total))
+    expect(added[0].length).toBe(bar)
     // Snapping stays inside the track and on bar lines at bar boundaries.
     expect(snap(bar, BEAT, 'round', bar)).toBe(bar)
     // Rescaling a full track into this meter keeps clips inside it, without overlaps.
@@ -407,6 +370,26 @@ describe('every custom time signature', () => {
       expect(clipEnd(scaled[i])).toBeLessThanOrEqual(total)
       if (i > 0) expect(scaled[i].start).toBeGreaterThanOrEqual(clipEnd(scaled[i - 1]))
     }
+    // Duplicating the first chord of a full track (⌘D, grid off so even tiny meters have room)
+    // fits, inside the track, without overlaps.
+    const dup = planDuplicate(scaled, [scaled[0].id], { [scaled[0].id]: 'copy' }, total, 0, bar)!
+    expect(dup.placedIds).toEqual(['copy'])
+    const sorted = [...dup.clips].sort((a, b) => a.start - b.start)
+    for (let i = 0; i < sorted.length; i++) {
+      expect(clipEnd(sorted[i])).toBeLessThanOrEqual(total)
+      if (i > 0) expect(sorted[i].start).toBeGreaterThanOrEqual(clipEnd(sorted[i - 1]))
+    }
+    // Nudging a short chord right, step by step, lands on every bar line and stops at the end.
+    let walk: Clip[] = [{ id: 'n', chord: ch('C'), start: 0, length: Math.min(BEAT / 2, bar) }]
+    const starts = [0]
+    for (let next = nudgeClips(walk, ['n'], 1, BEAT, total, sigBeatTicks(sig), bar); next; ) {
+      walk = next
+      starts.push(walk[0].start)
+      next = nudgeClips(walk, ['n'], 1, BEAT, total, sigBeatTicks(sig), bar)
+    }
+    expect(clipEnd(walk[0])).toBeLessThanOrEqual(total)
+    expect(total - clipEnd(walk[0])).toBeLessThan(BEAT)
+    for (let b = 0; b < 4; b++) expect(starts).toContain(b * bar)
   })
 })
 
@@ -563,6 +546,76 @@ describe('planDrop: copies (Option/Ctrl-drag)', () => {
 
   it('refuses a block that does not fit', () => {
     expect(planDrop(four, copy('C', { groupIds: ['C', 'G'] }), 4 * BAR - 10, 4 * BAR, TICKS_PER_BEAT)).toBeNull()
+  })
+})
+
+describe('planDuplicate (⌘D)', () => {
+  const four = ['C', 'G', 'A', 'F'].map((r, i): Clip => ({ id: r, chord: ch(r), start: i * BAR, length: BAR }))
+  const roots = (clips: Clip[]) => [...clips].sort((a, b) => a.start - b.start).map((c) => c.chord?.root ?? '-')
+  const ids = { C: 'C2', G: 'G2', A: 'A2', F: 'F2' }
+
+  it('puts a copy right after the chord, pushing the rest into free space', () => {
+    const two = four.slice(0, 2)
+    const plan = planDuplicate(two, ['C'], ids, TOTAL, BEAT)!
+    expect(roots(plan.clips)).toEqual(['C', 'C', 'G'])
+    expect(plan.clips.find((c) => c.id === 'C2')).toMatchObject({ start: BAR, length: BAR })
+    expect(plan.clips.find((c) => c.id === 'G')).toMatchObject({ start: 2 * BAR, length: BAR })
+    expect(plan.placedIds).toEqual(['C2'])
+  })
+
+  it('makes room on a full track like a copy-drag onto the right edge', () => {
+    const plan = planDuplicate(four, ['G'], ids, TOTAL, BEAT)!
+    const drag = planDrop(four, { id: 'G', chord: ch('G'), existing: true, grabOffset: 0, copy: true, copyIds: ids }, 2 * BAR - 10, TOTAL, BEAT)!
+    expect(plan.clips).toEqual(drag.clips)
+    expect(roots(plan.clips)).toEqual(['C', 'G', 'G', 'A', 'F'])
+  })
+
+  it('copies a selection as one block after its last chord', () => {
+    const plan = planDuplicate(four.slice(0, 2), ['G', 'C'], ids, TOTAL, BEAT)!
+    expect(roots(plan.clips)).toEqual(['C', 'G', 'C', 'G'])
+    expect(plan.placedIds).toEqual(['C2', 'G2'])
+  })
+
+  it('does nothing without room or without a selection', () => {
+    expect(planDuplicate(four, ['C', 'G'], ids, TOTAL, BEAT)).toBeNull()
+    expect(planDuplicate(four, ['F'], ids, TOTAL, BEAT)).toBeNull()
+    expect(planDuplicate(four, [], ids, TOTAL, BEAT)).toBeNull()
+  })
+})
+
+describe('nudgeClips (⌥/Ctrl + ←/→)', () => {
+  const at = (clips: Clip[] | null, id: string) => clips?.find((c) => c.id === id)?.start
+
+  it('moves a chord one grid step into empty space, both ways', () => {
+    const clips = [clip('a', BAR, BAR)]
+    expect(at(nudgeClips(clips, ['a'], 1, BEAT, TOTAL, BEAT), 'a')).toBe(BAR + BEAT)
+    expect(at(nudgeClips(clips, ['a'], -1, BEAT, TOTAL, BEAT), 'a')).toBe(BAR - BEAT)
+    expect(at(nudgeClips(clips, ['a'], 1, BAR, TOTAL, BEAT), 'a')).toBe(2 * BAR)
+  })
+
+  it('snaps an off-grid chord to the next grid point', () => {
+    expect(at(nudgeClips([clip('a', BEAT / 2, BEAT)], ['a'], 1, BEAT, TOTAL, BEAT), 'a')).toBe(BEAT)
+    expect(at(nudgeClips([clip('a', BEAT / 2, BEAT)], ['a'], -1, BEAT, TOTAL, BEAT), 'a')).toBe(0)
+  })
+
+  it('moves exactly one beat with the grid off', () => {
+    expect(at(nudgeClips([clip('a', 100, BEAT)], ['a'], 1, 0, TOTAL, BEAT), 'a')).toBe(100 + BEAT)
+  })
+
+  it('never overlaps, pushes or leaves the track', () => {
+    const clips = [clip('a', 0, BAR), clip('b', BAR, BAR)]
+    expect(nudgeClips(clips, ['a'], 1, BEAT, TOTAL, BEAT)).toBeNull()
+    expect(nudgeClips(clips, ['a'], -1, BEAT, TOTAL, BEAT)).toBeNull()
+    expect(nudgeClips([clip('z', 3 * BAR, BAR)], ['z'], 1, BEAT, TOTAL, BEAT)).toBeNull()
+  })
+
+  it('moves a selection together, keeping its spacing', () => {
+    const clips = [clip('a', 0, BEAT), clip('b', 2 * BEAT, BEAT), clip('c', 2 * BAR, BAR)]
+    const out = nudgeClips(clips, ['a', 'b'], 1, BEAT, TOTAL, BEAT)!
+    expect([at(out, 'a'), at(out, 'b'), at(out, 'c')]).toEqual([BEAT, 3 * BEAT, 2 * BAR])
+    // The selected chords may move into each other's old place.
+    const touching = [clip('a', 0, BEAT), clip('b', BEAT, BEAT)]
+    expect(nudgeClips(touching, ['a', 'b'], 1, BEAT, TOTAL, BEAT)!.map((c) => c.start)).toEqual([BEAT, 2 * BEAT])
   })
 })
 

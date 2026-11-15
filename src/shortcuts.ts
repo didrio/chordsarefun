@@ -1,3 +1,5 @@
+import { IS_MAC, nudgeKey } from './platform'
+
 /** Keyboard shortcuts: which key does what. Pure, so the mapping is testable. */
 
 export type Shortcut =
@@ -16,15 +18,23 @@ export type Shortcut =
   | { type: 'remove' }
   | { type: 'deselect' }
   | { type: 'selectAll' }
+  /** Copy the selected chords right after them (⌘D / Ctrl+D). */
+  | { type: 'duplicate' }
+  /** Move the selected chords one grid step into empty space (⌥←/→ on a Mac, Ctrl+←/→ elsewhere). */
+  | { type: 'nudge'; dir: -1 | 1 }
 
 type Keys = Pick<KeyboardEvent, 'key' | 'shiftKey' | 'metaKey' | 'ctrlKey' | 'altKey'>
 
-export function shortcutFor(e: Keys): Shortcut | null {
+export function shortcutFor(e: Keys, mac = IS_MAC): Shortcut | null {
   const key = e.key.toLowerCase()
   const mod = e.metaKey || e.ctrlKey
   if (mod && key === 'z') return { type: e.shiftKey ? 'redo' : 'undo' }
   if (mod && key === 'y') return { type: 'redo' }
   if (mod && key === 'a') return { type: 'selectAll' }
+  // Duplicate, as in Ableton (and instead of the browser's "bookmark this page").
+  if (mod && !e.shiftKey && key === 'd') return { type: 'duplicate' }
+  if (nudgeKey(e, mac) && key === 'arrowleft') return { type: 'nudge', dir: -1 }
+  if (nudgeKey(e, mac) && key === 'arrowright') return { type: 'nudge', dir: 1 }
   // Leave every other modifier combo (browser shortcuts like ⌘1, ⌘L) alone.
   if (mod || e.altKey) return null
   if (key === ' ') return { type: e.shiftKey ? 'stop' : 'playPause' }

@@ -1,4 +1,4 @@
-import { COPY_KEY, FREE_KEY } from '../platform'
+import { COPY_KEY, FREE_KEY, NUDGE_KEY } from '../platform'
 
 /** [what you do, what happens] rows, grouped. Keep in sync with shortcuts.ts and AGENTS.md. */
 const KEYS: { title: string; rows: [string, string][] }[] = [
@@ -26,6 +26,8 @@ const KEYS: { title: string; rows: [string, string][] }[] = [
     title: 'Edit',
     rows: [
       ['Delete / Backspace', 'Remove the selected chords'],
+      ['⌘ / Ctrl + D', 'Duplicate the selected chords (the copy goes right after them)'],
+      [`${NUDGE_KEY} + ← →`, 'Move the selected chords one grid step (into empty space only)'],
       ['↑ ↓', 'Next / previous inversion (selected chords, or all)'],
       ['Shift + ↑ ↓', 'Octave up / down (selected chords, or all)'],
       ['⌘ / Ctrl + Z', 'Undo'],
@@ -67,7 +69,8 @@ export function HelpTip() {
           </li>
           <li>
             <b>Click a chord</b> to see what could go there instead (<b>Ideas</b>), other kinds of the same chord
-            (<b>Flavors</b>), or its notes, inversion and bass note (<b>Notes</b>). Or type any chord you like.
+            (<b>Flavors</b>), or its notes, inversion and bass note (<b>Notes</b>). Or type any chord you like. The
+            small ▶ on an idea plays it between its neighbors without changing anything; click the idea to use it.
           </li>
           <li>
             <b>Arrange.</b> Drag chords to move them (the preview tells you what will happen), drag an edge to resize,

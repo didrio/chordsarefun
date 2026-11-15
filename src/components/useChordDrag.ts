@@ -28,8 +28,9 @@ const DRAG_THRESHOLD_PX = 4
 const TRACK_MARGIN_PX = 48
 
 /**
- * Pointer-based drag for chords (palette chords and existing clips share it).
- * Uses window listeners so a drag can start in the palette and end on the track.
+ * Pointer-based drag for clips on the track (move, copy, group). Uses window listeners so
+ * the pointer can leave the track mid-drag. The drop rules (planDrop) also take a new
+ * chord (`held.existing` false), but nothing in the UI starts one since the palette went.
  */
 export function useChordDrag(options: Options) {
   const optionsRef = useRef(options)

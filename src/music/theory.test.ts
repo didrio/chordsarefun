@@ -4,35 +4,37 @@ import { chordName, makeChord } from './chord'
 import { parseChord } from './parse'
 import { applyGroove, DEFAULT_GROOVE, GROOVES } from './grooves'
 import { trackMidi } from './midi'
-import { chordToKey, diatonicChords, isDiatonic, keyName, MODES, romanNumeral, rootDegree } from './theory'
+import { chordToKey, degreeChord, isDiatonic, keyName, MODES, romanNumeral, rootDegree, type ModeName } from './theory'
 import { TICKS_PER_BAR } from './timeline'
 
-const names = (tonic: string, mode: (typeof MODES)[number], flavor?: 'triads' | '7ths' | '9ths') =>
-  diatonicChords(tonic, mode, flavor).map((c) => chordName(c.chord))
+/** The seven chords of a key at a size (3 = triads, 4 = 7ths, 5 = 9ths). */
+const keyChords = (tonic: string, mode: ModeName, size = 3) => Array.from({ length: 7 }, (_, d) => degreeChord(tonic, mode, d, size))
+const names = (tonic: string, mode: ModeName, size?: number) => keyChords(tonic, mode, size).map((c) => chordName(c))
+const numerals = (tonic: string, mode: ModeName, size?: number) => keyChords(tonic, mode, size).map((c) => romanNumeral(c, tonic, mode))
 const chord = (name: string) => parseChord(name)!
 
-describe('diatonicChords', () => {
+describe('degreeChord', () => {
   it('builds C major triads with roman numerals', () => {
     expect(names('C', 'ionian')).toEqual(['C', 'Dm', 'Em', 'F', 'G', 'Am', 'Bdim'])
-    expect(diatonicChords('C', 'ionian').map((c) => c.roman)).toEqual(['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'])
+    expect(numerals('C', 'ionian')).toEqual(['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'])
   })
 
   it('builds seventh chords', () => {
-    expect(names('C', 'ionian', '7ths')).toEqual(['Cmaj7', 'Dm7', 'Em7', 'Fmaj7', 'G7', 'Am7', 'Bm7b5'])
-    expect(diatonicChords('C', 'ionian', '7ths').map((c) => c.roman)).toEqual([
+    expect(names('C', 'ionian', 4)).toEqual(['Cmaj7', 'Dm7', 'Em7', 'Fmaj7', 'G7', 'Am7', 'Bm7b5'])
+    expect(numerals('C', 'ionian', 4)).toEqual([
       'Imaj7', 'ii7', 'iii7', 'IVmaj7', 'V7', 'vi7', 'viiø7',
     ])
   })
 
   it('builds ninth chords, leaving off flat 9ths (they clash)', () => {
-    expect(names('C', 'ionian', '9ths')).toEqual(['Cmaj9', 'Dm9', 'Em7', 'Fmaj9', 'G9', 'Am9', 'Bm7b5'])
-    expect(names('A', 'aeolian', '9ths')).toEqual(['Am9', 'Bm7b5', 'Cmaj9', 'Dm9', 'Em7', 'Fmaj9', 'G9'])
+    expect(names('C', 'ionian', 5)).toEqual(['Cmaj9', 'Dm9', 'Em7', 'Fmaj9', 'G9', 'Am9', 'Bm7b5'])
+    expect(names('A', 'aeolian', 5)).toEqual(['Am9', 'Bm7b5', 'Cmaj9', 'Dm9', 'Em7', 'Fmaj9', 'G9'])
   })
 
   it('works in every mode and key', () => {
     for (const mode of MODES) {
       for (const tonic of ['C', 'F#', 'Bb', 'Eb']) {
-        for (const spec of diatonicChords(tonic, mode, '9ths')) expect(isDiatonic(spec.chord, tonic, mode)).toBe(true)
+        for (const c of keyChords(tonic, mode, 5)) expect(isDiatonic(c, tonic, mode)).toBe(true)
       }
     }
   })
