@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { ChordInspector, type InspectorTab } from './components/ChordInspector'
+import { ChordMenu, type ChordMenuGroup } from './components/ChordMenu'
 import { NotesLane } from './components/NotesLane'
 import { ProgressionBrowser } from './components/ProgressionBrowser'
 import { HomeNotice } from './components/HomeNotice'
@@ -21,7 +22,7 @@ import { useHistory } from './history'
 import { usePersistentState } from './persist'
 import { clickSelect, EMPTY_SELECTION, pruneSelection, selectAll, type ClickMods, type Selection } from './selection'
 import { shortcutFor } from './shortcuts'
-import { COPY_KEY, DUPLICATE_KEY, TAP } from './platform'
+import { COPY_KEY, DUPLICATE_KEY, IS_MAC, TAP } from './platform'
 import { DEFAULT_TRACK, isTrack, migrateTrack, withMusic, type TrackMusic } from './track'
 import {
   ensureAudio,
@@ -137,7 +138,7 @@ const isSelection = (v: unknown) => {
 
 /** Elements whose clicks don't clear the clip selection. */
 const KEEPS_SELECTION =
-  '.clip, button, input, select, label, summary, .ruler, .panel, .notes-lane, .dropdown, .home-notice, .modal-backdrop'
+  '.clip, button, input, select, label, summary, .ruler, .panel, .notes-lane, .dropdown, .home-notice, .modal-backdrop, .chord-menu'
 
 /** Chord size for ideas. The Triads/7ths/9ths toggle is gone with the palette, so ideas use triads. */
 const flavor: PaletteFlavor = 'triads'
@@ -337,6 +338,21 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
     if (moved) setClips(() => moved)
   }
 
+  /** Clear chord: the selected chords become empty spots, staying where they are. */
+  const clearSelected = () => {
+    setClips((c) => c.map((x) => (selectedIds.includes(x.id) ? { ...x, chord: null } : x)))
+    // An empty spot has no flavors; land on its ideas (and stay there once it's filled).
+    setInspectorTab((t) => (t === 'flavors' ? 'ideas' : t))
+  }
+
+  /** The chord menu: where it's open (viewport pixels), or null. It acts on the selection. */
+  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null)
+  /** Right-click or ⋯ on a chord: acts on the selection, or on that chord if it isn't selected. */
+  const openChordMenu = (clip: Clip, x: number, y: number) => {
+    if (!selectedIds.includes(clip.id)) selectOnly(clip.id)
+    setMenuAt({ x, y })
+  }
+
   const removeSelected = () => {
     if (selectedIds.length === 0) return
     setClips((c) => c.filter((clip) => !selectedIds.includes(clip.id)))
@@ -429,6 +445,54 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
     if (!isPlaying) previewChord(moved[0]!)
   }
 
+  /** The rows of the chord menu, for whoever is selected. Disabled rows say why in their tooltip. */
+  const chordMenuGroups = (): ChordMenuGroup[] => {
+    const one = selectedClips.length === 1 ? selectedClips[0] : null
+    const withChords = selectedClips.filter((c) => c.chord)
+    const showTab = (tab: InspectorTab) => {
+      if (!one) return
+      setInspectorTab(tab)
+      setPanelOpen(true)
+    }
+    const needOne = 'Select one chord to see its ideas'
+    const invertable = (dir: 1 | -1) =>
+      withChords.length > 0 && withChords.every((c) => c.chord && canInvert(c.chord, dir))
+    const shiftable = (dir: 1 | -1) => withChords.length > 0 && withChords.every((c) => c.chord && shiftOctave(c.chord, dir))
+    return [
+      [
+        { id: 'ideas', label: 'Ideas for this spot', disabled: !one, title: one ? undefined : needOne, onSelect: () => showTab('ideas') },
+        {
+          id: 'variations',
+          label: 'Variations (7ths, sus, minor…)',
+          disabled: !one?.chord,
+          title: one?.chord ? undefined : one ? 'Pick a chord first' : needOne,
+          onSelect: () => showTab('flavors'),
+        },
+      ],
+      [
+        { id: 'inv-up', label: 'Higher inversion', shortcut: '↑', disabled: !invertable(1), onSelect: () => invertChords(1) },
+        { id: 'inv-down', label: 'Lower inversion', shortcut: '↓', disabled: !invertable(-1), onSelect: () => invertChords(-1) },
+        { id: 'oct-up', label: 'Octave up', shortcut: '⇧↑', disabled: !shiftable(1), onSelect: () => shiftOctaves(1) },
+        { id: 'oct-down', label: 'Octave down', shortcut: '⇧↓', disabled: !shiftable(-1), onSelect: () => shiftOctaves(-1) },
+      ],
+      [
+        { id: 'duplicate', label: 'Duplicate', shortcut: DUPLICATE_KEY, onSelect: duplicateSelected },
+        {
+          id: 'clear',
+          label: 'Clear chord',
+          disabled: withChords.length === 0,
+          title: 'Remove the chord but keep its place, so you can pick another',
+          onSelect: clearSelected,
+        },
+        { id: 'delete', label: 'Delete', shortcut: IS_MAC ? '⌫' : 'Del', danger: true, onSelect: removeSelected },
+      ],
+    ]
+  }
+  const menuTitle =
+    selectedClips.length === 1
+      ? (selectedClips[0]!.chord ? chordName(selectedClips[0]!.chord) : 'Empty spot')
+      : `${selectedClips.length} chords`
+
   /** Who the Voicing buttons act on, in words. */
   const voicingScope =
     octaveTargets.length === 0
@@ -488,7 +552,7 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
       const typing = (t instanceof HTMLInputElement && t.type !== 'range') || t instanceof HTMLSelectElement
       if (typing) return
       // The sessions window and the progression browser are modal: they handle their own keys.
-      if (document.querySelector('.modal-backdrop')) return
+      if (document.querySelector('.modal-backdrop, .chord-menu')) return
       // Dropdowns and sliders handle their own keys (arrows, Enter, Esc), but Space
       // still plays/pauses so changes can be heard without leaving them.
       if (t instanceof Element && t.closest('.dropdown, input[type="range"]') && e.key !== ' ') return
@@ -775,6 +839,7 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
             onResize={(id, edge, ticks) =>
               track.updateGesture(withClips((c) => resizeClip(c, id, edge, ticks, totalTicks)))
             }
+            onMenu={openChordMenu}
             onRemove={(id) => {
               // The × on a selected clip removes the whole selection.
               if (selectedIds.includes(id)) removeSelected()
@@ -915,7 +980,6 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
               onChange={(chord, fresh) => setInspectedChord(inspected, chord, fresh)}
               onClear={() => {
                 setClips((c) => c.map((x) => (x.id === inspected.id ? { ...x, chord: null } : x)))
-                // An empty spot has no flavors; land on its ideas (and stay there once it's filled).
                 setInspectorTab((t) => (t === 'flavors' ? 'ideas' : t))
               }}
               onPreview={(chord, fresh) => !isPlaying && previewChord(fresh ? fitOctave(chord, otherChords(inspected.id)) : chord)}
@@ -942,6 +1006,10 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
           )
         )}
       </div>
+
+      {menuAt && selectedClips.length > 0 && (
+        <ChordMenu x={menuAt.x} y={menuAt.y} title={menuTitle} groups={chordMenuGroups()} onClose={() => setMenuAt(null)} />
+      )}
 
       {drag && (
         <div

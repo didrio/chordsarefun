@@ -305,6 +305,16 @@ colors, fit dots and plain-language reasons, always relative to Home.
   deselects. Ctrl+click's context menu is suppressed on clips.
 - Delete/Backspace, or the × on any selected clip, removes all selected clips (× on
   an unselected clip removes just that one).
+- **Chord menu** (`ChordMenu.tsx`, T21): right-click a chord (or long-press on touch) or the **⋯** on a selected
+  chord opens a menu of *actions*, with shortcuts right-aligned: Ideas for this spot, Variations (open the details
+  tab; one chord only) · Higher/Lower inversion (↑/↓), Octave up/down (⇧↑/⇧↓) · Duplicate (⌘D), Clear chord (keeps
+  the spot), Delete (⌫). A right-click on an unselected chord selects it first, so the menu always acts on the
+  selection; its title names it ("Cm", "3 chords"). Disabled rows say why in their tooltip. Esc, a click outside
+  or the window resizing closes it (Esc doesn't also deselect; the app's shortcuts are off while it's open; it's
+  in `KEEPS_SELECTION`). On a Mac, Ctrl+click still toggles the selection (`menuOnContext` ignores the
+  contextmenu event it fires). `ChordMenu` is presentational (the app builds the rows in `chordMenuGroups`), so the
+  chord details can open the same menu. The ideas themselves are not in the menu: menus close after one pick,
+  and trying ideas one after another is the core loop.
 
 ### Dragging (`useChordDrag` + `planDrop` / `planGroupDrop`)
 
@@ -842,6 +852,7 @@ them up.
     `section.details-panel`; their X lives in the inspector's header.
   - `Modal.tsx`: the modal window both browsers use (portal, backdrop, Esc, Tab kept inside, focus taken
     back; the app's shortcuts are off while a `.modal-backdrop` exists).
+  - `ChordMenu.tsx`: the right-click / ⋯ menu of actions on chords (rows come from `App`).
   - `ChordInspector.tsx`, `NotesLane.tsx`, `ProgressionBrowser.tsx` (the progression window),
     `HomeNotice.tsx`, `SessionBrowser.tsx` (the sessions trigger + window),
     `InstrumentsPanel.tsx`, `MidiMenu.tsx` (+ `useDropdown.ts`): see Behavior.

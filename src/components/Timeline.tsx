@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode, type RefObject } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode, type RefObject } from 'react'
 import { analyzeChord } from '../music/analysis'
 import { chordName, voicedNoteNames } from '../music/chord'
-import { freeKey } from '../platform'
+import { freeKey, IS_MAC } from '../platform'
 import { playheadTicks } from '../music/audio'
 import { rootDegree, type ModeName } from '../music/theory'
 import { clipEnd, snap, type Clip, type ClipChange } from '../music/timeline'
@@ -40,6 +40,8 @@ type Props = {
   onResizeStart: () => void
   onResize: (id: string, edge: 'start' | 'end', ticks: number) => void
   onRemove: (id: string) => void
+  /** Open the chord menu for a chord at a viewport point (right-click, long-press, or its ⋯). */
+  onMenu: (clip: Clip, x: number, y: number) => void
   /** Double-click on empty space: add an empty clip there. */
   onCreateEmpty: (ticks: number) => void
   /** What an empty track shows: the ways to start (buttons), centered on the track. */
@@ -62,6 +64,34 @@ const CHANGE_LABELS: Record<ClipChange, { icon: string; text: string }> = {
   left: { icon: '←', text: 'shift' },
   right: { icon: '→', text: 'shift' },
   squeeze: { icon: '⇤', text: 'squeeze' },
+}
+
+/**
+ * Right-click (or long-press) opens the chord menu. On a Mac, Ctrl+click also fires a
+ * contextmenu event, but there it's a multi-select gesture: only a real right-click opens it.
+ */
+const menuOnContext = (props: Props, clip: Clip) => (e: MouseEvent) => {
+  e.preventDefault()
+  if (IS_MAC && e.ctrlKey) return
+  props.onMenu(clip, e.clientX, e.clientY)
+}
+
+/** The ⋯ shown on a selected chord: opens the same menu under the button. */
+function MoreButton({ props, clip, name }: { props: Props; clip: Clip; name: string }) {
+  return (
+    <button
+      className="clip-more"
+      aria-label={`More actions for ${name}`}
+      title="Actions (or right-click)"
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        const r = e.currentTarget.getBoundingClientRect()
+        props.onMenu(clip, r.left, r.bottom + 4)
+      }}
+    >
+      ⋯
+    </button>
+  )
 }
 
 export function Timeline(props: Props) {
@@ -231,8 +261,7 @@ export function Timeline(props: Props) {
                 e.stopPropagation()
                 props.onClipPointerDown(clip, e, ticksAt(e.clientX) - clip.start)
               }}
-              // Ctrl+click is a multi-select gesture here, not a context menu.
-              onContextMenu={(e) => e.preventDefault()}
+              onContextMenu={menuOnContext(props, clip)}
             >
               {handle('start')}
               {change && (
@@ -249,6 +278,7 @@ export function Timeline(props: Props) {
               <span className="symbol">{name}</span>
               <span className="roman">{fit.roman}</span>
               <span className="notes">{notes}</span>
+              {selected && <MoreButton props={props} clip={clip} name={name} />}
               <button
                 className="remove"
                 aria-label={`Remove ${name}`}
@@ -295,7 +325,7 @@ function EmptyClip({ clip, handle, ...props }: Props & { clip: Clip; handle: (ed
         e.stopPropagation()
         props.onClipPointerDown(clip, e, ticksAt(e.clientX) - clip.start)
       }}
-      onContextMenu={(e) => e.preventDefault()}
+      onContextMenu={menuOnContext(props, clip)}
     >
       {handle('start')}
       {change && (
@@ -306,6 +336,7 @@ function EmptyClip({ clip, handle, ...props }: Props & { clip: Clip; handle: (ed
       )}
       <span className="symbol">?</span>
       <span className="notes">{selected ? 'pick a chord below' : 'empty'}</span>
+      {selected && <MoreButton props={props} clip={clip} name="empty spot" />}
       <button
         className="remove"
         aria-label="Remove empty spot"

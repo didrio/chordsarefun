@@ -4,7 +4,7 @@ Living, ordered backlog. One ticket per session: `/clear` → `/start Tn` → wo
 session updates this file and picks the next ticket, so each new session starts with a small, clear context.
 Rules: `.claude/skills/wrap/SKILL.md`. Capture ideas any time with `/ticket`.
 
-**Next:** T21 — chord menu (Sonnet · medium · plan off). T22 is independent (best after T21). If the `e2e` CI job is red, fix that first.
+**Next:** T22 — chord details rework (Sonnet · medium · plan off). It reuses T21's `ChordMenu` for the ⋯ and Clear. If the `e2e` CI job is red, fix that first.
 
 ## In progress
 
@@ -37,30 +37,11 @@ in one group of three. Agent's calls the owner accepted: the right-click menu ho
 ideas (menus close after one pick, and trying ideas one after another is the core loop); clicking an idea uses it
 and plays it in place, so the card ▶ goes (reverses T2's decision). Every ticket keeps phones working (the `e2e`
 widths), updates `AGENTS.md` (including the design decisions it reverses) and adds tests next to changed rules.
-T16–T20 are done; T21–T22 don't depend on each other.
-
-### T21 — Chord menu: right-click and ⋯
-
-- **Status:** ready
-- **Session:** Sonnet · medium effort · plan mode off
-- **Goal:** The actions on chords, with their shortcuts, one right-click away (and one tap on touch screens).
-- **Done when:**
-  - [ ] `ChordMenu.tsx`: right-click a chord on the track, or the ⋯ that shows on the selected chord, opens a menu
-        acting on the selection (or on that chord if it isn't selected): Ideas for this spot, Variations (open the
-        details tab) · Higher / Lower inversion (↑/↓) · Octave up / down (⇧↑/⇧↓) · Duplicate (⌘D) · Clear chord
-        (keeps the spot) · Delete (⌫). Shortcuts shown right-aligned, like a DAW menu; the header names the chord
-        or "3 chords"; Esc and click outside close it.
-  - [ ] Ctrl+click on a Mac keeps toggling the selection (today `onContextMenu` is suppressed on clips in
-        `Timeline.tsx`): only a real right-click opens the menu.
-  - [ ] The menu is reusable from the chord details header (T22 puts Clear there).
-  - [ ] e2e: right-click → Duplicate adds a copy.
-  - [ ] `AGENTS.md`: Selection, the shortcuts table if anything changed, the help popover.
-- **Context:** `duplicateSelected`, `removeSelected`, `invertChords`, `shiftOctaves` in `App.tsx`; Clear is today's
-  `onClear` in the inspector (sets `chord: null`).
+T16–T21 are done.
 
 ### T22 — Chord details rework
 
-- **Status:** ready (best after T21)
+- **Status:** ready (T21's `ChordMenu` is in; open it from the header's ⋯ with `chordMenuGroups` in `App.tsx`)
 - **Session:** Sonnet · medium effort · plan mode off
 - **Goal:** The panel songwriters use most: always in the same place, one click per idea, tabs that say what
   they're for.
@@ -106,6 +87,7 @@ T16–T20 are done; T21–T22 don't depend on each other.
 
 ## Done
 
+- T21 — Chord menu — 2026-11-16 — `ChordMenu.tsx`: right-click (or long-press) a chord, or the ⋯ on a selected one, opens actions on the selection (Ideas, Variations, inversion, octave, Duplicate, Clear, Delete) with shortcuts; right-click selects an unselected chord first; Mac Ctrl+click still toggles selection. Rows built in `chordMenuGroups` (App.tsx), so T22 can reuse it. Owner to try a real right-click and the ⋯ on a phone.
 - T20 — Voicing you can understand at a glance — 2026-11-16 — Inversion [↓ Lower][Higher ↑], Octave and Smooth voicing moved into the Voicing header (work while collapsed) after a scope label ("All 4 chords" / "F" / "2 selected chords"); clicking a chord in `NotesLane` selects it (`onSelect` → `selectClip`, so it also previews it); the header wraps below the title on narrow windows. Deviation: the panel hint moved into the expanded legend (no room in the bar); Smooth voicing keeps its old rule (selection only if 2+), so with one chord selected the label names that chord but Smooth acts on all (its tooltip says so). e2e: scope label, lane click + ↑. Owner to look at the header on a phone.
 - T19 — Progression browser — 2026-11-16 — `ProgressionBrowser.tsx` (a modal like the sessions window; both now share `Modal.tsx`, `.modal-backdrop`): genres + search (`searchProgressions`), rows loop on click with the sounding chip lit, "Hear with: Its instruments | Your instruments" (global `progressionHearWith`), Use chords / Use instruments / Use both (`progressionTrack`, one undo step each; Enter and double-click = both); "Browse progressions" trigger replaces `ProgressionMenu.tsx`; Random gained Both. Calls the owner may revisit: search stays within the chosen genre ("Search all genres" when empty), ↑/↓ only keep playing if something was playing, under 400px the Random group shows the dice without the word. Owner to listen: a loop with Its vs Your instruments, flipping the switch mid-loop, Use both while the song plays.
 - T18 — Every progression has its own instruments and tempo — 2026-11-16 — each of the 183 progressions has a hand-picked preset and BPM (in its preset's range, never Just chords or the waltz, ≥2 presets per genre; tests); `progressionMusic` → `SessionMusic`; `previewSession` gained `passes`; the Progressions menu's ▶ now plays one pass with its own instruments and tempo. Deviation: per-progression values instead of genre defaults + overrides (every one was picked anyway). Owner to listen via the menu ▶: Heartfelt pop, Future pop, Emo build, Phonk, Dubstep, Backdoor cadence, Giant cycle, Andalusian cadence, Flamenco, Tango drama, Calypso.

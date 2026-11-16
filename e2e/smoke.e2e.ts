@@ -88,6 +88,35 @@ describe('keyboard editing', () => {
     expect(await names(p)).toEqual(['C', 'F', 'G', 'Am'])
   })
 
+  it('right-click opens the chord menu on that chord; Duplicate adds a copy; Esc closes it', async () => {
+    const p = await start(full())
+    await p.mouse.click(...(await pointIn(p, 1, 0.5)), { button: 'right' })
+    const menu = p.locator('.chord-menu')
+    await menu.waitFor()
+    // The right-clicked chord got selected, and the menu names it.
+    expect((await clips(p))[1].selected).toBe(true)
+    expect(await menu.locator('.chord-menu-title').textContent()).toBe('F')
+    await p.keyboard.press('Escape')
+    expect(await menu.count()).toBe(0)
+    expect((await clips(p))[1].selected).toBe(true) // Esc closed the menu, it didn't deselect
+    await p.mouse.click(...(await pointIn(p, 1, 0.5)), { button: 'right' })
+    await menu.getByRole('menuitem', { name: /^Duplicate/ }).click()
+    expect(await menu.count()).toBe(0)
+    expect(await names(p)).toEqual(['C', 'F', 'F', 'G', 'Am'])
+    await p.keyboard.press(`${CMD}+z`)
+    expect(await names(p)).toEqual(['C', 'F', 'G', 'Am'])
+  })
+
+  it('Ctrl+click toggles the selection instead of opening the menu (Mac)', async () => {
+    const p = await start(full())
+    await p.mouse.click(...(await pointIn(p, 0, 0.5)))
+    await p.keyboard.down('Control')
+    await p.mouse.click(...(await pointIn(p, 1, 0.5)))
+    await p.keyboard.up('Control')
+    expect(await p.locator('.chord-menu').count()).toBe(0)
+    expect((await clips(p)).map((c) => c.selected)).toEqual([true, true, false, false])
+  })
+
   it('⌥→ / Ctrl+→ nudges a chord into empty space', async () => {
     const p = await start(sparse())
     await p.mouse.click(...(await pointIn(p, 0, 0.5)))

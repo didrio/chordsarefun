@@ -715,6 +715,75 @@ button.toggle[aria-pressed='true']:hover {
   opacity: 1;
 }
 
+/* The ⋯ on a selected chord opens its menu (right-click does the same). */
+.clip .clip-more {
+  position: absolute;
+  top: 2px;
+  right: 30px;
+  padding: 0 0.3rem;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  line-height: 1;
+}
+
+.clip .clip-more:hover {
+  color: var(--text);
+}
+
+/* The chord menu: actions on the selected chords, shortcuts right-aligned like a DAW menu. */
+.chord-menu {
+  position: fixed;
+  z-index: 25;
+  min-width: 15rem;
+  padding: 0.35rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px #000a;
+}
+
+.chord-menu-title {
+  padding: 0.25rem 0.55rem 0.35rem;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.chord-menu-group + .chord-menu-group {
+  margin-top: 0.25rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.chord-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+
+.chord-menu-item:hover:not(:disabled),
+.chord-menu-item:focus-visible {
+  background: var(--surface-hover);
+  outline: none;
+}
+
+.chord-menu-item.danger {
+  color: #ff8a8a;
+}
+
+.chord-menu-item kbd {
+  font: inherit;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+
 .playhead {
   position: absolute;
   top: 0;
