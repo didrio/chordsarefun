@@ -266,6 +266,16 @@ describe('sessions window', () => {
     expect(await names(p)).toEqual(['C', 'F', 'G', 'Am'])
   })
 
+  it("▶ plays a session's chords once and shows them; ■ stops it", async () => {
+    const p = await start(full())
+    await openWindow(p)
+    await p.getByRole('button', { name: 'Hear Untitled session', exact: true }).click()
+    expect(await p.locator('.session-chords > span').allTextContents()).toEqual(['C', 'F', 'G', 'Am'])
+    await p.getByRole('button', { name: 'Stop hearing Untitled session' }).click()
+    expect(await p.locator('.session-chords').count()).toBe(0)
+    await p.getByRole('button', { name: 'Hear Untitled session', exact: true }).waitFor()
+  })
+
   it('backs up everything to one file and imports it without overwriting', async () => {
     const p = await start(full())
     await openWindow(p)

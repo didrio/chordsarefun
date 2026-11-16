@@ -117,7 +117,7 @@ export default function App() {
       prefix={sessionPrefix(sessions.current)}
       sessions={sessions}
       flushRef={flushRef}
-      sessionMenu={
+      sessionMenu={(onBeforePreview) => (
         <SessionMenu
           sessions={sessions}
           onFlush={flush}
@@ -125,8 +125,9 @@ export default function App() {
           onNew={newSession}
           onDuplicate={duplicate}
           onBackup={backup}
+          onBeforePreview={onBeforePreview}
         />
-      }
+      )}
     />
   )
 }
@@ -155,8 +156,8 @@ type WorkspaceProps = {
   /** Storage key prefix of the session (see session.ts). */
   prefix: string
   sessions: Sessions
-  /** The sessions trigger (and window), shown in the song bar. */
-  sessionMenu: ReactNode
+  /** The sessions trigger (and window), shown in the song bar; given a way to pause the song before hearing a session. */
+  sessionMenu: (onBeforePreview: () => void) => ReactNode
   /** Set to this workspace's "save everything now", so a session can be copied right away. */
   flushRef: { current: () => void }
 }
@@ -611,7 +612,7 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
           <h1>create a chord progression</h1>
           <HelpTip />
         </div>
-        {sessionMenu}
+        {sessionMenu(() => isPlaying && pause())}
         <div className="song-settings">
           <HomeMenu
             home={{ tonic, mode }}

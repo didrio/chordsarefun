@@ -3,7 +3,7 @@ import type { Chord } from './chord'
 import { arrangementOf, DEFAULT_GROOVE, type GrooveSettings } from './grooves'
 import { bassNoteFor, chordPartVoicing, renderTrack, type DrumVoice, type NoteEvent, type Rendered } from './patterns'
 import { bassSound, chordSound, cutoffHz, DRUM_TRIM_DB, partDb, type Instrument } from './sound'
-import { metronomeClicks, playbackEnd, TICKS_PER_BEAT, type ClickAccent, type Clip, type TimeSignature } from './timeline'
+import { chordTimes, metronomeClicks, playbackEnd, TICKS_PER_BEAT, type ClickAccent, type Clip, type TimeSignature } from './timeline'
 import { chordVelocity } from './voicing'
 
 /**
@@ -17,7 +17,7 @@ import { chordVelocity } from './voicing'
 type Poly = Tone.PolySynth<Tone.Synth>
 
 let groove: GrooveSettings = DEFAULT_GROOVE
-let graph: {
+type Graph = {
   chordFilter: Tone.Filter
   chordVolume: Tone.Volume
   bassVolume: Tone.Volume
@@ -27,7 +27,8 @@ let graph: {
   nodes: { dispose: () => void }[]
   /** Master output after the limiter: faded to silence when everything stops at once (silenceAll). */
   out: Tone.Gain
-} | null = null
+}
+let graph: Graph | null = null
 let chordSynth: { id: string; synth: Poly } | null = null
 let bassSynth: { id: string; synth: Poly } | null = null
 
@@ -105,29 +106,39 @@ export function makeKit(out: Tone.InputNode): Kit {
   }
 }
 
+/** The three parts' chains into a limiter and a master gain (synths are added separately). */
+function makeGraph(brightness: number): Graph {
+  const out = new Tone.Gain(1).toDestination()
+  const limiter = new Tone.Limiter(-1).connect(out)
+  const chordVolume = new Tone.Volume().connect(limiter)
+  const bassVolume = new Tone.Volume().connect(limiter)
+  const drumVolume = new Tone.Volume().connect(limiter)
+  const chordFilter = new Tone.Filter({ type: 'lowpass', frequency: cutoffHz(brightness), rolloff: -24 }).connect(chordVolume)
+  const kit = makeKit(drumVolume)
+  return {
+    chordFilter,
+    chordVolume,
+    bassVolume,
+    drumVolume,
+    kit,
+    out,
+    nodes: [chordFilter, chordVolume, bassVolume, drumVolume, limiter, out, kit],
+  }
+}
+
 function getGraph() {
   if (!graph) {
-    const out = new Tone.Gain(1).toDestination()
-    const limiter = new Tone.Limiter(-1).connect(out)
-    const chordVolume = new Tone.Volume().connect(limiter)
-    const bassVolume = new Tone.Volume().connect(limiter)
-    const drumVolume = new Tone.Volume().connect(limiter)
-    const chordFilter = new Tone.Filter({ type: 'lowpass', frequency: cutoffHz(groove.chords.brightness), rolloff: -24 }).connect(
-      chordVolume,
-    )
-    const kit = makeKit(drumVolume)
-    graph = {
-      chordFilter,
-      chordVolume,
-      bassVolume,
-      drumVolume,
-      kit,
-      out,
-      nodes: [chordFilter, chordVolume, bassVolume, drumVolume, limiter, out, kit],
-    }
+    graph = makeGraph(groove.chords.brightness)
     applyGroove()
   }
   return graph
+}
+
+/** Each part's level and on/off from groove settings (instrument trims included). */
+function setLevels(g: Graph, settings: GrooveSettings, chordInst: Instrument, bassInst: Instrument) {
+  setLevel(g.chordVolume, settings.chords.on, settings.chords.volume, chordInst.trimDb)
+  setLevel(g.bassVolume, settings.bass.on, settings.bass.volume, bassInst.trimDb)
+  setLevel(g.drumVolume, settings.drums.on, settings.drums.volume, DRUM_TRIM_DB)
 }
 
 const setLevel = (node: Tone.Volume, on: boolean, volume: number, trimDb = 0) => {
@@ -148,9 +159,7 @@ function applyGroove() {
     bassSynth?.synth.dispose()
     bassSynth = { id: bassInst.id, synth: makePoly(bassInst, g.bassVolume) }
   }
-  setLevel(g.chordVolume, groove.chords.on, groove.chords.volume, chordInst.trimDb)
-  setLevel(g.bassVolume, groove.bass.on, groove.bass.volume, bassInst.trimDb)
-  setLevel(g.drumVolume, groove.drums.on, groove.drums.volume, DRUM_TRIM_DB)
+  setLevels(g, groove, chordInst, bassInst)
   g.chordFilter.frequency.rampTo(cutoffHz(groove.chords.brightness), 0.05)
 }
 
@@ -230,10 +239,37 @@ let previewTimers: number[] = []
  */
 let generation = 0
 
-/** Stop a preview of several chords (previewProgression) before its next chord. */
-export function stopPreview() {
+/** Called once when the running session preview (previewSession) ends, finished or stopped. */
+let previewEnded: (() => void) | null = null
+
+/** A session preview's own sound graph and synths, built from that session's groove; thrown away after. */
+let previewRig: { graph: Graph; synths: Poly[] } | null = null
+
+/** Bumped by every stopPreview, so a session preview still waiting for the audio to start can tell it was cancelled. */
+let previewToken = 0
+
+/**
+ * Stop a preview of several chords (previewProgression, previewSession) before its next
+ * chord. A session preview stops at once (its own sound graph fades out and is thrown
+ * away); `release` also cuts a chord still ringing on the main instruments.
+ */
+export function stopPreview(release = false) {
+  previewToken++
   previewTimers.forEach(clearTimeout)
   previewTimers = []
+  if (release) releaseAll()
+  const rig = previewRig
+  previewRig = null
+  if (rig) {
+    rig.graph.out.gain.rampTo(0, 0.03)
+    window.setTimeout(() => {
+      rig.synths.forEach((synth) => synth.dispose())
+      rig.graph.nodes.forEach((n) => n.dispose())
+    }, 100)
+  }
+  const ended = previewEnded
+  previewEnded = null
+  ended?.()
 }
 
 /** Hear one chord now (see soundChord). Like every preview, it replaces a running one. */
@@ -247,6 +283,65 @@ export function previewProgression(chords: Chord[], seconds: number) {
   stopPreview()
   ensureAudio()
   previewTimers = chords.map((chord, i) => window.setTimeout(() => soundChord(chord, seconds * 0.95), i * seconds * 1000))
+}
+
+/** A whole stored session, as its Play button would play it once. */
+export type SessionMusic = {
+  clips: Clip[]
+  totalTicks: number
+  sig: TimeSignature
+  bpm: number
+  groove: GrooveSettings
+}
+
+/** How long a session preview lets the last notes ring before its sound graph is thrown away. */
+const PREVIEW_TAIL_SECONDS = 2
+
+/**
+ * Hear another session exactly as its Play button plays it, once (no loop): its tempo,
+ * time signature, patterns, swing, sounds, brightness, mix and parts on/off, without the
+ * metronome. It plays on its own sound graph built from that session's groove (so the
+ * open session's sounds are untouched), with every note scheduled up front from
+ * renderTrack. Replaces any running preview. `onChord` is called as each chord starts
+ * (index into chordTimes), `onEnd` when the music ends or the preview is stopped.
+ */
+export async function previewSession(
+  music: SessionMusic,
+  { onEnd, onChord }: { onEnd?: () => void; onChord?: (index: number) => void } = {},
+) {
+  stopPreview()
+  previewEnded = onEnd ?? null
+  const token = previewToken
+  await ensureAudio()
+  if (token !== previewToken) return // stopped (or replaced) while the audio was starting
+
+  const { clips, totalTicks, sig, bpm, groove: settings } = music
+  const sec = (ticks: number) => (ticks / TICKS_PER_BEAT) * (60 / bpm)
+  const g = makeGraph(settings.chords.brightness)
+  const chordInst = chordSound(settings.chords.sound)
+  const bassInst = bassSound(settings.bass.sound)
+  const chords = makePoly(chordInst, g.chordFilter)
+  const bass = makePoly(bassInst, g.bassVolume)
+  setLevels(g, settings, chordInst, bassInst)
+  previewRig = { graph: g, synths: [chords, bass] }
+
+  const rendered = renderTrack(clips, totalTicks, sig, arrangementOf(settings))
+  const byTick = <T extends { tick: number }>(events: T[]) => [...events].sort((a, b) => a.tick - b.tick)
+  const start = Tone.now() + 0.05
+  if (settings.chords.on) for (const e of byTick(rendered.chords)) playNote(chords, e, start + sec(e.tick), sec(e.duration))
+  if (settings.bass.on) for (const e of byTick(rendered.bass)) playNote(bass, e, start + sec(e.tick), sec(e.duration))
+  if (settings.drums.on) for (const e of byTick(rendered.drums)) g.kit.trigger(e.voice, start + sec(e.tick), e.velocity)
+
+  const end = sec(playbackEnd(clips, totalTicks))
+  previewTimers = chordTimes(clips, bpm).map(({ at }, i) => window.setTimeout(() => onChord?.(i), (at + 0.05) * 1000))
+  previewTimers.push(
+    window.setTimeout(() => {
+      const ended = previewEnded
+      previewEnded = null
+      ended?.()
+    }, (end + 0.05) * 1000),
+    window.setTimeout(() => stopPreview(), (end + PREVIEW_TAIL_SECONDS) * 1000),
+  )
 }
 
 export function setBpm(bpm: number) {

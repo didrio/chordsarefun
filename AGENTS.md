@@ -529,13 +529,21 @@ The (i) tooltip next to the logo (`HelpTip.tsx`: how it works + every shortcut, 
   (`SessionBrowser.tsx`, a modal, portalled to `body`; full screen on phones, the views as chips): views on
   the left (**All sessions**, **★ Favorites**, **Folders**, one level, + to add), search, **+ New session**
   (made in the folder being viewed) and a sort select (Last edited · Name · Date created, saved globally as
-  `sessionSort`). Rows: ☆/★ · name with an "Open" badge · "4 chords · C minor · folder · edited 3 min ago" ·
+  `sessionSort`). Rows: ☆/★ · ▶ · name with an "Open" badge · "4 chords · C minor · folder · edited 3 min ago" ·
   ⋯ menu (also right-click): Rename (inline; Enter/blur saves, Esc cancels), Duplicate ("<name> copy" in the
   same folder, highlighted), Move to (No folder, folders, New folder…), Delete… (an inline confirm in the row).
   Clicking a row opens it and closes the window. Keys: ↑/↓ between rows (from the search box too), Enter
   opens, F2 renames, Esc closes (or closes a menu/confirm first); Tab stays inside; the app's shortcuts are
   off while it's open (focus that falls out of it is taken back). Folder ⋯: Rename, Delete (its sessions are
   kept, back to no folder).
+- **Hear a session** (the row's ▶, ■ while it plays): it plays once (no loop, no metronome) exactly as its
+  own Play would: its tempo, time signature, patterns, swing, chord/bass sounds, brightness, mix and parts
+  on/off (`sessionMusic` reads them like the workspace does; `previewSession` in `audio.ts` renders it with
+  `renderTrack` and schedules every note up front on a **separate sound graph** built from that session's
+  groove, so the open session's sounds are untouched; the graph is thrown away when it ends or stops). While
+  it plays, the row's summary line becomes its chord names with the sounding one lit (`chordTimes`). It pauses the song if it's playing,
+  replaces any other preview, and stops on ■, on closing the window, or on opening a session. Disabled for
+  sessions with no chords.
 - **Blank sessions don't pile up**: leaving a session that still has its automatic name ("Untitled session N"),
   isn't starred and has no chords and nothing to undo removes it. Deleting the open session opens the most
   recently edited other one (or a new blank one). Stored values of a session that's being left are removed
@@ -738,7 +746,8 @@ them up.
   - `timeline.ts`: track model and **all editing rules** as pure functions
     `(clips, ...) => clips`: resize, insert, reorder, drop planning (single and group),
     duplicate (`planDuplicate`), nudge (`nudgeClips`), add/replace/remove, fit/rescale; time signatures (`sigBarTicks`, `sigBeatTicks`),
-    grids (`gridStep`, `snap`, `stepGrid`), `playbackEnd`, `metronomeClicks`.
+    grids (`gridStep`, `snap`, `stepGrid`), `playbackEnd`, `metronomeClicks`, `chordTimes` (a track's chords in
+    seconds, for hearing a session).
     Clips treat their chord as opaque; `planGroupDrop` is an internal helper of `planDrop`.
   - `chord.ts`: the chord model: types, names, notes, voicing/inversions, slash bass
     (`withBass`, `bassNote`, `soundingNotes`), note toggling (`fromIntervals` canonicalizes).
@@ -758,6 +767,7 @@ them up.
   - `progressions.ts`: the progression library (genres) and its layout on a track.
   - `audio.ts`: Tone.js playback of the three parts (synths, drum kit, per-part
     volume, limiter), seeking, metronome. The only module touching Web Audio.
+    Previews (`previewChord`, `previewProgression`, `previewSession`) and `silenceAll`.
   - `patterns.ts`: chord/bass/drum patterns and `renderTrack` (all notes played), pure.
   - `grooves.ts`: groove settings, presets, matching, validation.
   - `sound.ts`: instrument presets (Tone options as data), brightness → cutoff, levels.

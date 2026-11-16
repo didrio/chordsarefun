@@ -117,6 +117,15 @@ export function playbackEnd(clips: Clip[], total: number): number {
   return clips.length ? Math.max(...clips.map(clipEnd)) : total
 }
 
+/**
+ * When each chord sounds, in seconds from the start of the track, at a tempo: the chords
+ * in order (empty spots skipped). Used to follow along while hearing a whole session.
+ */
+export function chordTimes(clips: Clip[], bpm: number): { chord: Chord; at: number; seconds: number }[] {
+  const sec = (ticks: number) => (ticks / TICKS_PER_BEAT) * (60 / bpm)
+  return (sortClips(chordClips(clips)) as ChordClip[]).map((c) => ({ chord: c.chord, at: sec(c.start), seconds: sec(c.length) }))
+}
+
 export type ClickAccent = 'bar' | 'group' | 'beat'
 
 /**

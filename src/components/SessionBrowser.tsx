@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { planImport, readBackup } from '../backup'
+import { previewSession, stopPreview } from '../music/audio'
+import { PlayIcon, StopIcon } from './Icons'
 import {
   filterSessions,
   SESSION_SORTS,
+  sessionMusic,
   sessionSummary,
   sortSessions,
   type SessionMeta,
@@ -24,6 +27,8 @@ type Props = {
   onDuplicate: (id: string) => string | null
   /** Download every session as one backup file. */
   onBackup: () => void
+  /** Before hearing a session: pause the song if it's playing, so they never play over each other. */
+  onBeforePreview: () => void
 }
 
 /** "3 min ago", "yesterday", or a date. */
@@ -127,7 +132,7 @@ function NameInput({ initial = '', placeholder, label, onDone }: { initial?: str
  * The sessions window: views on the left (All, Favorites, folders), the list on the right
  * (search, sort), backup and import at the bottom. Opening a session closes it.
  */
-function SessionBrowser({ sessions: s, onOpen, onNew, onDuplicate, onBackup, onClose }: Props & { onClose: () => void }) {
+function SessionBrowser({ sessions: s, onOpen, onNew, onDuplicate, onBackup, onBeforePreview, onClose }: Props & { onClose: () => void }) {
   const [view, setView] = useState<SessionView>('all')
   const [query, setQuery] = useState('')
   const [menu, setMenu] = useState<MenuAt | null>(null)
@@ -141,6 +146,12 @@ function SessionBrowser({ sessions: s, onOpen, onNew, onDuplicate, onBackup, onC
   const [newFolderFor, setNewFolderFor] = useState<string | null>(null)
   const [flash, setFlash] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  /** The session being heard (its ▶ shows ■), and which of its chords is sounding. */
+  const [hearing, setHearing] = useState<{ id: string; names: string[]; at: number } | null>(null)
+  const hearingRef = useRef(false)
+  useEffect(() => {
+    hearingRef.current = hearing !== null
+  })
   const dialogRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -149,6 +160,7 @@ function SessionBrowser({ sessions: s, onOpen, onNew, onDuplicate, onBackup, onC
   // A folder deleted while viewed: back to all.
   const shownView = view === 'all' || view === 'favorites' || folderName.has(view) ? view : 'all'
   const summaries = useMemo(() => new Map(s.sessions.map((m) => [m.id, sessionSummary(m.id)])), [s.sessions])
+  const music = useMemo(() => new Map(s.sessions.map((m) => [m.id, sessionMusic(m.id)])), [s.sessions])
   const rows = sortSessions(filterSessions(s.sessions, shownView, query), s.sort)
   const count = (v: SessionView) => filterSessions(s.sessions, v).length
   const viewTitle = shownView === 'all' ? 'All sessions' : shownView === 'favorites' ? 'Favorites' : folderName.get(shownView)!
@@ -158,6 +170,27 @@ function SessionBrowser({ sessions: s, onOpen, onNew, onDuplicate, onBackup, onC
     if (window.matchMedia('(pointer: fine)').matches) searchRef.current?.focus()
     else dialogRef.current?.focus()
   }, [])
+
+  // Closing the window stops a session being heard.
+  useEffect(
+    () => () => {
+      if (hearingRef.current) stopPreview(true)
+    },
+    [],
+  )
+
+  /** ▶: hear a session once exactly as its Play plays it: its tempo, groove and sounds (■ stops it). */
+  const hear = (id: string) => {
+    if (hearing?.id === id) return stopPreview(true)
+    const m = music.get(id)
+    if (!m) return
+    onBeforePreview()
+    void previewSession(m, {
+      onChord: (at) => setHearing((h) => (h?.id === id ? { ...h, at } : h)),
+      onEnd: () => setHearing((h) => (h?.id === id ? null : h)),
+    })
+    setHearing({ id, names: m.names, at: -1 })
+  }
 
   // Focus lost to the page (the focused row was deleted, a click on nothing): take it back,
   // so keys keep working here (Esc closes) and never reach the app's shortcuts.
@@ -360,6 +393,17 @@ function SessionBrowser({ sessions: s, onOpen, onNew, onDuplicate, onBackup, onC
         >
           {m.favorite ? '★' : '☆'}
         </button>
+        <button
+          className={hearing?.id === m.id ? 'session-hear playing' : 'session-hear'}
+          aria-label={hearing?.id === m.id ? `Stop hearing ${m.name}` : `Hear ${m.name}`}
+          title={
+            hearing?.id === m.id ? 'Stop' : music.get(m.id) ? 'Hear it once, with its own tempo and sounds' : 'No chords to hear yet'
+          }
+          disabled={!music.get(m.id)}
+          onClick={() => hear(m.id)}
+        >
+          {hearing?.id === m.id ? <StopIcon /> : <PlayIcon />}
+        </button>
         {renaming === m.id ? (
           <div className="session-open renaming">
             <NameInput
@@ -389,7 +433,17 @@ function SessionBrowser({ sessions: s, onOpen, onNew, onDuplicate, onBackup, onC
               <span className="session-title">{m.name}</span>
               {isCurrent && <span className="session-badge">Open</span>}
             </span>
-            <span className="session-meta">{meta}</span>
+            {hearing?.id === m.id ? (
+              <span className="session-meta session-chords" aria-live="off">
+                {hearing.names.map((n, i) => (
+                  <span key={i} className={i === hearing.at ? 'now' : undefined}>
+                    {n}
+                  </span>
+                ))}
+              </span>
+            ) : (
+              <span className="session-meta">{meta}</span>
+            )}
           </button>
         )}
         <button

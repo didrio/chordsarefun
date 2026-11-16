@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  chordTimes,
   clipEnd,
   fitToLength,
   insertClip,
@@ -639,5 +640,22 @@ describe('addNextEmptyClip (+ New)', () => {
     expect(out.find((c) => c.id === 'c3')).toMatchObject({ start: 3 * BAR, length: BAR / 2 })
     expect(out.find((c) => c.id === 'n')).toMatchObject({ start: 3.5 * BAR, length: BAR / 2 })
     for (let i = 1; i < out.length; i++) expect(out[i].start).toBeGreaterThanOrEqual(out[i - 1].start + out[i - 1].length)
+  })
+})
+
+describe('chordTimes', () => {
+  it('times chords from the start of the track, at the tempo', () => {
+    const chord = { root: 'C', type: '', add: [], omit: [], inversion: 0 }
+    const clips: Clip[] = [
+      { id: 'b', chord, start: 3 * TICKS_PER_BEAT, length: TICKS_PER_BEAT * 2 },
+      { id: 'e', chord: null, start: 0, length: TICKS_PER_BEAT },
+      { id: 'a', chord, start: TICKS_PER_BEAT, length: TICKS_PER_BEAT },
+    ]
+    // 120 BPM: half a second per beat. The empty spot is skipped.
+    expect(chordTimes(clips, 120).map(({ at, seconds }) => [at, seconds])).toEqual([
+      [0.5, 0.5],
+      [1.5, 1],
+    ])
+    expect(chordTimes([], 120)).toEqual([])
   })
 })

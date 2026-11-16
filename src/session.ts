@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { readHistory, type History } from './history'
 import { copyKeys, load, loadRaw, removeKeys, save, saveRaw } from './persist'
 import { isTrack, migrateTrack, type Track } from './track'
-import { chordClips } from './music/timeline'
+import { chordClips, chordTimes, sigBarTicks } from './music/timeline'
+import { DEFAULT_GROOVE, isGrooveSettings, type GrooveSettings } from './music/grooves'
+import { chordName } from './music/chord'
+import type { SessionMusic } from './music/audio'
 import { keyName } from './music/theory'
 
 /**
@@ -135,6 +138,27 @@ export function sessionSummary(id: string): string | null {
   if (!h || h.present.clips.length === 0) return null
   const n = chordClips(h.present.clips).length
   return `${n} ${n === 1 ? 'chord' : 'chords'} · ${keyName(h.present.tonic, h.present.mode)}`
+}
+
+/**
+ * Everything needed to hear a stored session as its Play button plays it (its track, tempo
+ * and groove, read the way the workspace reads them), plus its chord names in order; null
+ * if it has no chords.
+ */
+export function sessionMusic(id: string): (SessionMusic & { names: string[] }) | null {
+  const h = readTrack(id)
+  if (!h || chordClips(h.present.clips).length === 0) return null
+  const { clips, bars, sig } = h.present
+  const bpm = load(`${sessionPrefix(id)}bpm`, 120, (v) => typeof v === 'number' && v > 0)
+  const groove = load<GrooveSettings>(`${sessionPrefix(id)}groove2`, DEFAULT_GROOVE, isGrooveSettings)
+  return {
+    clips,
+    totalTicks: bars * sigBarTicks(sig),
+    sig,
+    bpm,
+    groove,
+    names: chordTimes(clips, bpm).map((c) => chordName(c.chord)),
+  }
 }
 
 const newMeta = (name: string, folder: string | null = null): SessionMeta => {
