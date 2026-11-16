@@ -127,7 +127,7 @@ export function ProgressionMenu({ tonic, onUse, onPreview, highlight = false, re
                   </span>
                   <span className="progression-feel">{prog.feel}</span>
                 </button>
-                <button className="hear" aria-label={`Hear ${prog.name}`} title="Hear it (doesn't change the track)" onClick={() => onPreview(prog)}>
+                <button className="hear" aria-label={`Hear ${prog.name}`} title={`Hear it with its own instruments, ${prog.bpm} BPM (doesn't change the track)`} onClick={() => onPreview(prog)}>
                   ▶
                 </button>
               </div>

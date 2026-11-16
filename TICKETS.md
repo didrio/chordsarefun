@@ -4,8 +4,8 @@ Living, ordered backlog. One ticket per session: `/clear` → `/start Tn` → wo
 session updates this file and picks the next ticket, so each new session starts with a small, clear context.
 Rules: `.claude/skills/wrap/SKILL.md`. Capture ideas any time with `/ticket`.
 
-**Next:** T18 — every progression has its own instruments and tempo (Opus · high · plan off); T19 needs it. T20–T22
-are independent (Sonnet · medium · plan off). If the `e2e` CI job is red, fix that first.
+**Next:** T19 — progression browser (Opus · high · plan on); T18 gave it each progression's instruments and tempo.
+T20–T22 are independent (Sonnet · medium · plan off). If the `e2e` CI job is red, fix that first.
 
 ## In progress
 
@@ -40,27 +40,6 @@ and plays it in place, so the card ▶ goes (reverses T2's decision). Every tick
 widths), updates `AGENTS.md` (including the design decisions it reverses) and adds tests next to changed rules.
 T20–T22 don't depend on each other or on T16–T19.
 
-### T18 — Every progression has its own instruments and tempo
-
-- **Status:** ready
-- **Session:** Opus · high effort · plan mode off (musical judgment; data and one pure function)
-- **Goal:** Each progression in the library knows how it's meant to sound (a groove preset and a tempo), and can be
-  heard that way.
-- **Done when:**
-  - [ ] `Progression` (`progressions.ts`) gains `groove` (a `GROOVES` id) and `bpm`. Genre defaults plus
-        per-progression overrides so each genre cycles 2–3 fitting presets (ballads → Piano ballad, power chords →
-        Rock / Punk / Metal, jazz ballads → Jazz ballad, lo-fi → Lo-fi hip-hop, flamenco → … ). Never "Just
-        chords"; the waltz only for a 3/4 progression (there are none today).
-  - [ ] `progressionMusic(prog, tonic, groove?, bpm?)` returns a `SessionMusic` (`audio.ts`): clips from
-        `progressionClips` (one bar per chord), 4/4, the progression's preset (`applyGroove` on `DEFAULT_GROOVE`)
-        and BPM, or the ones passed in ("your instruments"). Previews then reuse `previewSession` (loops
-        seamlessly on its own sound graph; `onChord` lights the sounding chord).
-  - [ ] Tests: every preset id exists, every BPM is inside its preset's `bpm` range, every genre uses at least two
-        presets.
-  - [ ] Hand-off lists a few progressions for the owner to listen to.
-- **Context:** Presets carry `genre` and `bpm: [min, max]` already (`grooves.ts`; `randomBpm` is unused). Levels
-  are measured, not guessed (`AGENTS.md`), but this ticket adds no sounds or presets, so no new measuring.
-
 ### T19 — Progression browser
 
 - **Status:** ready (after T16 and T18)
@@ -89,6 +68,13 @@ T20–T22 don't depend on each other or on T16–T19.
         scale" stays; add why instruments come with progressions).
 - **Context:** Hearing a session (`previewSession`, `chordTimes`, the row ▶ in `SessionBrowser.tsx`) is the model
   for previews. "Your instruments" = the open session's groove and BPM.
+- **From T18:** every `Progression` has `groove` (a preset id) and `bpm`; `progressionMusic(prog, tonic, groove?,
+  bpm?)` returns the `SessionMusic` to pass to `previewSession` (pass the open session's `groove` and `bpm` for
+  "Your instruments"). `previewSession` takes `passes` (default: loop forever); today's menu ▶ (`hearProgression`
+  in `App.tsx`) uses `passes: 1` and pauses the song first; the browser's ▶ should loop (no `passes`) with ■.
+  "Use instruments" = `applyGroove(groove, preset)` + the progression's `bpm`, through `commit` (one undo step).
+  Row label "Pop · 112 BPM" = the preset's `name` + `bpm`. The owner hasn't listened to the picks yet: if some
+  feel wrong, they're one line each in `progressions.ts`.
 
 ### T20 — Voicing you can understand at a glance
 
@@ -173,6 +159,7 @@ T20–T22 don't depend on each other or on T16–T19.
 
 ## Done
 
+- T18 — Every progression has its own instruments and tempo — 2026-11-16 — each of the 183 progressions has a hand-picked preset and BPM (in its preset's range, never Just chords or the waltz, ≥2 presets per genre; tests); `progressionMusic` → `SessionMusic`; `previewSession` gained `passes`; the Progressions menu's ▶ now plays one pass with its own instruments and tempo. Deviation: per-progression values instead of genre defaults + overrides (every one was picked anyway). Owner to listen via the menu ▶: Heartfelt pop, Future pop, Emo build, Phonk, Dubstep, Backdoor cadence, Giant cycle, Andalusian cadence, Flamenco, Tango drama, Calypso.
 - T17 — Instruments section replaces the Groove dropdown — 2026-11-16 — `InstrumentsPanel` (under Voicing, closed by default, `instrumentsOpen`): preset `<select>` by genre in its bar (works collapsed, "Custom" when changed, never touches tempo), three strips + swing; `Panel` gained an `actions` slot; `GrooveMenu` and both dice gone, replaced by one `🎲 Random: Chords | Instruments` group (T19 adds Both); help text says Instruments. Deviation: Space doesn't play/pause inside the new native selects (it never did in the old ones either: the key handler skips selects, and Space opens them natively); sliders still do. Owner to look at the strips and the phone layout (Random gets its own row).
 - T16 — Instruments and tempo join undo — 2026-11-16 — `Track` now holds `groove` and `bpm` (all undoable; sliders
   one step per drag via `Slider` gestures, no-op changes no step via `withMusic`/`sameGroove`); old sessions'

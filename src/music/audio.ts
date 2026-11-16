@@ -285,6 +285,9 @@ export function previewProgression(chords: Chord[], seconds: number) {
   previewTimers = chords.map((chord, i) => window.setTimeout(() => soundChord(chord, seconds * 0.95), i * seconds * 1000))
 }
 
+/** How long a preview that plays a set number of passes lets its last notes ring before it stops. */
+const PREVIEW_TAIL_SECONDS = 1.5
+
 /** A whole stored session, as its Play button would play it once. */
 export type SessionMusic = {
   clips: Clip[]
@@ -302,11 +305,12 @@ export type SessionMusic = {
  * renderTrack) are scheduled on the audio clock when the pass before starts, so loops are
  * seamless and there's always a pass queued ahead. Replaces any running preview; stopped
  * by stopPreview (■, another preview, silenceAll). `onChord` is called as each chord starts
- * (index into chordTimes), `onEnd` when the preview is stopped.
+ * (index into chordTimes), `onEnd` when the preview is stopped. With `passes`, it stops by
+ * itself after that many times through (once the last notes have rung out).
  */
 export async function previewSession(
   music: SessionMusic,
-  { onEnd, onChord }: { onEnd?: () => void; onChord?: (index: number) => void } = {},
+  { onEnd, onChord, passes = Infinity }: { onEnd?: () => void; onChord?: (index: number) => void; passes?: number } = {},
 ) {
   stopPreview()
   previewEnded = onEnd ?? null
@@ -338,6 +342,11 @@ export async function previewSession(
   const schedulePass = (n: number) => {
     if (previewRig?.graph !== g) return // stopped
     const start = first + n * loopSeconds
+    if (n >= passes) {
+      // Done: let the last notes ring a moment, then free the sound graph.
+      previewTimers = [...previewTimers, window.setTimeout(() => stopPreview(), msUntil(start + PREVIEW_TAIL_SECONDS))]
+      return
+    }
     for (const e of chordEvents) playNote(chords, e, start + sec(e.tick), sec(e.duration))
     for (const e of bassEvents) playNote(bass, e, start + sec(e.tick), sec(e.duration))
     for (const e of drumEvents) g.kit.trigger(e.voice, start + sec(e.tick), e.velocity)

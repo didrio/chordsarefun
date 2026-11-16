@@ -235,6 +235,13 @@ colors, fit dots and plain-language reasons, always relative to Home.
   playing, playback continues from there (so progressions can be auditioned back to
   back; the seek happens when the new clips are scheduled); one chord per bar, repeated while it fits, or
   shared evenly on shorter tracks. ▶ previews without touching the track.
+- **Every progression knows how it's meant to sound** (T18): a groove preset and a tempo (`groove`, `bpm` on
+  `Progression`), chosen per progression so each genre spreads over several presets; never "Just chords" or the
+  3/4 waltz, the tempo always inside the preset's range (tests enforce all three). `progressionMusic(prog, tonic,
+  groove?, bpm?)` turns one into a `SessionMusic` (one bar per chord, 4/4) with its own preset and tempo, or the
+  ones passed in, so it plays through `previewSession` like a stored session. The menu's ▶ plays it once that
+  way (`passes: 1`; pauses the song first); loading it still only takes the chords (T19 adds taking its
+  instruments).
 - **Rich dropdowns** (`useDropdown.ts`): custom popovers instead of native selects where
   options need descriptions (Key, progressions, sessions, time/length/grid). Click outside / Esc closes; ↑/↓
   move; the app's shortcuts ignore keys inside `.dropdown`.
@@ -785,10 +792,11 @@ them up.
     diminished / tritone sub / outside) and tension, in plain words.
   - `voicing.ts`: `smoothVoicing` (voice leading via inversions), `fitOctave`.
   - `flavors.ts`: the Flavors tab, grouped by fit and ordered most expected first.
-  - `progressions.ts`: the progression library (genres) and its layout on a track.
+  - `progressions.ts`: the progression library (genres, each progression's preset and tempo), its layout on
+    a track, and `progressionMusic` (a progression ready to hear).
   - `audio.ts`: Tone.js playback of the three parts (synths, drum kit, per-part
     volume, limiter), seeking, metronome. The only module touching Web Audio.
-    Previews (`previewChord`, `previewProgression`, `previewSession`) and `silenceAll`.
+    Previews (`previewChord`, `previewProgression`, `previewSession`: loops, or `passes` times) and `silenceAll`.
   - `patterns.ts`: chord/bass/drum patterns and `renderTrack` (all notes played), pure.
   - `grooves.ts`: groove settings, presets, matching, validation.
   - `sound.ts`: instrument presets (Tone options as data), brightness → cutoff, levels.

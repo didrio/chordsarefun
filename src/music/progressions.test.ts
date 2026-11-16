@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { chordName, voiceChord } from './chord'
-import { GENRES, numeralChord, PROGRESSIONS, progressionChords, progressionClips } from './progressions'
+import { applyGroove, DEFAULT_GROOVE, GROOVES } from './grooves'
+import { GENRES, numeralChord, PROGRESSIONS, progressionChords, progressionClips, progressionMusic } from './progressions'
 import { isDiatonic } from './theory'
 import { sigBarTicks, TICKS_PER_BAR } from './timeline'
 
@@ -79,5 +80,57 @@ describe('progressionClips', () => {
     const bar = sigBarTicks({ beats: 3, unit: 4 })
     const clips = progressionClips(pop, 'C', bar, bar)
     expect(clips.reduce((s, c) => s + c.length, 0)).toBe(bar)
+  })
+})
+
+describe('how each progression sounds', () => {
+  const preset = (id: string) => GROOVES.find((g) => g.id === id)
+
+  it('uses an existing preset, never Just chords or the 3/4 waltz', () => {
+    for (const p of PROGRESSIONS) {
+      expect(preset(p.groove), `${p.id}: ${p.groove}`).toBeDefined()
+      expect(['just', 'waltz'], p.id).not.toContain(p.groove)
+    }
+  })
+
+  it("plays at a tempo inside its preset's natural range", () => {
+    for (const p of PROGRESSIONS) {
+      const [min, max] = preset(p.groove)!.bpm
+      expect(p.bpm, `${p.id} on ${p.groove}`).toBeGreaterThanOrEqual(min)
+      expect(p.bpm, `${p.id} on ${p.groove}`).toBeLessThanOrEqual(max)
+    }
+  })
+
+  it('every genre uses at least two presets', () => {
+    for (const g of GENRES) {
+      expect(new Set(PROGRESSIONS.filter((p) => p.genre === g).map((p) => p.groove)).size, g).toBeGreaterThanOrEqual(2)
+    }
+  })
+})
+
+describe('progressionMusic', () => {
+  const preset = (id: string) => GROOVES.find((g) => g.id === id)!
+  const pop = PROGRESSIONS.find((p) => p.id === 'pop')!
+  const jazz = PROGRESSIONS.find((p) => p.id === 'twofive')!
+
+  it('lays the chords out one bar each in 4/4, in the key asked for', () => {
+    const m = progressionMusic(pop, 'G')
+    expect(m.sig).toEqual({ beats: 4, unit: 4 })
+    expect(m.totalTicks).toBe(4 * BAR)
+    expect(m.clips.map((c) => [c.start, c.length])).toEqual([0, 1, 2, 3].map((i) => [i * BAR, BAR]))
+    expect(m.clips.map((c) => chordName(c.chord!))).toEqual(['G', 'D', 'Em', 'C'])
+  })
+
+  it('plays with its own preset and tempo', () => {
+    const m = progressionMusic(jazz, 'C')
+    expect(m.bpm).toBe(jazz.bpm)
+    expect(m.groove).toEqual(applyGroove(DEFAULT_GROOVE, preset('jazz')))
+  })
+
+  it('or with the instruments and tempo passed in', () => {
+    const mine = applyGroove(DEFAULT_GROOVE, preset('reggae'))
+    const m = progressionMusic(jazz, 'C', mine, 77)
+    expect(m.groove).toBe(mine)
+    expect(m.bpm).toBe(77)
   })
 })

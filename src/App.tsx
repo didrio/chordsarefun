@@ -28,6 +28,7 @@ import {
   pausePlayback,
   previewChord,
   previewProgression,
+  previewSession,
   schedule,
   seekPlayback,
   setBpm as setTransportBpm,
@@ -42,7 +43,7 @@ import { canInvert, invert, shiftOctave, type Chord } from './music/chord'
 import { downloadMidi } from './music/midi'
 import { keyCandidates, suggestHome, type Home } from './music/home'
 import { inContext } from './music/suggest'
-import { PROGRESSIONS, progressionChords, progressionClips, type Progression } from './music/progressions'
+import { PROGRESSIONS, progressionClips, progressionMusic, type Progression } from './music/progressions'
 import {
   applyGroove,
   GROOVES,
@@ -458,7 +459,14 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
   const randomGroove = () => setGroove(applyGroove(groove, pickRandom(RANDOM_GROOVES, matchingGroove(groove))))
   /** How long each chord sounds in a preview of several chords: a bar, capped so previews stay quick. */
   const previewSeconds = Math.min((barTicks / TICKS_PER_BEAT) * (60 / bpm), MAX_PREVIEW_SECONDS)
-  const hearProgression = (prog: Progression) => previewProgression(progressionChords(prog, tonic), previewSeconds)
+  /**
+   * Hear a progression once the way it's meant to sound: its own instruments and tempo, in
+   * the current key (pauses the song first, like hearing a session).
+   */
+  const hearProgression = (prog: Progression) => {
+    if (isPlaying) pause()
+    void previewSession(progressionMusic(prog, tonic), { passes: 1 })
+  }
   /**
    * Hear a chord where it would sit in the inspected clip's spot (the chord before, it, the
    * chord after), without touching the track. A fresh chord (an idea) is played in the
