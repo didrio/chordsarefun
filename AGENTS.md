@@ -64,7 +64,7 @@ say what's done, and suggest the next step or command.
 
 Everything is organized around one **Home** (key + mood), in three layers:
 
-- **Song**: Home and Groove, the context everything is measured against.
+- **Song**: Home and Instruments, the context everything is measured against.
 - **Palette**: chord options around home (the inspector's Ideas and Flavors, the
   progression library).
 - **Chord**: one chord up close (the inspector).
@@ -222,7 +222,7 @@ colors, fit dots and plain-language reasons, always relative to Home.
   centered nearest the average of all the other chords (`fitOctave`), in the drag preview
   too. With no other chords it centers around C4 (middle C), not C3.
   Existing chords are never re-voiced automatically (that's the Smooth voicing button).
-- "Progressions" (`ProgressionMenu.tsx`, on the right of the main toolbar; its panel hangs from the toolbar's right edge, like Groove's, so it stays on screen at every width): a dropdown with genre
+- "Progressions" (`ProgressionMenu.tsx`, on the right of the main toolbar; its panel hangs from the toolbar's right edge, like the song popover's, so it stays on screen at every width): a dropdown with genre
   submenus (hover switches genre after a short delay; ←/→ between columns). ~180
   progressions (no two with the same chords in the same mood; a test enforces it),
   curated most common first within each genre (`progressions.ts`), genres and progressions ordered most common first.
@@ -429,7 +429,7 @@ one undo step.
   (e.g. 7/8) accent only the downbeat (`metronomeClicks`).
 - Metronome and the groove (below) are separate: the metronome is never in MIDI.
 
-### Groove: chords, bass, drums (`GrooveMenu.tsx`, `grooves.ts`, `patterns.ts`, `sound.ts`)
+### Instruments (code: groove): chords, bass, drums (`InstrumentsPanel.tsx`, `grooves.ts`, `patterns.ts`, `sound.ts`)
 
 - Three parts, like three DAW tracks: **Chords**, **Bass**, **Drums**. Each has on/off,
   volume and a pattern; chords and bass also pick a sound (synth presets, no samples:
@@ -439,28 +439,33 @@ one undo step.
   **Picking a chord sound resets brightness to that sound's best value**
   (`Instrument.brightness`). Plus **swing** (8th offbeats pushed late, up to triplet
   feel).
-- **Groove presets** (64, most common first, from pop/rock/hip-hop/electronic through
+- **Presets** ("groove presets" in code, 64, most common first, from pop/rock/hip-hop/electronic through
   soul, jazz, blues, country, world, cinematic and classical) set every part's sound,
   pattern, on/off **and volume** (`mix`), plus swing and chord brightness: presets own
   the mix, like loading a DAW preset. Volume/brightness tweaks afterwards don't make it
   "Custom".
 - **Instruments and tempo are part of undo** (T16): every groove change and tempo change is
-  an undo step. Toggles, pickers, presets, the dice and the tempo field use `commit`; the
-  volume, brightness and swing sliders (`Slider` in `GrooveMenu.tsx`) are gestures, so a
+  an undo step. Toggles, pickers, presets, the random buttons and the tempo field use `commit`; the
+  volume, brightness and swing sliders (`Slider` in `InstrumentsPanel.tsx`) are gestures, so a
   whole drag is one step (each arrow-key press one step; grabbing and letting go in place,
   none). Undo while playing changes the sound live.
   Each also has a home genre and natural tempo range (metadata for future smart
-  randomizing; `randomBpm` exists but is unused). The trigger
+  randomizing; `randomBpm` exists but is unused). The preset picker
   shows the matching preset, or "Custom" once a part is changed (`matchingGroove`); no
   two presets may be identical. **Default: Pop** (all parts on); "Just chords" (held
   chords only) stays first in the list.
-- **Random** (`pickRandom`): a die next to Progressions (random progression, never the
-  same twice in a row) and next to Groove (random preset, not Just chords or the 3/4
-  waltz). No "randomize everything" button: two dice are simple enough. Key, tempo
-  and time signature are never randomized.
-- The panel opens under the toolbar at full width: presets left, the three part rows
-  right (native selects with the chosen option's description under them), swing and a
-  Play button at the bottom. Space plays/pauses inside dropdowns and sliders.
+- **Random** (`pickRandom`): one connected group at the right of the transport row, "🎲 Random:
+  Chords | Instruments". Chords loads a random progression (never the same twice in a row);
+  Instruments picks a random preset (not Just chords or the 3/4 waltz). Key, tempo and time
+  signature are never randomized. (T19 adds "Both".)
+- **The Instruments section** (`InstrumentsPanel.tsx`, built on `Panel.tsx`, **under Voicing**; open
+  state saved per session as `instrumentsOpen`, closed by default). Its bar holds a native preset
+  `<select>` grouped by genre (`<optgroup>`; "Just chords" first) that works while collapsed and reads
+  "Custom" when a part was changed; picking a preset never changes the tempo. Opened: three strips side
+  by side (Chords, Bass, Drums: on/off, volume, Sound and Pattern with their descriptions, Chords'
+  brightness; stacked on phones), then Swing. `Panel` takes an `actions` prop for controls in its bar
+  that sit outside the collapse button. Selects ignore Space (they're native: Space opens them);
+  sliders still let Space play/pause.
 - **Patterns are pure** (`renderTrack`): chord patterns (19: whole chord, once per
   bar, every beat, pulsing 8ths, driving 16ths, pop 3-3-2, ballad, strum, broken chord,
   arpeggios up/down/up-down/16ths, offbeat stabs, backbeat stabs, jazz comping, bossa,
@@ -607,14 +612,16 @@ tracks; drums on channel 10 with General MIDI notes) or one part alone.
     group wraps under.
   - **Main toolbar** (dashed line above, solid below), like Ableton's transport bar: Play
     (accent tint), Stop, Loop · Undo, Redo (ghost) · **+ Add chord** (tinted) on the left;
-    Progressions + die and Groove + die on the right (fixed-width triggers, long text truncates).
+    Progressions and the Random group (Chords | Instruments) on the right (fixed-width trigger, long text truncates).
   - **The timeline** (no panel around it) runs the full width; the notes lane lines up with it.
-  - Two panels (`Panel.tsx`):
+  - Three panels (`Panel.tsx`), Voicing, Instruments and the chord details:
     - **Voicing** (collapsible, closed by default, saved per session as `moreOpen`; hint "every
       note and how chords connect"): a row with the notes-lane legend on the left and
       Inversion ↓/↑, Octave ↓/↑ and Smooth voicing on the right (unusable until expanded; the
       ↑/↓ shortcuts still work), then the notes lane, lined up with the track above (the
       lane runs to the panel's left edge, like the track; `--side` is the right column).
+    - **Instruments** (collapsible, closed by default, `instrumentsOpen`; see Instruments above), directly
+      under Voicing.
     - **Chord details** (`section.details-panel`, no title bar): not collapsible; it appears
       when one chord is selected or stepped to, and goes away with the X in its header (or
       when several chords are selected, or none). Selecting a chord again brings it back.
@@ -626,7 +633,7 @@ tracks; drums on channel 10 with General MIDI notes) or one part alone.
   add raw sizes.
 - **Three button weights**: accent (Play, + New, the empty track's "Start from a
   progression"; at most one filled `button.primary` in view), bordered (the default: menus,
-  settings), ghost (dice, undo, redo: no border until hovered).
+  settings), ghost (undo, redo: no border until hovered).
 - Helper text belongs in tooltips and the help popover, not always on screen: panels show
   state, and a sentence appears only when it says something about *this* chord (e.g. the
   slash-chord note).
@@ -641,7 +648,7 @@ tracks; drums on channel 10 with General MIDI notes) or one part alone.
   track edge never touch; this is visual only, the times are unchanged.
 - Clips show chord name, roman numeral, and notes; narrow clips hide details via
   container queries.
-- On/off settings (Loop, Metronome, the Groove parts) are toggle buttons that light up,
+- On/off settings (Loop, Metronome, the Instruments parts) are toggle buttons that light up,
   not checkboxes. Avoid explanatory text that isn't needed; prefer showing state.
 - **Phones (≤ 600px)**, one media block at the end of `index.css`: the song bar is two
   rows that never re-wrap, whatever the key or session is called: the logo icon (its title is
@@ -650,15 +657,15 @@ tracks; drums on channel 10 with General MIDI notes) or one part alone.
   with `order`, and an empty `::after` flex item between the rows forces the break. Long names
   shorten with an ellipsis rather than move anything; the song popover is a one-column sheet.
   The transport row wraps when it doesn't fit (Add chord drops to its own line at 320px). The
-  toolbar wraps (Progressions and Groove share a full-width row), the Voicing bar stays one
+  toolbar wraps (Progressions and the Random group each get a full-width row), the Voicing bar stays one
   line, every dropdown (and the help
   popover) opens as a sheet spanning its bar instead of hanging off its trigger, the
-  Groove panel stacks (presets above, one column per part), the chord details header puts
+  Instruments strips stack (one column, the preset picker stays in the bar), the chord details header puts
   "Type a chord" on its own row, and the tabs scroll sideways instead of wrapping (the
   spot's context is hidden). No horizontal page scroll down to 320px. Touch drags are untested
   on a real device.
 - **Narrow windows and small tablets (≤ 800px)**: the main toolbar wraps, Progressions and
-  Groove sharing a full-width row under the transport (its two halves need ~750px side by
+  Random sharing a full-width row under the transport (its two halves need ~750px side by
   side). Otherwise tablets use the desktop layout. `e2e` checks nine widths from 320 to 1280px
   for sideways overflow and an off-screen Progressions menu, and the phone header's rows.
 
@@ -806,11 +813,11 @@ them up.
   - `TimeSignatureControl.tsx`: preset menu + Custom pickers.
   - `SongMenu.tsx`: the song button and popover; `KeyPanel.tsx` (the key, its left half) and
     `OptionsMenu.tsx` (`TempoInput`, `TimingFields`: time signature, length, grid) fill it.
-  - `Panel.tsx`: the collapsible panel (Voicing). The chord details are a plain
+  - `Panel.tsx`: the collapsible panel (Voicing, Instruments). The chord details are a plain
     `section.details-panel`; their X lives in the inspector's header.
   - `ChordInspector.tsx`, `NotesLane.tsx`, `ProgressionMenu.tsx`,
     `HomeNotice.tsx`, `SessionBrowser.tsx` (the sessions trigger + window),
-    `GrooveMenu.tsx`, `MidiMenu.tsx` (+ `useDropdown.ts`): see Behavior.
+    `InstrumentsPanel.tsx`, `MidiMenu.tsx` (+ `useDropdown.ts`): see Behavior.
     The lane renders inside `Timeline` and follows the playhead via the `--playhead`
     CSS variable set on `.timeline`.
 - `e2e/`: browser smoke tests (`harness.ts` starts Vite + Chrome and seeds tracks; `smoke.e2e.ts`).

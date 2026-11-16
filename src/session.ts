@@ -30,6 +30,7 @@ export const SESSION_KEYS = [
   'groove2',
   'flavor',
   'moreOpen',
+  'instrumentsOpen',
   'selection',
   'inspectorTab',
   'inspected',

@@ -3,7 +3,8 @@ import { ChordInspector, type InspectorTab } from './components/ChordInspector'
 import { NotesLane } from './components/NotesLane'
 import { ProgressionMenu, type ProgressionMenuHandle } from './components/ProgressionMenu'
 import { HomeNotice } from './components/HomeNotice'
-import { GrooveMenu } from './components/GrooveMenu'
+import { DiceIcon } from './components/DiceIcon'
+import { InstrumentsPanel } from './components/InstrumentsPanel'
 import { ArrowIcon } from './components/ArrowIcon'
 import { HelpTip } from './components/HelpTip'
 import { MidiMenu } from './components/MidiMenu'
@@ -162,6 +163,7 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
   const k = (key: string) => prefix + key
   // Hidden by default: powerful, but a lot on first sight.
   const [moreOpen, setMoreOpen] = usePersistentState(k('moreOpen'), false)
+  const [instrumentsOpen, setInstrumentsOpen] = usePersistentState(k('instrumentsOpen'), false)
   const [gridKey, setGridKey] = usePersistentState<GridKey>(k('grid'), '1/4', (v) => GRIDS.some((g) => g.key === v))
   const [loop, setLoop] = usePersistentState(k('loop'), true)
   const [metronomeOn, setMetronomeOn] = usePersistentState(k('metronome'), false)
@@ -675,17 +677,20 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
             highlight={clips.length === 0}
             onUse={loadProgression}
             onPreview={hearProgression}
-            onRandom={randomProgression}
           />
-          <GrooveMenu
-            groove={groove}
-            onChange={setGroove}
-            onSlideStart={track.beginGesture}
-            onSlide={slideGroove}
-            isPlaying={isPlaying}
-            onTogglePlay={togglePlay}
-            onRandom={randomGroove}
-          />
+          {/* All the randomizing in one group (T19 adds "Both"). Key, tempo and time signature are never touched. */}
+          <div className="random-group" role="group" aria-label="Random">
+            <span className="random-label">
+              <DiceIcon />
+              Random
+            </span>
+            <button onClick={randomProgression} title="Replace the chords with a random progression">
+              Chords
+            </button>
+            <button onClick={randomGroove} title="Pick random instruments (a preset)">
+              Instruments
+            </button>
+          </div>
         </div>
       </div>
 
@@ -841,6 +846,15 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
             />
           </div>
         </Panel>
+
+        <InstrumentsPanel
+          groove={groove}
+          open={instrumentsOpen}
+          onToggle={() => setInstrumentsOpen((o) => !o)}
+          onChange={setGroove}
+          onSlideStart={track.beginGesture}
+          onSlide={slideGroove}
+        />
 
         {panelOpen && !multiSelected && inspected ? (
           <section className="panel details-panel" aria-label="Chord details">

@@ -4,9 +4,8 @@ Living, ordered backlog. One ticket per session: `/clear` → `/start Tn` → wo
 session updates this file and picks the next ticket, so each new session starts with a small, clear context.
 Rules: `.claude/skills/wrap/SKILL.md`. Capture ideas any time with `/ticket`.
 
-**Next:** T17 — Instruments section replaces the Groove dropdown (Sonnet · medium · plan off). T18 can go before
-it (they don't touch the same files); T19 needs both. T20–T22 are independent (Sonnet · medium · plan off). If the
-`e2e` CI job is red, fix that first.
+**Next:** T18 — every progression has its own instruments and tempo (Opus · high · plan off); T19 needs it. T20–T22
+are independent (Sonnet · medium · plan off). If the `e2e` CI job is red, fix that first.
 
 ## In progress
 
@@ -40,33 +39,6 @@ ideas (menus close after one pick, and trying ideas one after another is the cor
 and plays it in place, so the card ▶ goes (reverses T2's decision). Every ticket keeps phones working (the `e2e`
 widths), updates `AGENTS.md` (including the design decisions it reverses) and adds tests next to changed rules.
 T20–T22 don't depend on each other or on T16–T19.
-
-### T17 — Instruments section replaces the Groove dropdown
-
-- **Status:** ready (after T15; best after T16)
-- **Session:** Sonnet · medium effort · plan mode off
-- **Goal:** Editing your instruments gets its own place, a collapsible "Instruments" section like Voicing, with the
-  presets as a simple dropdown; randomizing moves into one group in the transport row.
-- **Done when:**
-  - [ ] New `InstrumentsPanel.tsx` using `Panel.tsx`, below Voicing; open state saved per session (new key in
-        `SESSION_KEYS`, closed by default). Its header works while collapsed: a native preset `<select>` grouped
-        by genre (`<optgroup>`, from `GroovePreset.genre`), reading "Custom" when a part was changed
-        (`matchingGroove`). Picking a preset never changes the tempo.
-  - [ ] Body: three strips side by side (Chords, Bass, Drums: on/off, volume, Sound and Pattern with their
-        descriptions, Chords' brightness; reuse `Part` / `Picker` from `GrooveMenu.tsx`), then Swing. Stacks on
-        phones.
-  - [ ] The Groove trigger, its panel and Play button, and `GrooveMenu.tsx` are gone.
-  - [ ] Transport row, right: `🎲 Random: Chords · Instruments`, one connected group (the two dice move there;
-        `randomProgression` and `randomGroove` in `App.tsx`). T19 adds "Both".
-  - [ ] Wording: "Instruments" everywhere on screen ("Groove" gone from labels, tooltips, the help popover).
-  - [ ] `AGENTS.md`: the Groove section, Random, Visual design, the layout order.
-- **Context:** The chord-details panel is still the old one until T22 (it sits below Voicing today); keep the order
-  Track → (details) → Voicing → Instruments in mind. Space plays/pauses inside dropdowns and sliders
-  (`App.tsx`'s key handler); keep that for the new selects. Since T16 every groove change is an undo step: reuse
-  `Slider` from `GrooveMenu.tsx` (pointer down / key down → `onSlideStart` = `track.beginGesture`, moves →
-  `onSlide` = `slideGroove` in `App.tsx`) so a drag stays one step, and `setGroove` (commit) for the rest; move
-  `Slider`, `Part` and `Picker` into the new file. The e2e case "a whole volume drag is one undo step" opens the
-  Groove dropdown: point it at the new panel.
 
 ### T18 — Every progression has its own instruments and tempo
 
@@ -201,6 +173,7 @@ T20–T22 don't depend on each other or on T16–T19.
 
 ## Done
 
+- T17 — Instruments section replaces the Groove dropdown — 2026-11-16 — `InstrumentsPanel` (under Voicing, closed by default, `instrumentsOpen`): preset `<select>` by genre in its bar (works collapsed, "Custom" when changed, never touches tempo), three strips + swing; `Panel` gained an `actions` slot; `GrooveMenu` and both dice gone, replaced by one `🎲 Random: Chords | Instruments` group (T19 adds Both); help text says Instruments. Deviation: Space doesn't play/pause inside the new native selects (it never did in the old ones either: the key handler skips selects, and Space opens them natively); sliders still do. Owner to look at the strips and the phone layout (Random gets its own row).
 - T16 — Instruments and tempo join undo — 2026-11-16 — `Track` now holds `groove` and `bpm` (all undoable; sliders
   one step per drag via `Slider` gestures, no-op changes no step via `withMusic`/`sameGroove`); old sessions'
   history gets their saved `groove2`/`bpm` on open (`legacyMusic` → `migrateTrack`), `sessionMusic` reads the

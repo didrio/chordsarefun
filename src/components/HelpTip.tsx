@@ -77,7 +77,7 @@ export function HelpTip() {
             hold {COPY_KEY} to copy.
           </li>
           <li>
-            <b>Choose a Groove</b> for the chords, bass and drums, then press Play. Tempo, time signature, length,
+            <b>Choose Instruments</b> for the chords, bass and drums (the Instruments bar under the track), then press Play. Tempo, time signature, length,
             grid and the metronome are in the same song button as the key.
           </li>
           <li>

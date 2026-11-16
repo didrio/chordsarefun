@@ -243,11 +243,23 @@ describe('undo covers instruments and tempo', () => {
     expect(await bpm.textContent()).toBe(before)
   })
 
+  it('a preset picked in the collapsed Instruments bar keeps the tempo; one ⌘Z undoes it', async () => {
+    const p = await start(full())
+    const bpm = p.locator('.song-menu .trigger-bpm')
+    const bpmBefore = await bpm.textContent()
+    const select = p.locator('select[aria-label="Instrument preset"]')
+    const before = await select.inputValue()
+    await select.selectOption({ label: 'Just chords' })
+    expect(await select.inputValue()).toBe('just')
+    expect(await bpm.textContent()).toBe(bpmBefore)
+    await undoKey(p)
+    expect(await select.inputValue()).toBe(before)
+  })
+
   it('a whole volume drag is one undo step', async () => {
     const p = await start(full())
-    const openGroove = () => p.locator('.groove-menu .dropdown-trigger').click()
     const volume = p.locator('input[aria-label="Chords volume"]')
-    await openGroove()
+    await p.locator('.instruments-panel .panel-bar').click()
     const before = await volume.inputValue()
     const box = await volume.boundingBox()
     if (!box) throw new Error('No slider')
@@ -255,7 +267,6 @@ describe('undo covers instruments and tempo', () => {
     await drag(p, [box.x + box.width * 0.9, y], [box.x + box.width * 0.1, y])
     expect(Number(await volume.inputValue())).toBeLessThan(Number(before))
     await undoKey(p)
-    await openGroove()
     expect(await volume.inputValue()).toBe(before)
   })
 })

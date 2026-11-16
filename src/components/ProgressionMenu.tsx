@@ -3,15 +3,12 @@ import { chordName } from '../music/chord'
 import { GENRES, PROGRESSIONS, progressionChords, type Genre, type Progression } from '../music/progressions'
 import { keyName, rootDegree } from '../music/theory'
 import { UNDO_KEY } from '../platform'
-import { DiceIcon } from './DiceIcon'
 import { arrowNav, useDropdown } from './useDropdown'
 
 type Props = {
   tonic: string
   onUse: (prog: Progression) => void
   onPreview: (prog: Progression) => void
-  /** Load a random progression. */
-  onRandom: () => void
   /** Stand out as the place to start (the one accent button, while the track is empty). */
   highlight?: boolean
   /** Lets the empty track's "Start from a progression" open this menu. */
@@ -27,7 +24,7 @@ const HOVER_DELAY_MS = 120
  * "Progressions": genres on the left, that genre's progressions (in the
  * current key) on the right. Clicking one replaces the track; ▶ previews it.
  */
-export function ProgressionMenu({ tonic, onUse, onPreview, onRandom, highlight = false, ref }: Props) {
+export function ProgressionMenu({ tonic, onUse, onPreview, highlight = false, ref }: Props) {
   const { open, setOpen, rootRef } = useDropdown()
   useImperativeHandle(ref, () => ({ open: () => setOpen(true) }), [setOpen])
   const [genre, setGenre] = useState<Genre>(GENRES[0])
@@ -72,9 +69,6 @@ export function ProgressionMenu({ tonic, onUse, onPreview, onRandom, highlight =
         <span className="caret" aria-hidden>
           ▾
         </span>
-      </button>
-      <button className="icon dice" aria-label="Random progression" title="Random progression" onClick={onRandom}>
-        <DiceIcon />
       </button>
       {open && (
         <div className="dropdown-panel progression-panel" role="menu">
