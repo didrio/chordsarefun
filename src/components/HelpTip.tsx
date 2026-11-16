@@ -60,11 +60,11 @@ export function HelpTip() {
         <h2>How it works</h2>
         <ol>
           <li>
-            <b>Pick a Key</b> (top right): a home note and a mood. Chords are colored by how well they fit it, and
+            <b>Pick a Key</b> (the song button, top right): a home note and a mood. Chords are colored by how well they fit it, and
             anything outside it is explained, never forbidden.
           </li>
           <li>
-            <b>Add chords.</b> Start from a <b>Progression</b> (the dice picks one for you), or press <b>+</b> (or
+            <b>Add chords.</b> Start from a <b>Progression</b> (the dice picks one for you), or press <b>Add chord</b> (or
             double-click empty space on the track) to add a spot and pick one of its ideas.
           </li>
           <li>
@@ -77,8 +77,8 @@ export function HelpTip() {
             hold {COPY_KEY} to copy.
           </li>
           <li>
-            <b>Choose a Groove</b> for the chords, bass and drums, then press Play. Tempo is next to the key; time
-            signature, length and grid are under <b>4/4 · 4 bars</b>.
+            <b>Choose a Groove</b> for the chords, bass and drums, then press Play. Tempo, time signature, length,
+            grid and the metronome are in the same song button as the key.
           </li>
           <li>
             <b>Keep it.</b> Everything saves as you go. The session name at the top opens all your sessions (folders,

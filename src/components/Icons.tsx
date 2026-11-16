@@ -52,3 +52,14 @@ export const RedoIcon = () => (
     <path d="M11.5 3.5 15 7l-3.5 3.5M14.5 7H7a3.5 3.5 0 0 0 0 7h3" />
   </Svg>
 )
+
+/** A simple metronome glyph (pyramid body and pendulum). */
+export function MetronomeIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round">
+      <path d="M5.5 1.5h5l3 13h-11z" />
+      <path d="M8 11 12 3.5" strokeLinecap="round" />
+      <path d="M3.6 10.5h8.8" />
+    </svg>
+  )
+}

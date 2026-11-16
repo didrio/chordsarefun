@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { BAR_OPTIONS, GRIDS, sigLabel, type GridKey, type TimeSignature } from '../music/timeline'
 import { TimeSignatureControl } from './TimeSignatureControl'
-import { useDropdown } from './useDropdown'
 
 type TimingProps = {
   sig: TimeSignature
@@ -12,54 +11,37 @@ type TimingProps = {
   onGrid: (key: GridKey) => void
 }
 
-/**
- * "4/4 · 4 bars" in the song bar: time signature, length and grid in one small popover,
- * one setting per row. The trigger shows the two you read most, so you rarely open it.
- */
-export function TimingMenu({ sig, onSig, bars, onBars, gridKey, onGrid }: TimingProps) {
-  const { open, setOpen, rootRef } = useDropdown()
+/** "4/4 · 4 bars": what the song's length and meter read like in words. */
+export const timingLabel = (sig: TimeSignature, bars: number) => `${sigLabel(sig)} · ${bars} ${bars === 1 ? 'bar' : 'bars'}`
+
+/** Time signature, length and grid, one setting per row (the body of the song popover's right column). */
+export function TimingFields({ sig, onSig, bars, onBars, gridKey, onGrid }: TimingProps) {
   return (
-    <div className="dropdown timing-menu" ref={rootRef}>
-      <button
-        className="dropdown-trigger"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        title="Time signature, length and grid"
-        onClick={() => setOpen((o) => !o)}
-      >
-        {sigLabel(sig)} · {bars} {bars === 1 ? 'bar' : 'bars'}
-        <span className="caret" aria-hidden>
-          ▾
-        </span>
-      </button>
-      {open && (
-        <div className="dropdown-panel timing-panel" role="dialog" aria-label="Time, length and grid">
-          <span className="field field-time">
-            <TimeSignatureControl sig={sig} onChange={onSig} />
-          </span>
-          <label className="field">
-            Length
-            <select value={bars} onChange={(e) => onBars(Number(e.target.value))}>
-              {BAR_OPTIONS.map((n) => (
-                <option key={n} value={n}>
-                  {n} {n === 1 ? 'bar' : 'bars'}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field" title="What chords snap to when you drag or resize them">
-            Grid
-            <select value={gridKey} onChange={(e) => onGrid(e.target.value as GridKey)}>
-              {GRIDS.map((g) => (
-                <option key={g.key} value={g.key}>
-                  {g.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      )}
-    </div>
+    <>
+      <span className="field field-time">
+        <TimeSignatureControl sig={sig} onChange={onSig} />
+      </span>
+      <label className="field">
+        Length
+        <select value={bars} onChange={(e) => onBars(Number(e.target.value))}>
+          {BAR_OPTIONS.map((n) => (
+            <option key={n} value={n}>
+              {n} {n === 1 ? 'bar' : 'bars'}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="field" title="What chords snap to when you drag or resize them">
+        Grid
+        <select value={gridKey} onChange={(e) => onGrid(e.target.value as GridKey)}>
+          {GRIDS.map((g) => (
+            <option key={g.key} value={g.key}>
+              {g.label}
+            </option>
+          ))}
+        </select>
+      </label>
+    </>
   )
 }
 

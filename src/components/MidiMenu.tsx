@@ -27,8 +27,8 @@ export function MidiMenu({ groove, disabled, onDownload }: Props) {
   }
   return (
     <div className="dropdown midi-menu" ref={rootRef}>
-      <button className="dropdown-trigger" aria-haspopup="menu" aria-expanded={open} disabled={disabled} onClick={() => setOpen((o) => !o)}>
-        Download MIDI
+      <button className="dropdown-trigger" aria-haspopup="menu" aria-expanded={open} disabled={disabled} aria-label="Download MIDI" title="Download MIDI" onClick={() => setOpen((o) => !o)}>
+        <span aria-hidden>⤓</span> MIDI
         <span className="caret" aria-hidden>
           ▾
         </span>

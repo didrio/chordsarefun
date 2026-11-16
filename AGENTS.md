@@ -246,7 +246,7 @@ colors, fit dots and plain-language reasons, always relative to Home.
 - **Wording: users never see the word "clip".** In the UI (labels, tooltips, the how-to)
   it's always "chord"; an empty one is a "spot" ("Pick a chord", "blank spot", "empty
   spot"). "Clip" is only our internal name in code and in this file.
-- **+ New** (tinted + button above Undo, right of the track; also "Add a chord" on an
+- **+ Add chord** (tinted, labeled, in the transport row after Undo/Redo; also "Add a chord" on an
   empty track; `addNextEmptyClip`) adds an empty spot in the
   first gap on the track, never longer than a bar even if the gap is bigger. With no gap
   it goes at the end, taking up to half of (and shortening) the last chord. It ignores
@@ -361,11 +361,11 @@ one undo step.
 
 ### Grid, time signature, length
 
-- Tempo (`TempoInput`, in the song bar next to the key): typed freely; a value in range (30–300) applies as soon as it's
+- Tempo (`TempoInput`, in the song popover): typed freely; a value in range (30–300) applies as soon as it's
   complete (so typing 127 works), and on blur/Enter out-of-range values are clamped and
   unreadable ones restored.
-- Time signature, length and grid live in one small popover in the song bar
-  (`TimingMenu`), whose trigger reads "4/4 · 4 bars".
+- Time signature, length and grid are rows of the song popover (`SongMenu`, `TimingFields` in
+  `OptionsMenu.tsx`); the song button reads "C minor · 127 BPM · 4/4" (the length is only in the popover).
 - Grid: 1 bar, 1/2, 1/4, 1/8, 1/16, Off. "1 bar" = the current bar length. The grid
   **restarts at every bar line** (`snap(..., barTicks)`), so odd meters stay aligned;
   bar lines are always snap points. Grid Off draws beat lines dotted.
@@ -375,11 +375,12 @@ one undo step.
   one per bar. Part of undo.
 - Length change trims/drops clips past the new end (`fitToLength`). Part of undo.
 
-### Home (`home.ts`, `HomeMenu.tsx`, `HomeNotice.tsx`)
+### Home (`home.ts`, `KeyPanel.tsx`, `HomeNotice.tsx`)
 
 - **On screen it's called "Key"** (the word people walk in knowing); "home" is how the
   app explains it ("C is home", "Home note") and what the code and this file call it.
-  One "Key C Major" dropdown in the song bar (`HomeMenu.tsx`): 12 "Home note" buttons
+  The key is the left half of the song popover (`KeyPanel.tsx`, opened from the "C minor · 127 BPM ·
+  4/4" button; the suggestion dot sits on that button): detected keys, 12 "Home note" buttons
   over the moods (most common first: Major, Minor, Dorian, Mixolydian, Lydian, Phrygian,
   Locrian), each described in plain words (`MODE_INFO`). Picking a note keeps the menu
   open; picking a mood closes it.
@@ -422,7 +423,7 @@ one undo step.
   Click/drag anywhere on the ruler to move it (only the triangle shows a pointer
   cursor). Clicking empty track space moves it there; clicking a clip doesn't move it. Snaps to the grid (free with grid Off or ⌘/Alt). ← / → move it one
   grid step when nothing is selected (`stepGrid`, never skips bar lines).
-- Metronome (toggle + volume slider, M): clicks every beat of the time signature
+- Metronome (toggle + volume slider in the song popover, M anywhere): clicks every beat of the time signature
   (quarters in x/4, eighths in x/8), accented on the 1; compound meters (6/8, 9/8,
   12/8, x/16 equivalents) also get a lighter accent every 3 beats; irregular meters
   (e.g. 7/8) accent only the downbeat (`metronomeClicks`).
@@ -589,13 +590,14 @@ tracks; drums on channel 10 with General MIDI notes) or one part alone.
 - Dark UI. The rule is **the song on top, then the chords, then one chord**. Top to bottom:
   - **Song bar** (`header.song-bar`): the piano icon + "create a chord progression", the (i)
     help tooltip headed "chords are fun", the sessions trigger (opens the sessions window; reads like the document's
-    name); right: **Key C Major ▾**, the tempo field (BPM), **4/4 · 4 bars ▾** (time,
-    length, grid) and Download MIDI. On narrow windows the right group wraps under.
+    name); right: the **song button** "C minor · 127 BPM · 4/4 ▾" (`SongMenu.tsx`: its popover holds
+    the Key on the left and tempo, time signature, length, grid and the metronome on the right; it
+    scrolls inside itself on short windows) and a compact "⤓ MIDI". On narrow windows the right
+    group wraps under.
   - **Main toolbar** (dashed line above, solid below), like Ableton's transport bar: Play
-    (accent tint), Stop, Loop, metronome + volume on the left; Progressions + die and
-    Groove + die on the right (fixed-width triggers, long text truncates).
-  - **The timeline** (no panel around it, full width) with icon-only buttons stretched to
-    its height on the right: + New (new chord, tinted), Undo, Redo.
+    (accent tint), Stop, Loop · Undo, Redo (ghost) · **+ Add chord** (tinted) on the left;
+    Progressions + die and Groove + die on the right (fixed-width triggers, long text truncates).
+  - **The timeline** (no panel around it) runs the full width; the notes lane lines up with it.
   - Two panels (`Panel.tsx`):
     - **Voicing** (collapsible, closed by default, saved per session as `moreOpen`; hint "every
       note and how chords connect"): a row with the notes-lane legend on the left and
@@ -630,14 +632,13 @@ tracks; drums on channel 10 with General MIDI notes) or one part alone.
   container queries.
 - On/off settings (Loop, Metronome, the Groove parts) are toggle buttons that light up,
   not checkboxes. Avoid explanatory text that isn't needed; prefer showing state.
-- **Phones (≤ 600px)**, one media block at the end of `index.css`: the song bar is three
-  rows that never re-wrap, whatever the key or session is called: the logo; the session (takes
-  the room left) and Download MIDI; then key (takes the room left), tempo and timing. To get
-  there `.song-settings` becomes `display: contents` and its items are placed with `order`; the
-  session's flex-basis is "the row minus MIDI", which forces the break after MIDI; "BPM" sits
-  inside the tempo field (`.tempo-unit`); and the "Key" label hides while the key button is
-  narrower than 11rem (a container query: about every phone under 400px), so the longest name
-  ("F# Mixolydian") fits. Long names shorten with an ellipsis rather than move anything. The
+- **Phones (≤ 600px)**, one media block at the end of `index.css`: the song bar is two
+  rows that never re-wrap, whatever the key or session is called: the logo icon (its title is
+  visually hidden) and the session (takes the room left); then the song button (takes the room
+  left) and MIDI. To get there `.song-settings` becomes `display: contents`, its items are placed
+  with `order`, and an empty `::after` flex item between the rows forces the break. Long names
+  shorten with an ellipsis rather than move anything; the song popover is a one-column sheet.
+  The transport row wraps when it doesn't fit (Add chord drops to its own line at 320px). The
   toolbar wraps (Progressions and Groove share a full-width row), the Voicing bar stays one
   line, every dropdown (and the help
   popover) opens as a sheet spanning its bar instead of hanging off its trigger, the
@@ -682,9 +683,9 @@ These were discussed and chosen deliberately; don't "fix" them without asking.
   rather than chosen per clip type.
 - **"Key" on screen, "home" in explanations and code.** Nobody walks in knowing the word
   "home"; everyone knows "key". The Home paradigm itself is unchanged.
-- **Transport in a top bar, not beside the track** (Ableton puts play, loop, metronome and
-  tempo together); only + New, Undo and Redo stay beside the track. Changed in the
-  redesign that also split the old Config menu into Key, tempo and "4/4 · 4 bars".
+- **Transport in a top bar, not beside the track** (Ableton puts play, loop and undo
+  together); nothing sits beside the track any more, so it gets the full width. Undo, Redo
+  and a labeled "+ Add chord" joined Play/Stop/Loop (T15); the metronome moved into the song popover.
 - **Ideas are clicked in, not dragged**: an empty clip's target is obvious, and the
   inspector keeps showing ideas so trying several is one click each (undo restores).
 - **Sessions autosave; naming is optional**, like a DAW project that never loses
@@ -703,12 +704,12 @@ These were discussed and chosen deliberately; don't "fix" them without asking.
 - **Chords are descriptions, not note lists**: keeps names readable, lets key changes
   keep roles, makes every edit one clear change. Note edits are pitch-class based; a
   name can't capture every voicing (Cadd9 with the D moved down still reads "Cadd9").
-- **Song settings in the song bar** (`HomeMenu.tsx` for the key; `OptionsMenu.tsx` has
-  `TempoInput` and `TimingMenu` for time/length/grid): the key and tempo are read and
-  changed often, so they're always visible; time signature, length and grid are rarer, so
-  they share one small popover whose trigger shows the two you read most.
-- **Timeline and transport buttons are icons only** (tooltips explain them), so the
-  right-hand column stays narrow.
+- **Song settings behind one button that shows their values** (`SongMenu.tsx`: `KeyPanel.tsx`,
+  `TempoInput` and `TimingFields` in `OptionsMenu.tsx`): the key, tempo and meter are read
+  often and changed rarely, so one "C minor · 127 BPM · 4/4" button replaces five controls and
+  the rows below stay still. The owner chose a button that shows values over an icon.
+- **Transport buttons are icons only** (tooltips explain them); "+ Add chord" is the one
+  with a label, since adding a chord is the main verb.
 - **Custom dropdowns only where native selects can't show enough** (descriptions,
   submenus); simple value pickers (Key, Length, Grid) stay native.
 - **⌘D reuses the copy-drag rule** (a copy dropped on the last chord's right edge)
@@ -791,11 +792,11 @@ them up.
   - `useChordDrag.ts`: pointer drag for clips (click vs drag threshold, Esc cancel,
     click modifiers, live copy/free modifiers).
   - `TimeSignatureControl.tsx`: preset menu + Custom pickers.
-  - `OptionsMenu.tsx`: `TempoInput` (the song bar's tempo field) and `TimingMenu`
-    ("4/4 · 4 bars": time signature, length, grid).
+  - `SongMenu.tsx`: the song button and popover; `KeyPanel.tsx` (the key, its left half) and
+    `OptionsMenu.tsx` (`TempoInput`, `TimingFields`: time signature, length, grid) fill it.
   - `Panel.tsx`: the collapsible panel (Voicing). The chord details are a plain
     `section.details-panel`; their X lives in the inspector's header.
-  - `ChordInspector.tsx`, `NotesLane.tsx`, `ProgressionMenu.tsx`, `HomeMenu.tsx`,
+  - `ChordInspector.tsx`, `NotesLane.tsx`, `ProgressionMenu.tsx`,
     `HomeNotice.tsx`, `SessionBrowser.tsx` (the sessions trigger + window),
     `GrooveMenu.tsx`, `MidiMenu.tsx` (+ `useDropdown.ts`): see Behavior.
     The lane renders inside `Timeline` and follows the playhead via the `--playhead`
@@ -829,7 +830,7 @@ them up.
   tried), seeds `chords:v1:track` in localStorage (`seedTrack` in `e2e/harness.ts`) and reads
   clips from the DOM. Add a case there when a new pointer or keyboard flow lands. It also
   checks the layout at nine widths (no sideways scroll, the Progressions menu on screen) and
-  that the phone header keeps its three rows.
+  that the phone header keeps its two rows.
 - For UI: run the dev server and drive the installed Chrome headlessly, e.g.
   `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new
   --screenshot=out.png --window-size=1280,800 http://localhost:5173/`, or a

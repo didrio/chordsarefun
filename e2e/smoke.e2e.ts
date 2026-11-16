@@ -140,17 +140,23 @@ describe('layout at every width', () => {
 })
 
 describe('phone header', () => {
-  it('is three rows that never re-wrap: logo, session + MIDI, key + tempo + timing', async () => {
+  it('is two rows that never re-wrap: logo + session, then the song button + MIDI', async () => {
     const p = await start(full())
     for (const width of [320, 360, 375, 430, 600]) {
       await p.setViewportSize({ width, height: 800 })
       const top = async (selector: string) => Math.round((await p.locator(selector).boundingBox())!.y)
-      const [session, midi] = [await top('.session-trigger'), await top('.midi-menu .dropdown-trigger')]
-      const [key, tempo, timing] = [await top('.home-menu .dropdown-trigger'), await top('.tempo-field'), await top('.timing-menu .dropdown-trigger')]
-      expect(Math.abs(session - midi), `${width}px: session and MIDI share a row`).toBeLessThan(4)
-      expect(Math.abs(key - tempo), `${width}px: key and tempo share a row`).toBeLessThan(4)
-      expect(Math.abs(key - timing), `${width}px: key and timing share a row`).toBeLessThan(4)
-      expect(key, `${width}px: the key row is under the session row`).toBeGreaterThan(session + 20)
+      const [logo, session] = [await top('.logo-icon'), await top('.session-trigger')]
+      const [song, midi] = [await top('.song-menu .dropdown-trigger'), await top('.midi-menu .dropdown-trigger')]
+      expect(Math.abs(logo - session), `${width}px: logo and session share a row`).toBeLessThan(12)
+      expect(Math.abs(song - midi), `${width}px: song button and MIDI share a row`).toBeLessThan(4)
+      expect(song, `${width}px: the song row is under the session row`).toBeGreaterThan(session + 20)
+      // The popover opens as a sheet that stays on screen.
+      await p.locator('.song-menu .dropdown-trigger').click()
+      const panel = await p.locator('.song-panel').boundingBox()
+      if (!panel) throw new Error('No song popover')
+      expect(panel.x, `${width}px: popover on screen (left)`).toBeGreaterThanOrEqual(0)
+      expect(panel.x + panel.width, `${width}px: popover on screen (right)`).toBeLessThanOrEqual(width)
+      await p.keyboard.press('Escape')
     }
   })
 })
@@ -171,7 +177,7 @@ describe('key-change notice', () => {
     await p.mouse.click(...(await pointIn(p, 1, 0.5)))
     const top = () => p.evaluate<number>("document.querySelector('.track').getBoundingClientRect().top")
     const before = await top()
-    await p.locator('.home-menu .dropdown-trigger').click()
+    await p.locator('.song-menu .dropdown-trigger').click()
     await p.locator('.home-keys button', { hasText: /^D$/ }).click()
     await p.keyboard.press('Escape')
     const notice = p.locator('.home-notice')
@@ -191,12 +197,32 @@ describe('key-change notice', () => {
 describe('detect key', () => {
   it('lists keys from the chords and uses one without offering to move them', async () => {
     const p = await start(full())
-    await p.locator('.home-menu .dropdown-trigger').click()
+    await p.locator('.song-menu .dropdown-trigger').click()
     const items = p.locator('.home-detect-item .menu-title')
     expect(await items.allTextContents()).toEqual(['C MajorBest matchCurrent', 'A Minor'])
     await items.nth(1).click()
-    expect(await p.locator('.home-menu .trigger-value').textContent()).toBe('A Minor')
+    expect(await p.locator('.song-menu .trigger-value').textContent()).toContain('A minor')
     expect(await p.locator('.home-notice').count()).toBe(0)
+  })
+})
+
+describe('song popover', () => {
+  it('changes the tempo and toggles the metronome, with the trigger showing the values', async () => {
+    const p = await start(full())
+    await p.locator('.song-menu .dropdown-trigger').click()
+    await p.locator('.song-panel input[aria-label="Tempo (BPM)"]').fill('93')
+    const metronome = p.locator('.song-panel button[aria-label="Metronome"]')
+    expect(await metronome.getAttribute('aria-pressed')).toBe('false')
+    await metronome.click()
+    expect(await metronome.getAttribute('aria-pressed')).toBe('true')
+    await p.keyboard.press('Escape')
+    expect(await p.locator('.song-menu .trigger-bpm').textContent()).toBe('93 BPM')
+    // M still toggles it from the keyboard.
+    // Shortcuts ignore keys while a dropdown has focus, so let go of the trigger first.
+    await p.evaluate('document.activeElement.blur()')
+    await p.keyboard.press('m')
+    await p.locator('.song-menu .dropdown-trigger').click()
+    expect(await metronome.getAttribute('aria-pressed')).toBe('false')
   })
 })
 

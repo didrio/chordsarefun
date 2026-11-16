@@ -7,8 +7,7 @@ import { GrooveMenu } from './components/GrooveMenu'
 import { ArrowIcon } from './components/ArrowIcon'
 import { HelpTip } from './components/HelpTip'
 import { MidiMenu } from './components/MidiMenu'
-import { HomeMenu } from './components/HomeMenu'
-import { TempoInput, TimingMenu } from './components/OptionsMenu'
+import { SongMenu } from './components/SongMenu'
 import { Panel } from './components/Panel'
 import { LoopIcon, PauseIcon, PlayIcon, PlusIcon, RedoIcon, StopIcon, UndoIcon } from './components/Icons'
 import { SessionMenu } from './components/SessionBrowser'
@@ -614,18 +613,28 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
         </div>
         {sessionMenu(() => isPlaying && pause())}
         <div className="song-settings">
-          <HomeMenu
+          <SongMenu
             home={{ tonic, mode }}
             suggestion={homeSuggestion}
             detected={detectedKeys}
             onChange={changeHome}
             onDetect={applyDetectedKey}
+            bpm={bpm}
+            onBpm={setBpm}
+            sig={sig}
+            onSig={changeSig}
+            bars={bars}
+            onBars={changeBars}
+            gridKey={gridKey}
+            onGrid={setGridKey}
+            metronomeOn={metronomeOn}
+            onMetronome={() => {
+              ensureAudio()
+              setMetronomeOn((m) => !m)
+            }}
+            metronomeVolume={metronomeVolume}
+            onMetronomeVolume={setMetronomeVolume}
           />
-          <label className="tempo-field" title="Tempo in beats (quarter notes) per minute">
-            <TempoInput bpm={bpm} onBpm={setBpm} />
-            <span className="tempo-unit">BPM</span>
-          </label>
-          <TimingMenu sig={sig} onSig={changeSig} bars={bars} onBars={changeBars} gridKey={gridKey} onGrid={setGridKey} />
           <MidiMenu
             groove={groove}
             disabled={chordClips(clips).length === 0}
@@ -646,31 +655,18 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
           <button className="toggle icon" aria-pressed={loop} onClick={() => setLoop((l) => !l)} aria-label="Loop" title="Loop (L)">
             <LoopIcon />
           </button>
-          <span className="metronome">
-            <button
-              className="toggle icon"
-              aria-pressed={metronomeOn}
-              aria-label="Metronome"
-              onClick={() => {
-                ensureAudio()
-                setMetronomeOn((m) => !m)
-              }}
-              title="Metronome (M)"
-            >
-              <MetronomeIcon />
-            </button>
-            <input
-              type="range"
-              className="volume"
-              min={0}
-              max={1}
-              step={0.01}
-              value={metronomeVolume}
-              onChange={(e) => setMetronomeVolume(Number(e.target.value))}
-              aria-label="Metronome volume"
-              title="Metronome volume"
-            />
-          </span>
+          <span className="transport-gap" aria-hidden />
+          <button className="icon ghost" onClick={track.undo} disabled={!track.canUndo} aria-label="Undo" title="Undo (⌘Z / Ctrl+Z)">
+            <UndoIcon />
+          </button>
+          <button className="icon ghost" onClick={track.redo} disabled={!track.canRedo} aria-label="Redo" title="Redo (⇧⌘Z / Ctrl+Y)">
+            <RedoIcon />
+          </button>
+          <span className="transport-gap" aria-hidden />
+          <button className="tinted add-chord" onClick={newChord} title="Add a chord: an empty spot in the first free space (up to a bar), then pick its chord">
+            <PlusIcon />
+            Add chord
+          </button>
         </div>
         <div className="toolbar-section">
           <ProgressionMenu
@@ -760,17 +756,6 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
               select({ ids: [id], anchor: id })
             }}
           />
-              <div className="side-buttons">
-              <button className="tinted" onClick={newChord} aria-label="New chord" title="New chord: add an empty spot in the first free space (up to a bar), then pick its chord">
-                <PlusIcon />
-              </button>
-              <button onClick={track.undo} disabled={!track.canUndo} aria-label="Undo" title="Undo (⌘Z / Ctrl+Z)">
-                <UndoIcon />
-              </button>
-              <button onClick={track.redo} disabled={!track.canRedo} aria-label="Redo" title="Redo (⇧⌘Z / Ctrl+Y)">
-                <RedoIcon />
-              </button>
-            </div>
           </div>
 
         <Panel
@@ -908,17 +893,5 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
         </div>
       )}
     </main>
-  )
-}
-
-
-/** A simple metronome glyph (pyramid body and pendulum). */
-function MetronomeIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round">
-      <path d="M5.5 1.5h5l3 13h-11z" />
-      <path d="M8 11 12 3.5" strokeLinecap="round" />
-      <path d="M3.6 10.5h8.8" />
-    </svg>
   )
 }
