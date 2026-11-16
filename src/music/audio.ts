@@ -294,16 +294,15 @@ export type SessionMusic = {
   groove: GrooveSettings
 }
 
-/** How long a session preview lets the last notes ring before its sound graph is thrown away. */
-const PREVIEW_TAIL_SECONDS = 2
-
 /**
- * Hear another session exactly as its Play button plays it, once (no loop): its tempo,
- * time signature, patterns, swing, sounds, brightness, mix and parts on/off, without the
- * metronome. It plays on its own sound graph built from that session's groove (so the
- * open session's sounds are untouched), with every note scheduled up front from
- * renderTrack. Replaces any running preview. `onChord` is called as each chord starts
- * (index into chordTimes), `onEnd` when the music ends or the preview is stopped.
+ * Hear another session exactly as its Play button plays it, looping over the whole track
+ * until stopped: its tempo, time signature, patterns, swing, sounds, brightness, mix and
+ * parts on/off, without the metronome. It plays on its own sound graph built from that
+ * session's groove (so the open session's sounds are untouched). Each pass's notes (from
+ * renderTrack) are scheduled on the audio clock when the pass before starts, so loops are
+ * seamless and there's always a pass queued ahead. Replaces any running preview; stopped
+ * by stopPreview (■, another preview, silenceAll). `onChord` is called as each chord starts
+ * (index into chordTimes), `onEnd` when the preview is stopped.
  */
 export async function previewSession(
   music: SessionMusic,
@@ -327,21 +326,30 @@ export async function previewSession(
 
   const rendered = renderTrack(clips, totalTicks, sig, arrangementOf(settings))
   const byTick = <T extends { tick: number }>(events: T[]) => [...events].sort((a, b) => a.tick - b.tick)
-  const start = Tone.now() + 0.05
-  if (settings.chords.on) for (const e of byTick(rendered.chords)) playNote(chords, e, start + sec(e.tick), sec(e.duration))
-  if (settings.bass.on) for (const e of byTick(rendered.bass)) playNote(bass, e, start + sec(e.tick), sec(e.duration))
-  if (settings.drums.on) for (const e of byTick(rendered.drums)) g.kit.trigger(e.voice, start + sec(e.tick), e.velocity)
+  const chordEvents = settings.chords.on ? byTick(rendered.chords) : []
+  const bassEvents = settings.bass.on ? byTick(rendered.bass) : []
+  const drumEvents = settings.drums.on ? byTick(rendered.drums) : []
+  const times = chordTimes(clips, bpm)
+  const loopSeconds = sec(totalTicks)
+  const first = Tone.now() + 0.05
+  /** Milliseconds until an audio-clock time, so timers follow the music without drifting. */
+  const msUntil = (time: number) => Math.max(0, (time - Tone.immediate()) * 1000)
 
-  const end = sec(playbackEnd(clips, totalTicks))
-  previewTimers = chordTimes(clips, bpm).map(({ at }, i) => window.setTimeout(() => onChord?.(i), (at + 0.05) * 1000))
-  previewTimers.push(
-    window.setTimeout(() => {
-      const ended = previewEnded
-      previewEnded = null
-      ended?.()
-    }, (end + 0.05) * 1000),
-    window.setTimeout(() => stopPreview(), (end + PREVIEW_TAIL_SECONDS) * 1000),
-  )
+  const schedulePass = (n: number) => {
+    if (previewRig?.graph !== g) return // stopped
+    const start = first + n * loopSeconds
+    for (const e of chordEvents) playNote(chords, e, start + sec(e.tick), sec(e.duration))
+    for (const e of bassEvents) playNote(bass, e, start + sec(e.tick), sec(e.duration))
+    for (const e of drumEvents) g.kit.trigger(e.voice, start + sec(e.tick), e.velocity)
+    // Added to the earlier passes' timers (some still pending), so stopPreview clears them all.
+    previewTimers = [
+      ...previewTimers,
+      ...times.map(({ at }, i) => window.setTimeout(() => onChord?.(i), msUntil(start + at))),
+      // Once this pass starts, queue the next one (a whole loop ahead).
+      window.setTimeout(() => schedulePass(n + 1), msUntil(start)),
+    ]
+  }
+  schedulePass(0)
 }
 
 export function setBpm(bpm: number) {

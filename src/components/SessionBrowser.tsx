@@ -179,7 +179,7 @@ function SessionBrowser({ sessions: s, onOpen, onNew, onDuplicate, onBackup, onB
     [],
   )
 
-  /** ▶: hear a session once exactly as its Play plays it: its tempo, groove and sounds (■ stops it). */
+  /** ▶: hear a session on a loop exactly as its Play plays it: its tempo, groove and sounds (■ stops it). */
   const hear = (id: string) => {
     if (hearing?.id === id) return stopPreview(true)
     const m = music.get(id)
@@ -397,7 +397,7 @@ function SessionBrowser({ sessions: s, onOpen, onNew, onDuplicate, onBackup, onB
           className={hearing?.id === m.id ? 'session-hear playing' : 'session-hear'}
           aria-label={hearing?.id === m.id ? `Stop hearing ${m.name}` : `Hear ${m.name}`}
           title={
-            hearing?.id === m.id ? 'Stop' : music.get(m.id) ? 'Hear it once, with its own tempo and sounds' : 'No chords to hear yet'
+            hearing?.id === m.id ? 'Stop' : music.get(m.id) ? 'Hear it on a loop, with its own tempo and sounds' : 'No chords to hear yet'
           }
           disabled={!music.get(m.id)}
           onClick={() => hear(m.id)}

@@ -536,11 +536,12 @@ The (i) tooltip next to the logo (`HelpTip.tsx`: how it works + every shortcut, 
   opens, F2 renames, Esc closes (or closes a menu/confirm first); Tab stays inside; the app's shortcuts are
   off while it's open (focus that falls out of it is taken back). Folder ⋯: Rename, Delete (its sessions are
   kept, back to no folder).
-- **Hear a session** (the row's ▶, ■ while it plays): it plays once (no loop, no metronome) exactly as its
-  own Play would: its tempo, time signature, patterns, swing, chord/bass sounds, brightness, mix and parts
+- **Hear a session** (the row's ▶, ■ while it plays): it **loops over the whole track until stopped** (no
+  metronome; handy for singing over a session), exactly as its own Play would: its tempo, time signature, patterns, swing, chord/bass sounds, brightness, mix and parts
   on/off (`sessionMusic` reads them like the workspace does; `previewSession` in `audio.ts` renders it with
-  `renderTrack` and schedules every note up front on a **separate sound graph** built from that session's
-  groove, so the open session's sounds are untouched; the graph is thrown away when it ends or stops). While
+  `renderTrack` on a **separate sound graph** built from that session's groove, so the open session's sounds
+  are untouched; each pass is scheduled on the audio clock when the one before starts, so loops are seamless;
+  the graph is thrown away when it stops). While
   it plays, the row's summary line becomes its chord names with the sounding one lit (`chordTimes`). It pauses the song if it's playing,
   replaces any other preview, and stops on ■, on closing the window, or on opening a session. Disabled for
   sessions with no chords.
