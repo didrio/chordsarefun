@@ -99,6 +99,46 @@ describe('keyboard editing', () => {
   })
 })
 
+describe('voicing', () => {
+  /**
+   * Each chord's shape in the notes lane: the gaps between its notes in px, one string per chord.
+   * (Gaps, not positions: the lane grows or shrinks as chords move, shifting every row.)
+   */
+  const lane = (p: Page) =>
+    p.$$eval('.lane-clip', (els) =>
+      els.map((el) => {
+        const tops = [...el.querySelectorAll('.lane-note')]
+          .map((n) => parseFloat(/top:\s*([\d.]+)px/.exec(n.getAttribute('style') ?? '')?.[1] ?? '0'))
+          .sort((a, b) => a - b)
+        return tops.slice(1).map((t, i) => t - tops[i]).join(',')
+      }),
+    )
+
+  it('the scope label names who the buttons change, even while the panel is collapsed', async () => {
+    const p = await start(full())
+    const scope = p.locator('.voicing-scope')
+    expect(await scope.textContent()).toBe('All 4 chords')
+    await p.mouse.click(...(await pointIn(p, 1, 0.5)))
+    expect(await scope.textContent()).toBe('F')
+    expect(await p.getByRole('button', { name: 'Inversion higher' }).isEnabled()).toBe(true)
+  })
+
+  it('clicking a chord in the notes lane selects it, and ↑ changes only that chord', async () => {
+    const p = await start(full())
+    await p.getByRole('button', { name: /Voicing/ }).first().click()
+    await p.locator('.lane-clip').nth(2).waitFor()
+    const before = await lane(p)
+    const box = await p.locator('.lane-clip').nth(2).boundingBox()
+    if (!box) throw new Error('No lane chord')
+    await p.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+    expect((await clips(p)).map((c) => c.selected)).toEqual([false, false, true, false])
+    await p.keyboard.press('ArrowUp')
+    const after = await lane(p)
+    expect(after[2]).not.toBe(before[2])
+    expect([after[0], after[1], after[3]]).toEqual([before[0], before[1], before[3]])
+  })
+})
+
 describe('adding and previewing', () => {
   it('double-clicking empty space adds a spot', async () => {
     const p = await start(sparse())

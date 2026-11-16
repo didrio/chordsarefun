@@ -202,14 +202,17 @@ colors, fit dots and plain-language reasons, always relative to Home.
   A slash always sets the bass, never an inversion. Typed chords and ideas are moved to
   the octave nearest the other chords (like dropped chords; `fitOctave`); the inversion
   you chose is kept.
-- Notes lane (`NotesLane.tsx`, in the **Voicing** panel): a **display-only** piano roll on the
+- Notes lane (`NotesLane.tsx`, in the **Voicing** panel): a piano roll (**clicking a chord's notes selects that chord**,
+  same modifiers as the track: Shift range, ⌘/Ctrl toggle; the lane is in `KEEPS_SELECTION`) on the
   track's time axis showing what the
   chords part plays for each clip (its voicing, plus a slash chord's low bass note when
   the Bass part is off; empty clips show nothing), out-of-key notes striped, lines from each note to the nearest note of
   the next chord. Individual notes are edited only in the inspector; the Voicing buttons
   adjust **whole chords**:
-  - "Inversion ↓/↑" and "Octave ↓/↑" buttons (arrows with a shaft; keys ↓/↑ and Shift+↓/↑, `shiftOctave` = inversion ±
-    note count) act on the selection, or every chord when nothing is selected; they
+  - The controls sit in the Voicing panel's **header bar, so they work while it's collapsed**, after a scope label
+    in words ("All 4 chords" / "Cm" / "2 selected chords", `voicingScope`): **Inversion [↓ Lower] [Higher ↑]**,
+    **Octave [↓] [↑]** (keys ↓/↑ and Shift+↓/↑, `shiftOctave` = inversion ± note count; tooltips carry the keys), then
+    Smooth voicing. They act on the selection, or every chord when nothing is selected; they
     move together (if any can't, none do). Clips have no buttons of their own.
   - "Smooth voicing" picks inversions so chords move least (`smoothVoicing`): the
     selection if 2+ clips are selected, else the whole track.
@@ -628,10 +631,10 @@ tracks; drums on channel 10 with General MIDI notes) or one part alone.
     Browse progressions and the Random group (Chords | Instruments | Both) on the right (fixed-width trigger).
   - **The timeline** (no panel around it) runs the full width; the notes lane lines up with it.
   - Three panels (`Panel.tsx`), Voicing, Instruments and the chord details:
-    - **Voicing** (collapsible, closed by default, saved per session as `moreOpen`; hint "every
-      note and how chords connect"): a row with the notes-lane legend on the left and
-      Inversion ↓/↑, Octave ↓/↑ and Smooth voicing on the right (unusable until expanded; the
-      ↑/↓ shortcuts still work), then the notes lane, lined up with the track above (the
+    - **Voicing** (collapsible, closed by default, saved per session as `moreOpen`): the **header bar** holds the
+      scope label, Inversion [↓ Lower] [Higher ↑], Octave [↓] [↑] and Smooth voicing, usable while collapsed (the
+      bar wraps onto a second line when the window is too narrow). Expanded: a one-line legend (what the lines
+      mean, "click a chord's notes to select it"), then the notes lane, lined up with the track above (the
       lane runs to the panel's left edge, like the track; `--side` is the right column).
     - **Instruments** (collapsible, closed by default, `instrumentsOpen`; see Instruments above), directly
       under Voicing.

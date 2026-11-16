@@ -4,6 +4,7 @@ import { chordIntervals, noteAt, type Chord } from '../music/chord'
 import { noteInKey, rootDegree, scaleNotes, type ModeName } from '../music/theory'
 import { chordPartVoicing } from '../music/patterns'
 import { chordClips, clipEnd, type Clip } from '../music/timeline'
+import type { ClickMods } from '../selection'
 
 type Props = {
   clips: Clip[]
@@ -13,6 +14,8 @@ type Props = {
   selectedIds: string[]
   /** Whether the bass part plays (if not, slash chords show their low bass note here). */
   bassOn: boolean
+  /** A chord's notes were clicked: select it (same modifiers as the track). */
+  onSelect?: (id: string, mods: ClickMods) => void
 }
 
 /** Height of one semitone row, in px. */
@@ -42,7 +45,7 @@ function spell(chroma: number, chord: Chord, tonic: string, mode: ModeName): str
  * chord, so you can see which notes hold, which step, and which jump. Display only:
  * notes are edited in the inspector; inversion/octave/smoothing act on whole chords.
  */
-export function NotesLane({ clips, totalTicks, tonic, mode, selectedIds, bassOn }: Props) {
+export function NotesLane({ clips, totalTicks, tonic, mode, selectedIds, bassOn, onSelect }: Props) {
   const sorted = chordClips(clips).sort((a, b) => a.start - b.start)
   const voiced = sorted.map((clip) => ({ clip, notes: chordPartVoicing(clip.chord, bassOn) }))
   if (voiced.length === 0) return null
@@ -107,7 +110,9 @@ export function NotesLane({ clips, totalTicks, tonic, mode, selectedIds, bassOn 
             key={clip.id}
             className={selectedIds.includes(clip.id) ? 'lane-clip selected' : 'lane-clip'}
             data-diatonic={degree === null ? 'no' : 'yes'}
+            data-clip-id={clip.id}
             style={style}
+            onClick={(e) => onSelect?.(clip.id, { shift: e.shiftKey, toggle: e.metaKey || e.ctrlKey })}
           >
             {notes.map((m) => {
               const name = spell(chromaOf(m), clip.chord, tonic, mode)

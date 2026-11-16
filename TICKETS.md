@@ -4,8 +4,7 @@ Living, ordered backlog. One ticket per session: `/clear` → `/start Tn` → wo
 session updates this file and picks the next ticket, so each new session starts with a small, clear context.
 Rules: `.claude/skills/wrap/SKILL.md`. Capture ideas any time with `/ticket`.
 
-**Next:** T20 — voicing you can understand at a glance (Sonnet · medium · plan off). T21 and T22 are independent of it
-(T22 best after T21). If the `e2e` CI job is red, fix that first.
+**Next:** T21 — chord menu (Sonnet · medium · plan off). T22 is independent (best after T21). If the `e2e` CI job is red, fix that first.
 
 ## In progress
 
@@ -38,25 +37,7 @@ in one group of three. Agent's calls the owner accepted: the right-click menu ho
 ideas (menus close after one pick, and trying ideas one after another is the core loop); clicking an idea uses it
 and plays it in place, so the card ▶ goes (reverses T2's decision). Every ticket keeps phones working (the `e2e`
 widths), updates `AGENTS.md` (including the design decisions it reverses) and adds tests next to changed rules.
-T16–T19 are done; T20–T22 don't depend on each other.
-
-### T20 — Voicing you can understand at a glance
-
-- **Status:** ready
-- **Session:** Sonnet · medium effort · plan mode off
-- **Goal:** Make it obvious that inversion and octave act on the selected chords (or all of them), and let people
-  select chords right where the result shows.
-- **Done when:**
-  - [ ] The controls live in the Voicing header and work while it's collapsed (today they're dead until opened).
-  - [ ] A scope label in words before them: "All 4 chords" / "2 selected chords" / "Cm".
-  - [ ] Labeled steppers: Inversion [↓ Lower] [Higher ↑], Octave [↓] [↑], then Smooth voicing; tooltips keep the
-        shortcuts.
-  - [ ] Clicking a chord's notes in `NotesLane.tsx` selects that chord (same modifiers as the track: Shift range,
-        ⌘/Ctrl toggle; `clickSelect`). Still no editing of single notes there.
-  - [ ] `KEEPS_SELECTION` in `App.tsx` still covers the lane; e2e case: click a chord in the lane, ↑ changes only it.
-  - [ ] `AGENTS.md`: the Notes lane bullets, Visual design (Voicing).
-- **Context:** `invertChords`, `shiftOctaves`, `smoothen` and `octaveTargets` in `App.tsx` already hold the rules
-  (selection, else every chord; all move or none).
+T16–T20 are done; T21–T22 don't depend on each other.
 
 ### T21 — Chord menu: right-click and ⋯
 
@@ -125,6 +106,7 @@ T16–T19 are done; T20–T22 don't depend on each other.
 
 ## Done
 
+- T20 — Voicing you can understand at a glance — 2026-11-16 — Inversion [↓ Lower][Higher ↑], Octave and Smooth voicing moved into the Voicing header (work while collapsed) after a scope label ("All 4 chords" / "F" / "2 selected chords"); clicking a chord in `NotesLane` selects it (`onSelect` → `selectClip`, so it also previews it); the header wraps below the title on narrow windows. Deviation: the panel hint moved into the expanded legend (no room in the bar); Smooth voicing keeps its old rule (selection only if 2+), so with one chord selected the label names that chord but Smooth acts on all (its tooltip says so). e2e: scope label, lane click + ↑. Owner to look at the header on a phone.
 - T19 — Progression browser — 2026-11-16 — `ProgressionBrowser.tsx` (a modal like the sessions window; both now share `Modal.tsx`, `.modal-backdrop`): genres + search (`searchProgressions`), rows loop on click with the sounding chip lit, "Hear with: Its instruments | Your instruments" (global `progressionHearWith`), Use chords / Use instruments / Use both (`progressionTrack`, one undo step each; Enter and double-click = both); "Browse progressions" trigger replaces `ProgressionMenu.tsx`; Random gained Both. Calls the owner may revisit: search stays within the chosen genre ("Search all genres" when empty), ↑/↓ only keep playing if something was playing, under 400px the Random group shows the dice without the word. Owner to listen: a loop with Its vs Your instruments, flipping the switch mid-loop, Use both while the song plays.
 - T18 — Every progression has its own instruments and tempo — 2026-11-16 — each of the 183 progressions has a hand-picked preset and BPM (in its preset's range, never Just chords or the waltz, ≥2 presets per genre; tests); `progressionMusic` → `SessionMusic`; `previewSession` gained `passes`; the Progressions menu's ▶ now plays one pass with its own instruments and tempo. Deviation: per-progression values instead of genre defaults + overrides (every one was picked anyway). Owner to listen via the menu ▶: Heartfelt pop, Future pop, Emo build, Phonk, Dubstep, Backdoor cadence, Giant cycle, Andalusian cadence, Flamenco, Tango drama, Calypso.
 - T17 — Instruments section replaces the Groove dropdown — 2026-11-16 — `InstrumentsPanel` (under Voicing, closed by default, `instrumentsOpen`): preset `<select>` by genre in its bar (works collapsed, "Custom" when changed, never touches tempo), three strips + swing; `Panel` gained an `actions` slot; `GrooveMenu` and both dice gone, replaced by one `🎲 Random: Chords | Instruments` group (T19 adds Both); help text says Instruments. Deviation: Space doesn't play/pause inside the new native selects (it never did in the old ones either: the key handler skips selects, and Space opens them natively); sliders still do. Owner to look at the strips and the phone layout (Random gets its own row).

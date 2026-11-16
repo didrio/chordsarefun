@@ -1044,6 +1044,7 @@ h2 {
 }
 
 .lane-clip {
+  cursor: pointer;
   --tint: hsl(var(--hue, 0) 55% 60%);
   position: absolute;
   top: 0;
@@ -1387,6 +1388,43 @@ input[type='text'][aria-invalid='true'] {
   --tint: #888;
 }
 
+
+.voicing-scope {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  padding-right: 0.2rem;
+}
+
+.voicing-scope::after {
+  content: ':';
+}
+
+.voicing-panel .panel-head {
+  flex-wrap: wrap;
+}
+
+.voicing-panel .panel-actions {
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.4rem 1rem;
+  padding-block: 0.3rem;
+}
+
+.panel-actions .octave button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  height: 1.7rem;
+  padding-block: 0;
+}
+
+.panel-actions .octave button.arrow {
+  width: 1.9rem;
+  justify-content: center;
+  padding-inline: 0;
+}
 
 .octave {
   display: inline-flex;

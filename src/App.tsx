@@ -38,7 +38,7 @@ import {
   stopPlayback,
   stopPreview,
 } from './music/audio'
-import { canInvert, invert, shiftOctave, type Chord } from './music/chord'
+import { canInvert, chordName, invert, shiftOctave, type Chord } from './music/chord'
 import { downloadMidi } from './music/midi'
 import { keyCandidates, suggestHome, type Home } from './music/home'
 import { inContext } from './music/suggest'
@@ -429,6 +429,16 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
     if (!isPlaying) previewChord(moved[0]!)
   }
 
+  /** Who the Voicing buttons act on, in words. */
+  const voicingScope =
+    octaveTargets.length === 0
+      ? 'No chords yet'
+      : selectedClips.length === 0
+        ? `All ${octaveTargets.length} chord${octaveTargets.length === 1 ? '' : 's'}`
+        : selectedClips.length === 1
+          ? chordName(octaveTargets[0]!.chord)
+          : `${selectedClips.length} selected chords`
+
   /** Re-voice the selection (2+ clips) or the whole track so chords move as little as possible. */
   const smoothen = () => {
     const target = chordClips(selectedClips.length > 1 ? selectedClips : sortedClips)
@@ -794,72 +804,79 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
 
         <Panel
           title="Voicing"
-          hint="every note and how chords connect"
           open={moreOpen}
           onToggle={() => setMoreOpen((o) => !o)}
+          className="voicing-panel"
+          actions={
+            <>
+              <span className="voicing-scope" title="The buttons below change these chords">
+                {voicingScope}
+              </span>
+              <span className="octave" role="group" aria-label="Inversion">
+                <span className="muted">Inversion</span>
+                <button
+                  className="small"
+                  onClick={() => invertChords(-1)}
+                  disabled={!canInvertAll(-1)}
+                  aria-label="Inversion lower"
+                  title="One inversion lower (↓)"
+                >
+                  <ArrowIcon dir="down" /> Lower
+                </button>
+                <button
+                  className="small"
+                  onClick={() => invertChords(1)}
+                  disabled={!canInvertAll(1)}
+                  aria-label="Inversion higher"
+                  title="One inversion higher (↑)"
+                >
+                  Higher <ArrowIcon dir="up" />
+                </button>
+              </span>
+              <span className="octave" role="group" aria-label="Octave">
+                <span className="muted">Octave</span>
+                <button
+                  className="small arrow"
+                  onClick={() => shiftOctaves(-1)}
+                  disabled={!octaveShifted(-1)}
+                  aria-label="Octave down"
+                  title="Down an octave (Shift+↓)"
+                >
+                  <ArrowIcon dir="down" />
+                </button>
+                <button
+                  className="small arrow"
+                  onClick={() => shiftOctaves(1)}
+                  disabled={!octaveShifted(1)}
+                  aria-label="Octave up"
+                  title="Up an octave (Shift+↑)"
+                >
+                  <ArrowIcon dir="up" />
+                </button>
+              </span>
+              <button
+                className="small"
+                onClick={smoothen}
+                disabled={chordClips(selectedClips.length > 1 ? selectedClips : clips).length < 2}
+                title={`Pick inversions so each chord moves as little as possible from the one before (${
+                  selectedClips.length > 1 ? 'the selected chords' : 'all chords'
+                })`}
+              >
+                Smooth voicing
+              </button>
+            </>
+          }
         >
           <div className="advanced-controls">
             <span className="lane-legend">
               {clips.length > 0 ? (
                 <>
-                  Lines show how each note moves to the next chord.
-                  <span className="out-swatch" aria-hidden /> not in the key
+                  Every note and how chords connect: lines show how each note moves to the next chord.
+                  <span className="out-swatch" aria-hidden /> not in the key. Click a chord's notes to select it.
                 </>
               ) : (
                 'Add chords to see their notes here.'
               )}
-            </span>
-            <span className="advanced-buttons">
-            <span className="octave" role="group" aria-label="Inversion">
-              <span className="muted">Inversion{selectedClips.length > 0 ? ' (selected)' : ''}</span>
-              <button
-                className="small arrow"
-                onClick={() => invertChords(-1)}
-                disabled={!canInvertAll(-1)}
-                aria-label="Inversion down"
-                title="Move the selected chords (or all) one inversion down (↓)"
-              >
-                <ArrowIcon dir="down" />
-              </button>
-              <button
-                className="small arrow"
-                onClick={() => invertChords(1)}
-                disabled={!canInvertAll(1)}
-                aria-label="Inversion up"
-                title="Move the selected chords (or all) one inversion up (↑)"
-              >
-                <ArrowIcon dir="up" />
-              </button>
-            </span>
-            <span className="octave" role="group" aria-label="Octave">
-              <span className="muted">Octave{selectedClips.length > 0 ? ' (selected)' : ''}</span>
-              <button
-                className="small arrow"
-                onClick={() => shiftOctaves(-1)}
-                disabled={!octaveShifted(-1)}
-                aria-label="Octave down"
-                title="Move the selected chords (or all) down an octave (Shift+↓)"
-              >
-                <ArrowIcon dir="down" />
-              </button>
-              <button
-                className="small arrow"
-                onClick={() => shiftOctaves(1)}
-                disabled={!octaveShifted(1)}
-                aria-label="Octave up"
-                title="Move the selected chords (or all) up an octave (Shift+↑)"
-              >
-                <ArrowIcon dir="up" />
-              </button>
-            </span>
-            <button
-              className="small"
-              onClick={smoothen}
-              disabled={chordClips(selectedClips.length > 1 ? selectedClips : clips).length < 2}
-              title="Pick inversions so each chord moves as little as possible from the one before"
-            >
-              Smooth voicing{selectedClips.length > 1 ? ' (selected)' : ''}
-            </button>
             </span>
           </div>
           <div className="lane-wrap">
@@ -870,6 +887,10 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
               mode={mode}
               selectedIds={selectedIds}
               bassOn={groove.bass.on}
+              onSelect={(id, mods) => {
+                const clip = clips.find((c) => c.id === id)
+                if (clip) selectClip(clip, mods)
+              }}
             />
           </div>
         </Panel>
