@@ -7,7 +7,7 @@ import {
   filterSessions,
   SESSION_SORTS,
   sessionMusic,
-  sessionSummary,
+  sessionKey,
   sortSessions,
   type SessionMeta,
   type Sessions,
@@ -147,7 +147,7 @@ function SessionBrowser({ sessions: s, onOpen, onNew, onDuplicate, onBackup, onB
   const [flash, setFlash] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   /** The session being heard (its ▶ shows ■), and which of its chords is sounding. */
-  const [hearing, setHearing] = useState<{ id: string; names: string[]; at: number } | null>(null)
+  const [hearing, setHearing] = useState<{ id: string; at: number } | null>(null)
   const hearingRef = useRef(false)
   useEffect(() => {
     hearingRef.current = hearing !== null
@@ -159,7 +159,7 @@ function SessionBrowser({ sessions: s, onOpen, onNew, onDuplicate, onBackup, onB
   const folderName = new Map(s.folders.map((f) => [f.id, f.name]))
   // A folder deleted while viewed: back to all.
   const shownView = view === 'all' || view === 'favorites' || folderName.has(view) ? view : 'all'
-  const summaries = useMemo(() => new Map(s.sessions.map((m) => [m.id, sessionSummary(m.id)])), [s.sessions])
+  const keys = useMemo(() => new Map(s.sessions.map((m) => [m.id, sessionKey(m.id)])), [s.sessions])
   const music = useMemo(() => new Map(s.sessions.map((m) => [m.id, sessionMusic(m.id)])), [s.sessions])
   const rows = sortSessions(filterSessions(s.sessions, shownView, query), s.sort)
   const count = (v: SessionView) => filterSessions(s.sessions, v).length
@@ -189,7 +189,7 @@ function SessionBrowser({ sessions: s, onOpen, onNew, onDuplicate, onBackup, onB
       onChord: (at) => setHearing((h) => (h?.id === id ? { ...h, at } : h)),
       onEnd: () => setHearing((h) => (h?.id === id ? null : h)),
     })
-    setHearing({ id, names: m.names, at: -1 })
+    setHearing({ id, at: -1 })
   }
 
   // Focus lost to the page (the focused row was deleted, a click on nothing): take it back,
@@ -348,13 +348,33 @@ function SessionBrowser({ sessions: s, onOpen, onNew, onDuplicate, onBackup, onB
 
   const row = (m: SessionMeta) => {
     const isCurrent = m.id === s.current
-    const meta = [
-      summaries.get(m.id) ?? 'Empty',
+    const heard = hearing?.id === m.id ? hearing : null
+    const names = music.get(m.id)?.names
+    // Its chords (lit one by one while heard), then key · folder · edited, always on the right.
+    const chords = names ? (
+      <span className="session-chords" aria-live="off">
+        {names.map((n, i) => (
+          <span key={i} className={i === heard?.at ? 'now' : undefined}>
+            {n}
+          </span>
+        ))}
+      </span>
+    ) : (
+      <span className="session-chords empty">No chords yet</span>
+    )
+    const info = [
+      keys.get(m.id),
       shownView !== m.folder && m.folder ? folderName.get(m.folder) : null,
       `edited ${ago(m.updated)}`,
     ]
       .filter(Boolean)
       .join(' · ')
+    const meta = (
+      <span className="session-meta">
+        {chords}
+        <span className="session-info">{info}</span>
+      </span>
+    )
     const openMenu = (x: number, top: number, bottom: number) => {
       setFolderMenu(null)
       setNewFolderFor(null)
@@ -416,7 +436,7 @@ function SessionBrowser({ sessions: s, onOpen, onNew, onDuplicate, onBackup, onB
                 focusRow(m.id)
               }}
             />
-            <span className="session-meta">{meta}</span>
+            {meta}
           </div>
         ) : (
           <button
@@ -433,17 +453,7 @@ function SessionBrowser({ sessions: s, onOpen, onNew, onDuplicate, onBackup, onB
               <span className="session-title">{m.name}</span>
               {isCurrent && <span className="session-badge">Open</span>}
             </span>
-            {hearing?.id === m.id ? (
-              <span className="session-meta session-chords" aria-live="off">
-                {hearing.names.map((n, i) => (
-                  <span key={i} className={i === hearing.at ? 'now' : undefined}>
-                    {n}
-                  </span>
-                ))}
-              </span>
-            ) : (
-              <span className="session-meta">{meta}</span>
-            )}
+            {meta}
           </button>
         )}
         <button

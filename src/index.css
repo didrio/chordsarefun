@@ -2099,10 +2099,32 @@ button.session-hear:disabled {
   opacity: 0.25;
 }
 
-/* While a session is heard, its chord names replace the summary line; the sounding one lights up. */
+/* A row's second line: its chords (at least half of it; they fade out when they don't fit), then key · folder ·
+   edited on the right.
+   While the session is heard, the sounding chord lights up. */
 .session-chords {
   display: flex;
+  flex: 1 1 0;
   gap: 0.45rem;
+  min-width: 50%;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
+}
+
+.session-chords > span {
+  flex: none;
+}
+
+.session-chords.empty {
+  font-style: italic;
+}
+
+.session-info {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .session-chords .now {
@@ -2163,11 +2185,13 @@ button.session-open:focus-visible {
 }
 
 .session-meta {
+  display: flex;
+  gap: 1rem;
+  width: 100%;
   max-width: 100%;
   overflow: hidden;
   font-size: var(--fs-xs);
   color: var(--muted);
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -3268,5 +3292,20 @@ button.dice:hover:not(:disabled),
     flex-direction: row;
     align-items: center;
     max-width: 22rem;
+  }
+
+  /* Too narrow to share a line: the chords get their own, key · folder · edited goes under them. */
+  .session-row {
+    height: 4.4rem;
+  }
+
+  .session-meta {
+    flex-direction: column;
+    gap: 0.1rem;
+  }
+
+  .session-chords {
+    flex: none;
+    min-width: 0;
   }
 }

@@ -132,12 +132,11 @@ export function trackHasWork(stored: unknown): boolean {
 /** True if a stored session has any work in it. */
 export const hasWork = (id: string | null) => trackHasWork(load<unknown>(`${sessionPrefix(id)}track`, null, () => true))
 
-/** A one-line summary of a stored session: "4 chords · C major", or null if it's empty. */
-export function sessionSummary(id: string): string | null {
+/** A stored session's key ("C major"), or null if it has no chords (an empty track has no key worth showing). */
+export function sessionKey(id: string): string | null {
   const h = readTrack(id)
-  if (!h || h.present.clips.length === 0) return null
-  const n = chordClips(h.present.clips).length
-  return `${n} ${n === 1 ? 'chord' : 'chords'} · ${keyName(h.present.tonic, h.present.mode)}`
+  if (!h || chordClips(h.present.clips).length === 0) return null
+  return keyName(h.present.tonic, h.present.mode)
 }
 
 /**

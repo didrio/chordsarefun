@@ -529,8 +529,9 @@ The (i) tooltip next to the logo (`HelpTip.tsx`: how it works + every shortcut, 
   (`SessionBrowser.tsx`, a modal, portalled to `body`; full screen on phones, the views as chips): views on
   the left (**All sessions**, **★ Favorites**, **Folders**, one level, + to add), search, **+ New session**
   (made in the folder being viewed) and a sort select (Last edited · Name · Date created, saved globally as
-  `sessionSort`). Rows: ☆/★ · ▶ · name with an "Open" badge · "4 chords · C minor · folder · edited 3 min ago" ·
-  ⋯ menu (also right-click): Rename (inline; Enter/blur saves, Esc cancels), Duplicate ("<name> copy" in the
+  `sessionSort`). Rows: ☆/★ · ▶ · name with an "Open" badge, and under it the session's chords ("C F G Am",
+  every chord in track order; at least half the line, fading out at the right when they don't fit) with "C minor ·
+  folder · edited 3 min ago" kept at the right (on phones it goes on a line of its own under the chords) (folder only outside that folder's view; "No chords yet" for a blank one) · ⋯ menu (also right-click): Rename (inline; Enter/blur saves, Esc cancels), Duplicate ("<name> copy" in the
   same folder, highlighted), Move to (No folder, folders, New folder…), Delete… (an inline confirm in the row).
   Clicking a row opens it and closes the window. Keys: ↑/↓ between rows (from the search box too), Enter
   opens, F2 renames, Esc closes (or closes a menu/confirm first); Tab stays inside; the app's shortcuts are
@@ -542,7 +543,7 @@ The (i) tooltip next to the logo (`HelpTip.tsx`: how it works + every shortcut, 
   `renderTrack` on a **separate sound graph** built from that session's groove, so the open session's sounds
   are untouched; each pass is scheduled on the audio clock when the one before starts, so loops are seamless;
   the graph is thrown away when it stops). While
-  it plays, the row's summary line becomes its chord names with the sounding one lit (`chordTimes`). It pauses the song if it's playing,
+  it plays, the sounding chord in the row's chord list lights up (`chordTimes`). It pauses the song if it's playing,
   replaces any other preview, and stops on ■, on closing the window, or on opening a session. Disabled for
   sessions with no chords.
 - **Blank sessions don't pile up**: leaving a session that still has its automatic name ("Untitled session N"),

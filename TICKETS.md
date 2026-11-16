@@ -4,7 +4,7 @@ Living, ordered backlog. One ticket per session: `/clear` → `/start Tn` → wo
 session updates this file and picks the next ticket, so each new session starts with a small, clear context.
 Rules: `.claude/skills/wrap/SKILL.md`. Capture ideas any time with `/ticket`.
 
-**Next:** none ticketed. Pick from the Backlog (promote one with `/ticket`) or capture something new. T11–T13's e2e cases (sessions window, backup download/import, detect key, hearing a session) have only run on a Mac: if the `e2e` job is red after the push, fix that first (Sonnet · medium · plan off).
+**Next:** none ticketed. Pick from the Backlog (promote one with `/ticket`) or capture something new. T11–T14's e2e cases (sessions window, backup download/import, detect key, hearing a session) have only run on a Mac: if the `e2e` job is red after the push, fix that first (Sonnet · medium · plan off).
 
 ## In progress
 
@@ -38,6 +38,7 @@ _None. Promote Backlog items here with `/ticket`._
 
 ## Done
 
+- T14 — Session rows list their chords — 2026-11-16 — every row shows its chords (the sounding one lights up while heard) with key · folder · edited on the right (under the chords on phones); "4 chords" is gone.
 - T13 — Session preview loops — 2026-11-16 — the sessions window's ▶ loops the session (seamless, audio-clock scheduled pass by pass) until ■, closing the window or opening a session.
 - T12 — Hear a session from the sessions window — 2026-11-16 — ▶ on each row plays that session once exactly as its own Play would (its tempo, groove, sounds, drums, mix; own sound graph, ■ stops), shows the chord names with the sounding one lit, pauses the song first.
 - T11 — Detect key, silent session switch, sessions window, backups — 2026-11-16 — Key menu "Detect from your chords" (best match + major/minor second opinions, re-label only); `silenceAll` on session switch (progression/"in place" previews used to keep playing into the next session); the sessions dropdown became a modal window (folders, favorites, sort, search, inline rename/delete, no more "Unsaved session", blank sessions clean up); "Back up all sessions" / "Import backup…" (never overwrites, taken names get "(imported)"). Owner to listen once that switching sessions is silent.
