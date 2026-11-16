@@ -123,17 +123,21 @@ describe('adding and previewing', () => {
 describe('layout at every width', () => {
   // Phones (smallest first), the widths between phone and desktop (where the toolbar wraps), tablet, laptop.
   for (const width of [320, 360, 375, 430, 600, 640, 768, 1024, 1280]) {
-    it(`${width}px: nothing runs off-screen, the Progressions menu included`, async () => {
+    it(`${width}px: nothing runs off-screen, the progression browser included`, async () => {
       const p = await start(full())
       await p.setViewportSize({ width, height: 900 })
       // As a string: this file is type-checked for Node, which has no `document`.
       const overflow = () => p.evaluate<number>('document.documentElement.scrollWidth - window.innerWidth')
       expect(await overflow()).toBeLessThanOrEqual(0)
-      await p.locator('.progression-menu .dropdown-trigger').click()
-      const panel = await p.locator('.progression-panel').boundingBox()
-      if (!panel) throw new Error('No Progressions panel')
+      await p.locator('.progressions-trigger').click()
+      const panel = await p.locator('.prog-browser').boundingBox()
+      if (!panel) throw new Error('No progression browser')
       expect(panel.x).toBeGreaterThanOrEqual(0)
       expect(panel.x + panel.width).toBeLessThanOrEqual(width)
+      // The Use buttons stay on screen too.
+      const use = await p.getByRole('button', { name: 'Use both' }).boundingBox()
+      expect(use!.x + use!.width).toBeLessThanOrEqual(width)
+      expect(use!.y + use!.height).toBeLessThanOrEqual(900)
       expect(await overflow()).toBeLessThanOrEqual(0)
     })
   }
@@ -168,6 +172,60 @@ describe('finding the next step', () => {
     await p.mouse.click(...(await pointIn(p, 1, 0.5)))
     await p.locator('.details-panel .ideas-grid').waitFor()
     expect(await p.locator('.details-hint').count()).toBe(0)
+  })
+})
+
+describe('progression browser', () => {
+  const bpm = (p: Page) => p.locator('.song-menu .trigger-bpm').textContent()
+  const preset = (p: Page) => p.locator('select[aria-label="Instrument preset"]').inputValue()
+  /** Open the browser and find the Andalusian cadence (Acoustic, 104 BPM; Cm Bb Ab G in C). */
+  const findAndalusian = async (p: Page) => {
+    await p.locator('.progressions-trigger').click()
+    await p.getByRole('searchbox', { name: 'Search progressions' }).fill('andalusian')
+  }
+
+  it('hearing one leaves the track alone', async () => {
+    const p = await start(full())
+    const [bpmBefore, presetBefore] = [await bpm(p), await preset(p)]
+    await p.locator('.progressions-trigger').click()
+    await p.locator('.prog-open').first().click()
+    await p.getByRole('button', { name: 'Stop hearing Pop anthem' }).waitFor()
+    await p.keyboard.press('Escape')
+    expect(await p.locator('.prog-browser').count()).toBe(0)
+    expect(await names(p)).toEqual(['C', 'F', 'G', 'Am'])
+    expect([await bpm(p), await preset(p)]).toEqual([bpmBefore, presetBefore])
+  })
+
+  it('Use chords keeps your instruments and tempo', async () => {
+    const p = await start(full())
+    const [bpmBefore, presetBefore] = [await bpm(p), await preset(p)]
+    await findAndalusian(p)
+    await p.locator('.prog-open').first().click()
+    await p.getByRole('button', { name: 'Use chords' }).click()
+    expect(await p.locator('.prog-browser').count()).toBe(0)
+    expect(await names(p)).toEqual(['Cm', 'Bb', 'Ab', 'G'])
+    expect([await bpm(p), await preset(p)]).toEqual([bpmBefore, presetBefore])
+  })
+
+  it('Use both (↓ then Enter) takes its instruments and tempo too; one ⌘Z restores everything', async () => {
+    const p = await start(full())
+    const [bpmBefore, presetBefore] = [await bpm(p), await preset(p)]
+    await findAndalusian(p)
+    await p.keyboard.press('ArrowDown')
+    await p.keyboard.press('Enter')
+    expect(await p.locator('.prog-browser').count()).toBe(0)
+    expect(await names(p)).toEqual(['Cm', 'Bb', 'Ab', 'G'])
+    expect([await bpm(p), await preset(p)]).toEqual(['104 BPM', 'acoustic'])
+    await p.evaluate('document.activeElement.blur()')
+    await p.keyboard.press(`${CMD}+z`)
+    expect(await names(p)).toEqual(['C', 'F', 'G', 'Am'])
+    expect([await bpm(p), await preset(p)]).toEqual([bpmBefore, presetBefore])
+  })
+
+  it("the empty track's start button opens it", async () => {
+    const p = await start(seedTrack([]))
+    await p.getByRole('button', { name: 'Start from a progression' }).click()
+    await p.locator('.prog-browser').waitFor()
   })
 })
 

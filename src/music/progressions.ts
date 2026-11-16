@@ -1,6 +1,7 @@
 import { Note } from 'tonal'
 import type { SessionMusic } from './audio'
-import { makeChord, shiftOctave, type Chord } from './chord'
+import type { Track } from '../track'
+import { chordName, makeChord, shiftOctave, type Chord } from './chord'
 import { applyGroove, DEFAULT_GROOVE, GROOVES, type GrooveSettings } from './grooves'
 import type { ModeName } from './theory'
 import { FREE_RESOLUTION, sigBarTicks, type Clip, type TimeSignature } from './timeline'
@@ -350,4 +351,47 @@ export function progressionMusic(prog: Progression, tonic: string, groove?: Groo
     bpm: bpm ?? prog.bpm,
     groove: groove ?? (preset ? applyGroove(DEFAULT_GROOVE, preset) : DEFAULT_GROOVE),
   }
+}
+
+/** What to take from a progression: its chords (and scale), its instruments (and tempo), or both. */
+export type ProgressionParts = { chords: boolean; instruments: boolean }
+
+/** A progression's preset, if its id is known. */
+export const progressionPreset = (prog: Progression) => GROOVES.find((g) => g.id === prog.groove) ?? null
+
+/**
+ * The track with a progression's chords and/or instruments taken (one undo step for any of
+ * "Use chords", "Use instruments", "Use both"). Chords: its chords laid out on the track's own
+ * length and meter, in its scale (so they read as in key). Instruments: its preset and its tempo.
+ * The key's tonic, the length and the time signature are always yours.
+ */
+export function progressionTrack(t: Track, prog: Progression, parts: ProgressionParts): Track {
+  let next = t
+  if (parts.chords) {
+    const bar = sigBarTicks(t.sig)
+    next = { ...next, mode: prog.mode, clips: progressionClips(prog, t.tonic, t.bars * bar, bar) }
+  }
+  const preset = progressionPreset(prog)
+  if (parts.instruments && preset) next = { ...next, groove: applyGroove(t.groove, preset), bpm: prog.bpm }
+  return next
+}
+
+/** Typed ♭/♯ read as b/#, the way numerals are written. */
+const normalize = (s: string) => s.toLowerCase().replace(/♭/g, 'b').replace(/♯/g, '#')
+
+/**
+ * The progression browser's list: one genre (or all), then every word of the query must
+ * appear in the name, the feel, the chords (in `tonic`), the numerals or the preset's name.
+ * Library order (most common first) is kept.
+ */
+export function searchProgressions(list: Progression[], genre: Genre | 'all', query: string, tonic: string): Progression[] {
+  const words = normalize(query).split(/\s+/).filter(Boolean)
+  return list.filter((prog) => {
+    if (genre !== 'all' && prog.genre !== genre) return false
+    if (words.length === 0) return true
+    const text = normalize(
+      [prog.name, prog.feel, ...progressionChords(prog, tonic).map(chordName), ...prog.numerals, progressionPreset(prog)?.name ?? ''].join(' '),
+    )
+    return words.every((w) => text.includes(w))
+  })
 }

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { chordName, voiceChord } from './chord'
 import { applyGroove, DEFAULT_GROOVE, GROOVES } from './grooves'
-import { GENRES, numeralChord, PROGRESSIONS, progressionChords, progressionClips, progressionMusic } from './progressions'
+import { DEFAULT_TRACK } from '../track'
+import { GENRES, numeralChord, PROGRESSIONS, progressionChords, progressionClips, progressionMusic, progressionTrack, searchProgressions } from './progressions'
 import { isDiatonic } from './theory'
 import { sigBarTicks, TICKS_PER_BAR } from './timeline'
 
@@ -132,5 +133,65 @@ describe('progressionMusic', () => {
     const m = progressionMusic(jazz, 'C', mine, 77)
     expect(m.groove).toBe(mine)
     expect(m.bpm).toBe(77)
+  })
+})
+
+describe('searchProgressions', () => {
+  const ids = (genre: Parameters<typeof searchProgressions>[1], query: string, tonic = 'C') =>
+    searchProgressions(PROGRESSIONS, genre, query, tonic).map((p) => p.id)
+
+  it('with no query, lists the genre (or everything) in library order', () => {
+    expect(ids('all', '')).toEqual(PROGRESSIONS.map((p) => p.id))
+    expect(ids('Pop', '  ')).toEqual(PROGRESSIONS.filter((p) => p.genre === 'Pop').map((p) => p.id))
+  })
+
+  it('finds by name, feel, chord, numeral and preset, ignoring case', () => {
+    expect(ids('all', 'pop ANTHEM')).toContain('pop')
+    expect(ids('all', 'flamenco')).toContain('andalusian')
+    expect(ids('Pop', 'bm', 'D')).toContain('pop') // D A Bm G in D
+    expect(ids('Pop', 'bm')).not.toContain('pop') // C G Am F in C
+    expect(ids('all', 'bVII')).toContain('minoranthem')
+    expect(ids('all', '♭vii')).toContain('minoranthem')
+    expect(ids('all', 'motown')).toContain('doowop')
+  })
+
+  it('needs every word to match, and keeps to the genre', () => {
+    const both = ids('all', 'anthem minor')
+    expect(both).toContain('minoranthem')
+    expect(both).not.toContain('pop')
+    expect(ids('Jazz', 'pop anthem')).toEqual([])
+    expect(ids('all', 'zzz')).toEqual([])
+  })
+})
+
+describe('progressionTrack', () => {
+  const prog = PROGRESSIONS.find((p) => p.id === 'andalusian')!
+  const preset = GROOVES.find((g) => g.id === prog.groove)!
+  const track = { ...DEFAULT_TRACK, tonic: 'D', bars: 8, sig: { beats: 3, unit: 4 } }
+
+  it('chords: its chords on your length and meter, in its scale; your instruments and tempo stay', () => {
+    const t = progressionTrack(track, prog, { chords: true, instruments: false })
+    expect(t.clips.map((c) => chordName(c.chord!))).toEqual(['Dm', 'C', 'Bb', 'A', 'Dm', 'C', 'Bb', 'A'])
+    expect(t.clips[1].start).toBe(sigBarTicks(track.sig))
+    expect(t.mode).toBe('aeolian')
+    expect(t.groove).toBe(track.groove)
+    expect(t.bpm).toBe(track.bpm)
+  })
+
+  it('instruments: its preset and tempo; your chords and scale stay', () => {
+    const t = progressionTrack(track, prog, { chords: false, instruments: true })
+    expect(t.groove).toEqual(applyGroove(track.groove, preset))
+    expect(t.bpm).toBe(prog.bpm)
+    expect(t.clips).toBe(track.clips)
+    expect(t.mode).toBe(track.mode)
+  })
+
+  it('both: all of it; the tonic, length and meter are always yours', () => {
+    const t = progressionTrack(track, prog, { chords: true, instruments: true })
+    expect(t.mode).toBe('aeolian')
+    expect(t.clips).toHaveLength(8)
+    expect(t.groove).toEqual(applyGroove(track.groove, preset))
+    expect(t.bpm).toBe(prog.bpm)
+    expect([t.tonic, t.bars, t.sig]).toEqual([track.tonic, track.bars, track.sig])
   })
 })

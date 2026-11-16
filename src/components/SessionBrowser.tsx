@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
-import { createPortal } from 'react-dom'
 import { planImport, readBackup } from '../backup'
 import { previewSession, stopPreview } from '../music/audio'
 import { PlayIcon, StopIcon } from './Icons'
+import { Modal } from './Modal'
 import {
   filterSessions,
   SESSION_SORTS,
@@ -75,7 +75,7 @@ export function SessionMenu(props: Props) {
           ▾
         </span>
       </button>
-      {open && createPortal(<SessionBrowser {...props} onClose={close} />, document.body)}
+      {open && <SessionBrowser {...props} onClose={close} />}
     </div>
   )
 }
@@ -165,12 +165,6 @@ function SessionBrowser({ sessions: s, onOpen, onNew, onDuplicate, onBackup, onB
   const count = (v: SessionView) => filterSessions(s.sessions, v).length
   const viewTitle = shownView === 'all' ? 'All sessions' : shownView === 'favorites' ? 'Favorites' : folderName.get(shownView)!
 
-  // Search first on desktop (type to find); on touch screens don't pop the keyboard up.
-  useEffect(() => {
-    if (window.matchMedia('(pointer: fine)').matches) searchRef.current?.focus()
-    else dialogRef.current?.focus()
-  }, [])
-
   // Closing the window stops a session being heard.
   useEffect(
     () => () => {
@@ -191,19 +185,6 @@ function SessionBrowser({ sessions: s, onOpen, onNew, onDuplicate, onBackup, onB
     })
     setHearing({ id, at: -1 })
   }
-
-  // Focus lost to the page (the focused row was deleted, a click on nothing): take it back,
-  // so keys keep working here (Esc closes) and never reach the app's shortcuts.
-  useEffect(() => {
-    const onKey = (e: globalThis.KeyboardEvent) => {
-      const dialog = dialogRef.current
-      if (!dialog || dialog.contains(document.activeElement)) return
-      dialog.focus()
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  })
 
   // A new copy or import: show it and briefly highlight it.
   useEffect(() => {
@@ -229,27 +210,12 @@ function SessionBrowser({ sessions: s, onOpen, onNew, onDuplicate, onBackup, onB
 
   const onKeyDown = (e: KeyboardEvent) => {
     const target = e.target as HTMLElement
-    if (e.key === 'Escape') {
+    // Esc closes a menu or a confirm first (Modal closes the window otherwise).
+    if (e.key === 'Escape' && (menu || folderMenu || confirming || folderConfirming)) {
       e.preventDefault()
-      if (menu || folderMenu) return closeMenus()
-      if (confirming || folderConfirming) {
-        setConfirming(null)
-        setFolderConfirming(null)
-        return
-      }
-      return onClose()
-    }
-    // Keep Tab inside the window.
-    if (e.key === 'Tab') {
-      const focusable = [...dialogRef.current!.querySelectorAll<HTMLElement>('button:not(:disabled), input:not([type="file"]), select')]
-      const [first, last] = [focusable[0], focusable[focusable.length - 1]]
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault()
-        last.focus()
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault()
-        first.focus()
-      }
+      closeMenus()
+      setConfirming(null)
+      setFolderConfirming(null)
       return
     }
     // ↑/↓ between sessions (from the search box too), F2 renames.
@@ -576,136 +542,128 @@ function SessionBrowser({ sessions: s, onOpen, onNew, onDuplicate, onBackup, onB
         : 'This folder is empty. Move sessions here from their ⋯ menu, or start a + New session here.'
 
   return (
-    <div
-      className="session-backdrop"
+    <Modal
+      className="session-browser"
+      labelledBy="session-browser-title"
+      dialogRef={dialogRef}
+      initialFocus={searchRef}
+      onClose={onClose}
+      onKeyDown={onKeyDown}
       onPointerDown={(e) => {
-        if (e.target === e.currentTarget) onClose()
+        if (!(e.target as Element).closest('.session-popup, .session-more')) closeMenus()
       }}
     >
-      <div
-        className="session-browser"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="session-browser-title"
-        tabIndex={-1}
-        ref={dialogRef}
-        onKeyDown={onKeyDown}
-        onPointerDown={(e) => {
-          if (!(e.target as Element).closest('.session-popup, .session-more')) closeMenus()
-        }}
-      >
-        <header className="session-browser-head">
-          <h2 id="session-browser-title">Sessions</h2>
-          <input
-            ref={searchRef}
-            type="search"
-            className="session-search"
-            placeholder="Search sessions"
-            aria-label="Search sessions"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
+      <header className="session-browser-head">
+        <h2 id="session-browser-title">Sessions</h2>
+        <input
+          ref={searchRef}
+          type="search"
+          className="session-search"
+          placeholder="Search sessions"
+          aria-label="Search sessions"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <button
+          className="tinted session-new"
+          title={`Start a new, empty session${folderName.has(shownView) ? ` in ${viewTitle}` : ''}. This one is already saved.`}
+          onClick={() => onNew(folderName.has(shownView) ? shownView : null)}
+        >
+          + New session
+        </button>
+        <button className="session-close" aria-label="Close" title="Close (Esc)" onClick={onClose}>
+          ×
+        </button>
+      </header>
+
+      <nav className="session-sidebar" aria-label="Session views">
+        <button className="session-view" aria-current={shownView === 'all'} onClick={() => setView('all')}>
+          <span className="session-view-name">All sessions</span>
+          <span className="session-count">{s.sessions.length}</span>
+        </button>
+        <button className="session-view" aria-current={shownView === 'favorites'} onClick={() => setView('favorites')}>
+          <span className="session-view-name">★ Favorites</span>
+          <span className="session-count">{count('favorites')}</span>
+        </button>
+        <div className="session-folders-head">
+          <span>Folders</span>
           <button
-            className="tinted session-new"
-            title={`Start a new, empty session${folderName.has(shownView) ? ` in ${viewTitle}` : ''}. This one is already saved.`}
-            onClick={() => onNew(folderName.has(shownView) ? shownView : null)}
+            className="session-more"
+            aria-label="New folder"
+            title="New folder"
+            onClick={() => setFolderNaming('new')}
           >
-            + New session
+            +
           </button>
-          <button className="session-close" aria-label="Close" title="Close (Esc)" onClick={onClose}>
-            ×
-          </button>
-        </header>
+        </div>
+        {s.folders.map(folderItem)}
+        {folderNaming === 'new' && (
+          <NameInput
+            placeholder="Folder name"
+            label="New folder name"
+            onDone={(name) => {
+              if (name) s.createFolder(name)
+              setFolderNaming(null)
+            }}
+          />
+        )}
+        {s.folders.length === 0 && folderNaming !== 'new' && <p className="session-sidebar-note">No folders yet.</p>}
+      </nav>
 
-        <nav className="session-sidebar" aria-label="Session views">
-          <button className="session-view" aria-current={shownView === 'all'} onClick={() => setView('all')}>
-            <span className="session-view-name">All sessions</span>
-            <span className="session-count">{s.sessions.length}</span>
-          </button>
-          <button className="session-view" aria-current={shownView === 'favorites'} onClick={() => setView('favorites')}>
-            <span className="session-view-name">★ Favorites</span>
-            <span className="session-count">{count('favorites')}</span>
-          </button>
-          <div className="session-folders-head">
-            <span>Folders</span>
-            <button
-              className="session-more"
-              aria-label="New folder"
-              title="New folder"
-              onClick={() => setFolderNaming('new')}
-            >
-              +
-            </button>
-          </div>
-          {s.folders.map(folderItem)}
-          {folderNaming === 'new' && (
-            <NameInput
-              placeholder="Folder name"
-              label="New folder name"
-              onDone={(name) => {
-                if (name) s.createFolder(name)
-                setFolderNaming(null)
-              }}
-            />
-          )}
-          {s.folders.length === 0 && folderNaming !== 'new' && <p className="session-sidebar-note">No folders yet.</p>}
-        </nav>
-
-        <section className="session-main" aria-label={viewTitle}>
-          <div className="session-list-head">
-            <span className="session-view-title">
-              {viewTitle} <span className="muted">· {plural(rows.length, 'session')}</span>
-            </span>
-            <label className="session-sort">
-              <span className="muted">Sort</span>
-              <select value={s.sort} onChange={(e) => s.setSort(e.target.value as SessionSort)} aria-label="Sort sessions">
-                {SESSION_SORTS.map((o) => (
-                  <option key={o.key} value={o.key}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          {rows.length === 0 ? <p className="session-empty">{empty}</p> : <ul className="session-rows">{rows.map(row)}</ul>}
-        </section>
-
-        <footer className="session-browser-foot">
-          <span className="muted" role="status">
-            {notice ?? 'Everything saves automatically in this browser.'}
+      <section className="session-main" aria-label={viewTitle}>
+        <div className="session-list-head">
+          <span className="session-view-title">
+            {viewTitle} <span className="muted">· {plural(rows.length, 'session')}</span>
           </span>
-          <span className="session-backup">
-            <button
-              className="small"
-              title="Download every session (chords, undo history, groove, folders) as one file"
-              onClick={() => {
-                onBackup()
-                setNotice('Backup downloaded. Import it here any time to get these sessions back.')
-              }}
-            >
-              Back up all sessions
-            </button>
-            <button
-              className="small"
-              title="Add the sessions from a backup file. Nothing here is replaced."
-              onClick={() => fileRef.current?.click()}
-            >
-              Import backup…
-            </button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".json,application/json"
-              hidden
-              onChange={(e) => {
-                const file = e.target.files?.[0]
-                e.target.value = ''
-                if (file) void importFile(file)
-              }}
-            />
-          </span>
-        </footer>
-      </div>
-    </div>
+          <label className="session-sort">
+            <span className="muted">Sort</span>
+            <select value={s.sort} onChange={(e) => s.setSort(e.target.value as SessionSort)} aria-label="Sort sessions">
+              {SESSION_SORTS.map((o) => (
+                <option key={o.key} value={o.key}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        {rows.length === 0 ? <p className="session-empty">{empty}</p> : <ul className="session-rows">{rows.map(row)}</ul>}
+      </section>
+
+      <footer className="session-browser-foot">
+        <span className="muted" role="status">
+          {notice ?? 'Everything saves automatically in this browser.'}
+        </span>
+        <span className="session-backup">
+          <button
+            className="small"
+            title="Download every session (chords, undo history, groove, folders) as one file"
+            onClick={() => {
+              onBackup()
+              setNotice('Backup downloaded. Import it here any time to get these sessions back.')
+            }}
+          >
+            Back up all sessions
+          </button>
+          <button
+            className="small"
+            title="Add the sessions from a backup file. Nothing here is replaced."
+            onClick={() => fileRef.current?.click()}
+          >
+            Import backup…
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".json,application/json"
+            hidden
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              e.target.value = ''
+              if (file) void importFile(file)
+            }}
+          />
+        </span>
+      </footer>
+    </Modal>
   )
 }

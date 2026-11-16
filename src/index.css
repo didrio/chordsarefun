@@ -247,7 +247,7 @@ h1 {
   white-space: nowrap;
   overflow: hidden;
 }
-.main-toolbar .progression-menu .dropdown-trigger { width: 9.5rem; }
+.main-toolbar .progressions-trigger { width: 11rem; }
 .session-menu .session-trigger { width: 13rem; }
 .main-toolbar input.volume { width: 4rem; }
 
@@ -788,8 +788,8 @@ button.toggle[aria-pressed='true']:hover {
   font-size: var(--fs-sm);
 }
 
-/* The Progressions trigger while the track is empty: the place to start. */
-.dropdown-trigger.accent {
+/* "Browse progressions" while the track is empty: the place to start. */
+.progressions-trigger.accent {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 18%, var(--surface));
 }
@@ -1466,90 +1466,6 @@ input[type='text'][aria-invalid='true'] {
   color: var(--muted);
 }
 
-/*
- * Progressions sits on the right of the toolbar. Its panel hangs from the toolbar's right
- * edge (like Groove's, not from the trigger), so it can't run off-screen at any width.
- */
-.progression-menu {
-  position: static;
-}
-
-.progression-panel {
-  right: 0;
-  display: grid;
-  grid-template-columns: 11rem minmax(0, 1fr);
-  width: min(44rem, 100%);
-}
-
-.genres {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding-right: 0.35rem;
-  border-right: 1px solid var(--border);
-}
-
-.genres .menu-item {
-  flex-direction: row;
-  justify-content: space-between;
-  align-items: center;
-  font-size: var(--fs-sm);
-}
-
-.genres .menu-item.active {
-  color: var(--bg);
-  font-weight: 600;
-  background: var(--accent);
-}
-
-.genres .menu-item.active .caret {
-  color: var(--bg);
-}
-
-/*
- * A genre has up to ~30 progressions and the list scrolls. So that's visible without a
- * scrollbar (macOS hides them), the height cuts a row in half and the bottom edge fades
- * out; the padding lets the last row scroll clear of the fade.
- */
-.progressions {
-  --fade: 2.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  max-height: min(27.5rem, calc(100vh - 16rem));
-  padding: 0 0 var(--fade) 0.35rem;
-  overflow-y: auto;
-  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--fade)), transparent);
-}
-
-/* Name on the left; the numerals (extra info) quietly on the right, wrapping under it when tight. */
-.progression-title {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0 0.75rem;
-  width: 100%;
-}
-
-/* How it feels, in plain words: the line a newcomer chooses by. */
-.progression-feel {
-  font-size: var(--fs-sm);
-  line-height: 1.3;
-  color: var(--muted);
-}
-
-.progression-row {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-}
-
-.progression-row .menu-item {
-  flex: 1;
-  min-width: 0;
-}
-
 .menu-foot {
   grid-column: 1 / -1;
   margin: 0.35rem 0 0;
@@ -1868,9 +1784,9 @@ button.icon {
   white-space: nowrap;
 }
 
-/* The sessions window: a modal over the page (backdrop centers it, no transform, so its
+/* The sessions window and the progression browser: modals over the page (backdrop centers it, no transform, so its
    popup menus can be position: fixed). Fixed size: views left, list right, list scrolls. */
-.session-backdrop {
+.modal-backdrop {
   position: fixed;
   inset: 0;
   z-index: 40;
@@ -1881,7 +1797,8 @@ button.icon {
   background: #0009;
 }
 
-.session-browser {
+/* The shared window frame (Modal.tsx): the sessions window and the progression browser. */
+.modal {
   display: grid;
   grid-template-columns: 12rem minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
@@ -2372,6 +2289,79 @@ button.danger-fill:hover:not(:disabled) {
 .session-backup {
   display: flex;
   gap: 0.4rem;
+}
+
+/* The progression browser (ProgressionBrowser.tsx) uses the sessions window's frame, sidebar and rows;
+   these are its own parts. */
+.prog-hear-with {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: var(--fs-xs);
+}
+
+.prog-hear-with .segmented button {
+  white-space: nowrap;
+}
+
+.prog-row.selected {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.prog-row.selected:hover {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.prog-row .session-hear {
+  margin-left: 0.25rem;
+}
+
+/* Name, how it feels (gives way first), and its sound on the right. */
+.prog-title-line {
+  width: 100%;
+}
+
+.prog-feel {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prog-sound {
+  flex: none;
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.prog-chords {
+  gap: 0.25rem;
+}
+
+.prog-chords .bank-chord {
+  font-size: var(--fs-xs);
+  color: var(--text);
+}
+
+/* The sounding chord while it's heard. */
+.prog-chords .bank-chord.now {
+  color: var(--bg);
+  background: var(--tint);
+}
+
+.prog-use {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.session-empty button {
+  margin-top: 0.5rem;
 }
 
 
@@ -3044,7 +3034,7 @@ button.show-all {
     gap: 0.25rem;
   }
 
-  .main-toolbar .progression-menu .dropdown-trigger {
+  .main-toolbar .progressions-trigger {
     flex: 1;
     width: auto;
     min-width: 0;
@@ -3219,10 +3209,6 @@ button.show-all {
     margin-left: auto;
   }
 
-  .progression-panel {
-    grid-template-columns: 7rem minmax(0, 1fr);
-  }
-
   /* The three strips stack; the preset picker takes the bar's spare room. */
   .mixer {
     grid-template-columns: minmax(0, 1fr);
@@ -3245,7 +3231,7 @@ button.show-all {
     flex-wrap: wrap;
   }
 
-  .main-toolbar .progression-menu {
+  .main-toolbar .progressions-trigger {
     flex: 1 1 100%;
   }
 
@@ -3256,6 +3242,10 @@ button.show-all {
   .random-group > button {
     flex: 1;
     justify-content: center;
+    min-width: 0;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+    font-size: var(--fs-sm);
   }
 
   .insp-head {
@@ -3293,11 +3283,11 @@ button.show-all {
   }
 
   /* The sessions window fills the screen; the views become a row of chips over the list. */
-  .session-backdrop {
+  .modal-backdrop {
     padding: 0;
   }
 
-  .session-browser {
+  .modal {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto minmax(0, 1fr) auto;
     grid-template-areas: 'head' 'side' 'main' 'foot';
@@ -3318,6 +3308,33 @@ button.show-all {
 
   button.session-close {
     order: 2;
+  }
+
+  /* The progression browser: the title and close, then Hear with, then the search. */
+  .prog-hear-with {
+    order: 3;
+    flex: 1 1 100%;
+  }
+
+  .prog-browser input.session-search {
+    order: 4;
+  }
+
+  /* Its rows: the feel gives way to the name and the sound; the Use buttons share the footer's width. */
+  .prog-feel {
+    display: none;
+  }
+
+  .prog-use {
+    flex: 1 1 100%;
+  }
+
+  .prog-use > button {
+    flex: 1;
+    padding-left: 0.3rem;
+    padding-right: 0.3rem;
+    font-size: var(--fs-sm);
+    white-space: nowrap;
   }
 
   input.session-search {
@@ -3378,5 +3395,12 @@ button.show-all {
   .session-chords {
     flex: none;
     min-width: 0;
+  }
+}
+
+/* The smallest phones: Chords | Instruments | Both only fit beside the dice without the word "Random". */
+@media (max-width: 400px) {
+  .random-word {
+    display: none;
   }
 }

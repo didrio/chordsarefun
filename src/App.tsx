@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { ChordInspector, type InspectorTab } from './components/ChordInspector'
 import { NotesLane } from './components/NotesLane'
-import { ProgressionMenu, type ProgressionMenuHandle } from './components/ProgressionMenu'
+import { ProgressionBrowser } from './components/ProgressionBrowser'
 import { HomeNotice } from './components/HomeNotice'
 import { DiceIcon } from './components/DiceIcon'
 import { InstrumentsPanel } from './components/InstrumentsPanel'
@@ -28,7 +28,6 @@ import {
   pausePlayback,
   previewChord,
   previewProgression,
-  previewSession,
   schedule,
   seekPlayback,
   setBpm as setTransportBpm,
@@ -43,7 +42,7 @@ import { canInvert, invert, shiftOctave, type Chord } from './music/chord'
 import { downloadMidi } from './music/midi'
 import { keyCandidates, suggestHome, type Home } from './music/home'
 import { inContext } from './music/suggest'
-import { PROGRESSIONS, progressionClips, progressionMusic, type Progression } from './music/progressions'
+import { PROGRESSIONS, progressionTrack, type Progression, type ProgressionParts } from './music/progressions'
 import {
   applyGroove,
   GROOVES,
@@ -138,7 +137,7 @@ const isSelection = (v: unknown) => {
 
 /** Elements whose clicks don't clear the clip selection. */
 const KEEPS_SELECTION =
-  '.clip, button, input, select, label, summary, .ruler, .panel, .notes-lane, .dropdown, .home-notice, .session-backdrop'
+  '.clip, button, input, select, label, summary, .ruler, .panel, .notes-lane, .dropdown, .home-notice, .modal-backdrop'
 
 /** Chord size for ideas. The Triads/7ths/9ths toggle is gone with the palette, so ideas use triads. */
 const flavor: PaletteFlavor = 'triads'
@@ -438,35 +437,30 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
     setClips((c) => c.map((clip) => (byId.has(clip.id) ? { ...clip, chord: byId.get(clip.id)! } : clip)))
   }
 
-  /** Replace the track with a progression from the library, in its scale (one undo step). */
-  /** The last progression loaded, so random picks don't repeat it. */
+  /** The last progression used, so random picks don't repeat it. */
   const lastProgression = useRef<Progression | null>(null)
-  const loadProgression = (prog: Progression) => {
+  /**
+   * Take a progression's chords (in its scale), its instruments and tempo, or both: one undo
+   * step (progressionTrack). New chords send the playhead back to the top; while playing it
+   * keeps playing (so progressions can be auditioned one after another): the restart happens
+   * once the new clips are scheduled.
+   */
+  const takeProgression = (prog: Progression, parts: ProgressionParts) => {
     lastProgression.current = prog
     stopPreview()
-    // Back to the top. While playing, keep playing (so progressions can be auditioned
-    // one after another); the restart happens once the new clips are scheduled.
-    if (isPlaying) restartRef.current = true
-    else stop()
-    track.commit((t) => {
-      const bar = sigBarTicks(t.sig)
-      return { ...t, mode: prog.mode, clips: progressionClips(prog, t.tonic, t.bars * bar, bar) }
-    })
-    clearSelection()
+    if (parts.chords) {
+      if (isPlaying) restartRef.current = true
+      else stop()
+      clearSelection()
+    }
+    track.commit((t) => progressionTrack(t, prog, parts))
   }
 
-  const randomProgression = () => loadProgression(pickRandom(PROGRESSIONS, lastProgression.current))
+  const randomProgression = (instruments: boolean) =>
+    takeProgression(pickRandom(PROGRESSIONS, lastProgression.current), { chords: true, instruments })
   const randomGroove = () => setGroove(applyGroove(groove, pickRandom(RANDOM_GROOVES, matchingGroove(groove))))
   /** How long each chord sounds in a preview of several chords: a bar, capped so previews stay quick. */
   const previewSeconds = Math.min((barTicks / TICKS_PER_BEAT) * (60 / bpm), MAX_PREVIEW_SECONDS)
-  /**
-   * Hear a progression once the way it's meant to sound: its own instruments and tempo, in
-   * the current key (pauses the song first, like hearing a session).
-   */
-  const hearProgression = (prog: Progression) => {
-    if (isPlaying) pause()
-    void previewSession(progressionMusic(prog, tonic), { passes: 1 })
-  }
   /**
    * Hear a chord where it would sit in the inspected clip's spot (the chord before, it, the
    * chord after), without touching the track. A fresh chord (an idea) is played in the
@@ -483,8 +477,8 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
       const t = e.target
       const typing = (t instanceof HTMLInputElement && t.type !== 'range') || t instanceof HTMLSelectElement
       if (typing) return
-      // The sessions window is modal: it handles its own keys.
-      if (document.querySelector('.session-backdrop')) return
+      // The sessions window and the progression browser are modal: they handle their own keys.
+      if (document.querySelector('.modal-backdrop')) return
       // Dropdowns and sliders handle their own keys (arrows, Enter, Esc), but Space
       // still plays/pauses so changes can be heard without leaving them.
       if (t instanceof Element && t.closest('.dropdown, input[type="range"]') && e.key !== ' ') return
@@ -539,7 +533,13 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
   }
 
   const trackRef = useRef<HTMLDivElement>(null)
-  const progressionMenu = useRef<ProgressionMenuHandle>(null)
+  /** The progression browser: open from its trigger or the empty track's "Start from a progression". */
+  const [browsing, setBrowsing] = useState(false)
+  const browseTrigger = useRef<HTMLButtonElement>(null)
+  const closeBrowser = () => {
+    setBrowsing(false)
+    browseTrigger.current?.focus()
+  }
   /** The drop plan for a drag of clips on the track. Option/Ctrl turns a move into a copy, live, as in a DAW. */
   const plan = (d: DragState) =>
     d.overTicks === null ? null : planDrop(clips, { ...d.held, copy: d.copy }, d.overTicks, totalTicks, d.free ? 0 : gridTicks, barTicks)
@@ -679,24 +679,43 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
           </button>
         </div>
         <div className="toolbar-section">
-          <ProgressionMenu
-            ref={progressionMenu}
-            tonic={tonic}
-            highlight={clips.length === 0}
-            onUse={loadProgression}
-            onPreview={hearProgression}
-          />
-          {/* All the randomizing in one group (T19 adds "Both"). Key, tempo and time signature are never touched. */}
+          <button
+            ref={browseTrigger}
+            className={clips.length === 0 ? 'dropdown-trigger progressions-trigger accent' : 'dropdown-trigger progressions-trigger'}
+            aria-haspopup="dialog"
+            aria-expanded={browsing}
+            title="Browse over 180 progressions by genre: hear each with its own instruments, take its chords, its instruments or both"
+            onClick={() => setBrowsing(true)}
+          >
+            Browse progressions
+          </button>
+          {browsing && (
+            <ProgressionBrowser
+              tonic={tonic}
+              groove={groove}
+              bpm={bpm}
+              onUse={(prog, parts) => {
+                takeProgression(prog, parts)
+                closeBrowser()
+              }}
+              onBeforePreview={() => isPlaying && pause()}
+              onClose={closeBrowser}
+            />
+          )}
+          {/* All the randomizing in one group. The key and time signature are never touched; Both takes a progression's tempo. */}
           <div className="random-group" role="group" aria-label="Random">
-            <span className="random-label">
+            <span className="random-label" title="Random">
               <DiceIcon />
-              Random
+              <span className="random-word">Random</span>
             </span>
-            <button onClick={randomProgression} title="Replace the chords with a random progression">
+            <button onClick={() => randomProgression(false)} title="Replace the chords with a random progression (keeps your instruments)">
               Chords
             </button>
-            <button onClick={randomGroove} title="Pick random instruments (a preset)">
+            <button onClick={randomGroove} title="Pick random instruments (a preset; keeps your chords and tempo)">
               Instruments
+            </button>
+            <button onClick={() => randomProgression(true)} title="A random progression with its own instruments and tempo">
+              Both
             </button>
           </div>
         </div>
@@ -755,7 +774,7 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
               <>
                 <span className="track-empty-title">Start your progression</span>
                 <span className="track-empty-actions">
-                  <button className="primary" onClick={() => progressionMenu.current?.open()}>
+                  <button className="primary" onClick={() => setBrowsing(true)}>
                     Start from a progression
                   </button>
                   <button onClick={newChord}>Add a chord</button>

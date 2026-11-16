@@ -70,7 +70,7 @@ Everything is organized around one **Home** (key + mood), in three layers:
 - **Chord**: one chord up close (the inspector).
 
 **Home is context, not content: nothing on the track changes unless you ask.** Every
-chord anywhere (track, ideas, flavors, inspector, progression menu) uses the same
+chord anywhere (track, ideas, flavors, inspector, progression browser) uses the same
 colors, fit dots and plain-language reasons, always relative to Home.
 
 ## Explaining theory
@@ -116,7 +116,7 @@ colors, fit dots and plain-language reasons, always relative to Home.
 
 - **The palette (7 in-key chords), the Spice row and the Triads/7ths/9ths toggle were
   removed**: the inspector's Ideas and Flavors tabs cover chord ideas now. The 1–7
-  shortcuts went with them. Chords get on the track via Progressions, double-click
+  shortcuts went with them. Chords get on the track via the progression browser, double-click
   empty clips + Ideas / typing a chord in the inspector, copy-drag of clips and ⌘D.
   The palette's code (`Palette.tsx`, `SpiceRow`, `diatonicChords`, `addChord`/`dropChord`,
   its CSS) was deleted in T4; it's in git history before that commit if it's ever wanted.
@@ -222,28 +222,33 @@ colors, fit dots and plain-language reasons, always relative to Home.
   centered nearest the average of all the other chords (`fitOctave`), in the drag preview
   too. With no other chords it centers around C4 (middle C), not C3.
   Existing chords are never re-voiced automatically (that's the Smooth voicing button).
-- "Progressions" (`ProgressionMenu.tsx`, on the right of the main toolbar; its panel hangs from the toolbar's right edge, like the song popover's, so it stays on screen at every width): a dropdown with genre
-  submenus (hover switches genre after a short delay; ←/→ between columns). ~180
-  progressions (no two with the same chords in the same mood; a test enforces it),
-  curated most common first within each genre (`progressions.ts`), genres and progressions ordered most common first.
-  They arrive **an octave up** (around C4, root position; `progressionChords`); numerals relative to the major scale (♭VII etc.), shown in the current
-  tonic. Each row reads plain words first: name, chords, then its "feel" ("Sweet '50s nostalgia");
-  the numerals and scale sit quietly at the right of the name. The list scrolls (a genre has up
-  to ~30): it's cut mid-row and fades out at the bottom so that's visible without a scrollbar.
-  Clicking one replaces the track and
-  switches to its scale (one undo step); the playhead returns to the start and, if
-  playing, playback continues from there (so progressions can be auditioned back to
-  back; the seek happens when the new clips are scheduled); one chord per bar, repeated while it fits, or
-  shared evenly on shorter tracks. ▶ previews without touching the track.
+- **The progression browser** (`ProgressionBrowser.tsx`, T19; opened by **Browse progressions** on the right of
+  the main toolbar, or the empty track's "Start from a progression"): a modal window like the sessions window
+  (`Modal.tsx`). ~180 progressions (no two with the same chords in the same mood; a test enforces it), curated
+  most common first within each genre (`progressions.ts`), genres ordered most common first. Left: **All** + the
+  9 genres with counts (chips on phones). Head: search (`searchProgressions`: every word must appear in the name,
+  feel, chords in the current key, numerals or preset name; ♭/♯ read as b/#; within the chosen genre, with
+  "Search all genres" when nothing matches) and **Hear with: Its instruments | Your instruments** (saved
+  globally as `progressionHearWith`; "yours" = the open session's groove and BPM). Rows read plain words first:
+  name and its "feel" ("Sweet '50s nostalgia"), the chords in the current tonic as colored chips, its sound on
+  the right ("Motown soul · 112 BPM"), then the numerals (relative to the major scale, ♭VII etc.) and scale
+  muted (plus the genre in the All view). **Clicking a row selects it and plays it** on a loop
+  (`previewSession`, until ■; the sounding chip lights up, like hearing a session; it pauses the song first);
+  ↑/↓ (from the search box too) move the selection and keep playing if something was playing. The footer
+  (always there; buttons disabled until a row is selected) takes what you like, each one undo step
+  (`progressionTrack`) that closes the window: **Use chords** (its chords, **an octave up**, around C4, root
+  position, `progressionChords`, one chord per bar repeated while it fits or shared evenly on shorter tracks,
+  on your length and meter, in its scale; your instruments and tempo stay), **Use instruments** (its preset +
+  its tempo; your chords stay), **Use both** (the primary button; also Enter and double-clicking a row). Taking
+  chords returns the playhead to the start and, if playing, playback continues from there (the seek happens
+  when the new clips are scheduled). Previews stop on close, on use, on Play and on opening a session.
 - **Every progression knows how it's meant to sound** (T18): a groove preset and a tempo (`groove`, `bpm` on
   `Progression`), chosen per progression so each genre spreads over several presets; never "Just chords" or the
   3/4 waltz, the tempo always inside the preset's range (tests enforce all three). `progressionMusic(prog, tonic,
   groove?, bpm?)` turns one into a `SessionMusic` (one bar per chord, 4/4) with its own preset and tempo, or the
-  ones passed in, so it plays through `previewSession` like a stored session. The menu's ▶ plays it once that
-  way (`passes: 1`; pauses the song first); loading it still only takes the chords (T19 adds taking its
-  instruments).
+  ones passed in ("Your instruments"), so it plays through `previewSession` like a stored session.
 - **Rich dropdowns** (`useDropdown.ts`): custom popovers instead of native selects where
-  options need descriptions (Key, progressions, sessions, time/length/grid). Click outside / Esc closes; ↑/↓
+  options need descriptions (Key, time/length/grid, MIDI). Click outside / Esc closes; ↑/↓
   move; the app's shortcuts ignore keys inside `.dropdown`.
 - Clips show a fit tag ("borrowed", "→ Dm",
   "outside", "clash") when not plainly in key.
@@ -260,11 +265,10 @@ colors, fit dots and plain-language reasons, always relative to Home.
   the playhead on purpose (unexpected results). It's selected right away. **+ New
   session** (in the sessions window) shares the tint (`button.tinted`).
 - **An empty track says where to start**: "Start your progression" with **Start from a
-  progression** (the one accent button; opens the Progressions menu through its
-  `ProgressionMenuHandle`) and **Add a chord** (+ New), plus "or double-click anywhere on
-  the track". The buttons are passed into `Timeline` as `emptyState` and don't seek or
-  add a spot when clicked. While the track is empty the Progressions trigger is
-  highlighted too.
+  progression** (the one accent button; opens the progression browser) and **Add a chord**
+  (+ New), plus "or double-click anywhere on the track". The buttons are passed into
+  `Timeline` as `emptyState` and don't seek or add a spot when clicked. While the track is
+  empty the Browse progressions trigger is highlighted too.
 - **Double-click empty track space** to add an empty clip: the whole gap if it's a bar
   or less, else the part of the gap inside the clicked bar (`emptyClipSpan`). It's
   selected right away. Empty clips are dashed "?" clips: silent, resizable, movable,
@@ -462,9 +466,11 @@ one undo step.
   two presets may be identical. **Default: Pop** (all parts on); "Just chords" (held
   chords only) stays first in the list.
 - **Random** (`pickRandom`): one connected group at the right of the transport row, "🎲 Random:
-  Chords | Instruments". Chords loads a random progression (never the same twice in a row);
-  Instruments picks a random preset (not Just chords or the 3/4 waltz). Key, tempo and time
-  signature are never randomized. (T19 adds "Both".)
+  Chords | Instruments | Both". Chords takes a random progression's chords (like Use chords);
+  Both takes its chords, instruments and tempo (exactly like Use both); neither repeats the
+  progression used last. Instruments picks a random preset (not Just chords or the 3/4 waltz)
+  and keeps the tempo. The key and time signature are never randomized. Under 400px wide the
+  word "Random" hides (the dice stays).
 - **The Instruments section** (`InstrumentsPanel.tsx`, built on `Panel.tsx`, **under Voicing**; open
   state saved per session as `instrumentsOpen`, closed by default). Its bar holds a native preset
   `<select>` grouped by genre (`<optgroup>`; "Just chords" first) that works while collapsed and reads
@@ -546,7 +552,7 @@ The (i) tooltip next to the logo (`HelpTip.tsx`: how it works + every shortcut, 
   session" (copied, checked, then the scratch keys are removed), old list entries get their new fields
   (`migrateMeta`), and with nothing to open a new empty session is made. Idempotent (StrictMode runs it twice).
 - The song bar's trigger reads like the document's name and opens the **sessions window**
-  (`SessionBrowser.tsx`, a modal, portalled to `body`; full screen on phones, the views as chips): views on
+  (`SessionBrowser.tsx`, a modal (`Modal.tsx`), portalled to `body`; full screen on phones, the views as chips): views on
   the left (**All sessions**, **★ Favorites**, **Folders**, one level, + to add), search, **+ New session**
   (made in the folder being viewed) and a sort select (Last edited · Name · Date created, saved globally as
   `sessionSort`). Rows: ☆/★ · ▶ · name with an "Open" badge, and under it the session's chords ("C F G Am",
@@ -619,7 +625,7 @@ tracks; drums on channel 10 with General MIDI notes) or one part alone.
     group wraps under.
   - **Main toolbar** (dashed line above, solid below), like Ableton's transport bar: Play
     (accent tint), Stop, Loop · Undo, Redo (ghost) · **+ Add chord** (tinted) on the left;
-    Progressions and the Random group (Chords | Instruments) on the right (fixed-width trigger, long text truncates).
+    Browse progressions and the Random group (Chords | Instruments | Both) on the right (fixed-width trigger).
   - **The timeline** (no panel around it) runs the full width; the notes lane lines up with it.
   - Three panels (`Panel.tsx`), Voicing, Instruments and the chord details:
     - **Voicing** (collapsible, closed by default, saved per session as `moreOpen`; hint "every
@@ -646,7 +652,7 @@ tracks; drums on channel 10 with General MIDI notes) or one part alone.
   slash-chord note).
 - There is no Clear button: start over with + New session.
 - **Chord color = scale degree of the root** (hue = degree × 360/7), identical in
-  ideas, flavors, clips, lane and progression menu, so Dm, Dm7 and D (V/V) in C share the "2" color; how
+  ideas, flavors, clips, lane and progression browser, so Dm, Dm7 and D (V/V) in C share the "2" color; how
   far a chord strays is shown by its fit tag, not its color. Roots outside the key are
   gray.
 - Fit colors: green in key, blue common move (borrowed/leading), orange outside;
@@ -664,17 +670,17 @@ tracks; drums on channel 10 with General MIDI notes) or one part alone.
   with `order`, and an empty `::after` flex item between the rows forces the break. Long names
   shorten with an ellipsis rather than move anything; the song popover is a one-column sheet.
   The transport row wraps when it doesn't fit (Add chord drops to its own line at 320px). The
-  toolbar wraps (Progressions and the Random group each get a full-width row), the Voicing bar stays one
+  toolbar wraps (Browse progressions and the Random group each get a full-width row), the Voicing bar stays one
   line, every dropdown (and the help
   popover) opens as a sheet spanning its bar instead of hanging off its trigger, the
   Instruments strips stack (one column, the preset picker stays in the bar), the chord details header puts
   "Type a chord" on its own row, and the tabs scroll sideways instead of wrapping (the
   spot's context is hidden). No horizontal page scroll down to 320px. Touch drags are untested
   on a real device.
-- **Narrow windows and small tablets (≤ 800px)**: the main toolbar wraps, Progressions and
+- **Narrow windows and small tablets (≤ 800px)**: the main toolbar wraps, Browse progressions and
   Random sharing a full-width row under the transport (its two halves need ~750px side by
   side). Otherwise tablets use the desktop layout. `e2e` checks nine widths from 320 to 1280px
-  for sideways overflow and an off-screen Progressions menu, and the phone header's rows.
+  for sideways overflow and an off-screen progression browser, and the phone header's rows.
 
 ## Design decisions (and why)
 
@@ -749,7 +755,14 @@ These were discussed and chosen deliberately; don't "fix" them without asking.
   no chord's details are open, which is exactly when a newcomer has no next step on screen
   (right after loading a progression). It's one line and dashed, like an empty spot, and it
   leaves as soon as a chord is clicked.
-- **The progression menu leads with the feel, not the numerals**: people who can't read
+- **Progressions come with their instruments, and you choose what to take.** A progression
+  is heard the way it's meant to sound (its preset and tempo), because "Pop anthem" on a
+  harpsichord at 60 BPM doesn't sell it. But your instruments may already be right, so the
+  browser offers chords, instruments or both (and "Hear with: Your instruments" to audition
+  chords in your own sound). One undo step each.
+- **The progression browser is a window, not a dropdown**: ~180 rows, genres, search and
+  looping previews need the room, like the sessions window (and they share `Modal.tsx`).
+- **The progression browser leads with the feel, not the numerals**: people who can't read
   "I – V – vi – IV" choose by "Uplifting and familiar"; the numerals stay visible for those
   who can.
 
@@ -793,7 +806,8 @@ them up.
   - `voicing.ts`: `smoothVoicing` (voice leading via inversions), `fitOctave`.
   - `flavors.ts`: the Flavors tab, grouped by fit and ordered most expected first.
   - `progressions.ts`: the progression library (genres, each progression's preset and tempo), its layout on
-    a track, and `progressionMusic` (a progression ready to hear).
+    a track, `progressionMusic` (a progression ready to hear), `progressionTrack` (taking its chords,
+    instruments or both) and `searchProgressions` (the browser's list).
   - `audio.ts`: Tone.js playback of the three parts (synths, drum kit, per-part
     volume, limiter), seeking, metronome. The only module touching Web Audio.
     Previews (`previewChord`, `previewProgression`, `previewSession`: loops, or `passes` times) and `silenceAll`.
@@ -823,7 +837,9 @@ them up.
     `OptionsMenu.tsx` (`TempoInput`, `TimingFields`: time signature, length, grid) fill it.
   - `Panel.tsx`: the collapsible panel (Voicing, Instruments). The chord details are a plain
     `section.details-panel`; their X lives in the inspector's header.
-  - `ChordInspector.tsx`, `NotesLane.tsx`, `ProgressionMenu.tsx`,
+  - `Modal.tsx`: the modal window both browsers use (portal, backdrop, Esc, Tab kept inside, focus taken
+    back; the app's shortcuts are off while a `.modal-backdrop` exists).
+  - `ChordInspector.tsx`, `NotesLane.tsx`, `ProgressionBrowser.tsx` (the progression window),
     `HomeNotice.tsx`, `SessionBrowser.tsx` (the sessions trigger + window),
     `InstrumentsPanel.tsx`, `MidiMenu.tsx` (+ `useDropdown.ts`): see Behavior.
     The lane renders inside `Timeline` and follows the playhead via the `--playhead`
@@ -856,7 +872,7 @@ them up.
   `playwright-core` with the installed Chrome (`CHROME_PATH` overrides; Mac and Linux paths are
   tried), seeds `chords:v1:track` in localStorage (`seedTrack` in `e2e/harness.ts`) and reads
   clips from the DOM. Add a case there when a new pointer or keyboard flow lands. It also
-  checks the layout at nine widths (no sideways scroll, the Progressions menu on screen) and
+  checks the layout at nine widths (no sideways scroll, the progression browser on screen) and
   that the phone header keeps its two rows.
 - For UI: run the dev server and drive the installed Chrome headlessly, e.g.
   `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new
