@@ -4,7 +4,7 @@ Living, ordered backlog. One ticket per session: `/clear` → `/start Tn` → wo
 session updates this file and picks the next ticket, so each new session starts with a small, clear context.
 Rules: `.claude/skills/wrap/SKILL.md`. Capture ideas any time with `/ticket`.
 
-**Next:** T22 — chord details rework (Sonnet · medium · plan off). It reuses T21's `ChordMenu` for the ⋯ and Clear. If the `e2e` CI job is red, fix that first.
+**Next:** nothing queued. The redesign is done; pick from the Backlog or `/ticket` new ideas. If the `e2e` CI job is red, fix that first.
 
 ## In progress
 
@@ -37,32 +37,7 @@ in one group of three. Agent's calls the owner accepted: the right-click menu ho
 ideas (menus close after one pick, and trying ideas one after another is the core loop); clicking an idea uses it
 and plays it in place, so the card ▶ goes (reverses T2's decision). Every ticket keeps phones working (the `e2e`
 widths), updates `AGENTS.md` (including the design decisions it reverses) and adds tests next to changed rules.
-T16–T21 are done.
-
-### T22 — Chord details rework
-
-- **Status:** ready (T21's `ChordMenu` is in; open it from the header's ⋯ with `chordMenuGroups` in `App.tsx`)
-- **Session:** Sonnet · medium effort · plan mode off
-- **Goal:** The panel songwriters use most: always in the same place, one click per idea, tabs that say what
-  they're for.
-- **Done when:**
-  - [ ] Always present, fixed height, directly under the track (above Voicing and Instruments). No X:
-        `panelOpen` retires (keep its key in `SESSION_KEYS` for cleanup). With no chord inspected, or several
-        selected, it shows an empty state in the same frame (today's `details-hint` text).
-  - [ ] Header: ▶ · name · numeral · notes · fit line · "↺ Back to Cm" (shown once the chord changed since it was
-        selected; one undo step; the inspector remounts per clip, so it can remember the chord it opened with) ·
-        Type a chord · ⋯ (T21's menu; Clear lives there now, not next to anything that closes).
-  - [ ] Tabs: Ideas for this spot · Variations of C (was "Flavors of C") · Notes (was "Notes and bass").
-  - [ ] Clicking an idea or variation uses it and plays it in place (chord before → it → after, `inContext`);
-        while the track plays you hear it in the loop instead. The card ▶ (`HearInPlace`) is gone. Why-text is
-        clamped to two lines (full text on hover).
-  - [ ] Notes tab: keyboard, Bass note, "Shape" (this chord's inversion and octave), Why it sounds like this.
-  - [ ] e2e: replace "an idea's ▶ doesn't change the track" with "clicking an idea changes the chord and Back
-        restores it".
-  - [ ] `AGENTS.md`: Chord inspector section, the design decisions on the details panel and on hearing ideas in
-        place (reversed: the owner agreed), "Wording".
-- **Context:** `ChordInspector.tsx` (`SpotIdeas`, `Flavors`, `InversionRow`, `BassRow`, `WhyItSounds`), the
-  details section and `details-hint` in `App.tsx`, `hearInContext` and `setInspectedChord` in `App.tsx`.
+T16–T22 are done (the redesign is complete).
 
 ## Backlog
 
@@ -87,6 +62,7 @@ T16–T21 are done.
 
 ## Done
 
+- T22 — Chord details rework — 2026-11-16 — panel is always present (fixed height, no X, `panelOpen` retired; same frame shows an empty state); header gained "↺ Back to Cm" and ⋯ (opens `ChordMenu`; Clear lives there); tabs are Ideas · Variations of C · Notes; clicking an idea/variation uses it and plays it in place (card ▶ removed, why-text clamped to 2 lines); Notes tab has Bass note, Shape (inversion + octave), Why. Also fixed: the chord menu stayed open when you clicked a chord (clips stop pointerdown; the menu's outside-click listener is now capture-phase; e2e added). Owner to look at the panel on a phone and listen to click-to-hear.
 - T21 — Chord menu — 2026-11-16 — `ChordMenu.tsx`: right-click (or long-press) a chord, or the ⋯ on a selected one, opens actions on the selection (Ideas, Variations, inversion, octave, Duplicate, Clear, Delete) with shortcuts; right-click selects an unselected chord first; Mac Ctrl+click still toggles selection. Rows built in `chordMenuGroups` (App.tsx), so T22 can reuse it. Owner to try a real right-click and the ⋯ on a phone.
 - T20 — Voicing you can understand at a glance — 2026-11-16 — Inversion [↓ Lower][Higher ↑], Octave and Smooth voicing moved into the Voicing header (work while collapsed) after a scope label ("All 4 chords" / "F" / "2 selected chords"); clicking a chord in `NotesLane` selects it (`onSelect` → `selectClip`, so it also previews it); the header wraps below the title on narrow windows. Deviation: the panel hint moved into the expanded legend (no room in the bar); Smooth voicing keeps its old rule (selection only if 2+), so with one chord selected the label names that chord but Smooth acts on all (its tooltip says so). e2e: scope label, lane click + ↑. Owner to look at the header on a phone.
 - T19 — Progression browser — 2026-11-16 — `ProgressionBrowser.tsx` (a modal like the sessions window; both now share `Modal.tsx`, `.modal-backdrop`): genres + search (`searchProgressions`), rows loop on click with the sounding chip lit, "Hear with: Its instruments | Your instruments" (global `progressionHearWith`), Use chords / Use instruments / Use both (`progressionTrack`, one undo step each; Enter and double-click = both); "Browse progressions" trigger replaces `ProgressionMenu.tsx`; Random gained Both. Calls the owner may revisit: search stays within the chosen genre ("Search all genres" when empty), ↑/↓ only keep playing if something was playing, under 400px the Random group shows the dice without the word. Owner to listen: a loop with Its vs Your instruments, flipping the switch mid-loop, Use both while the song plays.

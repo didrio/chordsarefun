@@ -177,15 +177,28 @@ describe('adding and previewing', () => {
     expect(await names(p)).toEqual(['C', '?'])
   })
 
-  it("an idea's ▶ doesn't change the track", async () => {
+  it('clicking an idea changes the chord, and Back restores it', async () => {
     const p = await start(full())
     await p.mouse.click(...(await pointIn(p, 1, 0.5)))
-    const before = await clips(p)
-    const hear = p.locator('.card-hear').first()
-    await hear.waitFor()
-    await hear.click()
+    await p.locator('.ideas-grid').waitFor()
+    expect(await p.locator('.card-hear').count()).toBe(0)
+    await p.getByRole('button', { name: /^Back to/ }).waitFor({ state: 'detached' })
+    await p.locator('.idea:not(.current)').first().click()
+    expect(await names(p)).not.toEqual(['C', 'F', 'G', 'Am'])
+    await p.getByRole('button', { name: 'Back to F' }).click()
     expect(await names(p)).toEqual(['C', 'F', 'G', 'Am'])
-    expect((await clips(p)).map((c) => [c.left, c.right])).toEqual(before.map((c) => [c.left, c.right]))
+  })
+})
+
+describe('chord menu', () => {
+  it('closes when you click a chord, and stays closed', async () => {
+    const p = await start(full())
+    await p.mouse.click(...(await pointIn(p, 1, 0.5)), { button: 'right' })
+    await p.locator('.chord-menu').waitFor()
+    await p.mouse.click(...(await pointIn(p, 2, 0.5)))
+    await p.locator('.chord-menu').waitFor({ state: 'detached' })
+    await p.mouse.click(...(await pointIn(p, 2, 0.5)))
+    expect(await p.locator('.chord-menu').count()).toBe(0)
   })
 })
 

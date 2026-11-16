@@ -55,12 +55,13 @@ export function ChordMenu({ x, y, title, groups, onClose }: Props) {
       e.stopPropagation() // Esc closes the menu, it doesn't also deselect
       onClose()
     }
-    window.addEventListener('pointerdown', onPointerDown)
+    // Capture phase: clips stop pointerdown from bubbling, which would leave the menu open.
+    window.addEventListener('pointerdown', onPointerDown, true)
     window.addEventListener('keydown', onKey, true)
     window.addEventListener('blur', onClose)
     window.addEventListener('resize', onClose)
     return () => {
-      window.removeEventListener('pointerdown', onPointerDown)
+      window.removeEventListener('pointerdown', onPointerDown, true)
       window.removeEventListener('keydown', onKey, true)
       window.removeEventListener('blur', onClose)
       window.removeEventListener('resize', onClose)

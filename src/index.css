@@ -2598,37 +2598,27 @@ button.tinted:hover:not(:disabled) {
 
 
 
-.panel-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.6rem;
-  height: 1.6rem;
-  margin: -0.2rem -0.5rem -0.2rem auto;
-  padding: 0;
-  color: var(--muted);
-  background: transparent;
-  border-color: transparent;
-}
-
-.panel-close:hover {
-  color: var(--text);
-  background: var(--surface-hover);
-}
-
 /*
  * Where the chord details go while none are open: one line on the next move. Dashed, like
  * an empty spot on the track: a place waiting for something.
  */
+@media (min-width: 801px) {
+  .details-hint {
+    height: 25rem;
+  }
+}
+
 .details-hint {
-  margin: 0.6rem 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
   padding: 1.4rem 1rem;
   font-size: var(--fs-sm);
   line-height: 1.5;
   text-align: center;
   text-wrap: balance;
   color: var(--muted);
-  border: 1px dashed var(--border);
   border-radius: 10px;
 }
 
@@ -2644,6 +2634,12 @@ button.tinted:hover:not(:disabled) {
  */
 .details-panel {
   padding: 0;
+}
+
+/* Empty frame: dashed, like an empty spot on the track. */
+.details-panel:has(> .details-hint) {
+  border-style: dashed;
+  background: transparent;
 }
 
 .inspector {
@@ -2770,15 +2766,27 @@ button.hear {
   color: var(--tension-2);
 }
 
-.insp-actions {
-  display: flex;
+.insp-head .back {
   flex: none;
-  align-items: center;
-  gap: 0.15rem;
+  font-size: var(--fs-sm);
+  white-space: nowrap;
 }
 
-.insp-actions .panel-close {
-  margin: 0;
+button.chord-more {
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  font-size: var(--fs-lg);
+  line-height: 1;
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+}
+
+button.chord-more:hover {
+  color: var(--text);
+  background: var(--surface-hover);
 }
 
 /* Tabs: underlined, so the selected one is obvious without boxes around everything. */
@@ -2902,56 +2910,19 @@ button.insp-tab[aria-selected='true'] {
 }
 
 .idea-why {
+  display: -webkit-box;
+  overflow: hidden;
   font-size: var(--fs-xs);
   line-height: 1.35;
   color: var(--muted);
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
-/* A card (idea or flavor) with its small ▶ in the corner: hear it in place without using it.
-   The ▶ sits inside the card's right padding, so it never changes the card's size. */
 .card {
-  position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
-}
-
-.card > .idea,
-.card > .flavor {
-  padding-right: 2rem;
-}
-
-button.card-hear {
-  position: absolute;
-  top: 0.3rem;
-  right: 0.3rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  padding: 0 0 0 1px;
-  color: var(--muted);
-  background: transparent;
-  border-color: transparent;
-  border-radius: 50%;
-}
-
-button.card-hear svg {
-  width: 11px;
-  height: 11px;
-}
-
-.card:hover > button.card-hear,
-button.card-hear:focus-visible {
-  color: var(--text);
-  border-color: var(--border);
-}
-
-button.card-hear:hover:not(:disabled) {
-  color: var(--text);
-  background: var(--surface);
-  border-color: var(--text);
 }
 
 .idea-none {

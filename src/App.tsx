@@ -182,7 +182,6 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
     null,
     (v) => v === null || typeof v === 'string',
   )
-  const [panelOpen, setPanelOpen] = usePersistentState(k('panelOpen'), false)
   // The track (clips, length, key, time signature, instruments, tempo) is the undoable, saved
   // document. Sessions saved before the instruments and tempo joined it get their old values.
   const [legacy] = useState(() => legacyMusic(prefix))
@@ -259,15 +258,13 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
     return { prev, next, loopTo, tonic, mode, flavor }
   }
   /**
-   * Change the selection, and with it the details panel: one clip selected opens it on
-   * that clip (on the tab used last); several hide it. Deselecting leaves it as it is.
+   * Change the selection, and with it the details panel: one clip selected shows it on
+   * that clip (on the tab used last); several show its empty state. Deselecting leaves it as it is.
    */
   const select = (next: Selection) => {
     setSelection(next)
-    if (next.ids.length > 1) setPanelOpen(false)
     if (next.ids.length !== 1) return
     setInspectedId(next.ids[0])
-    setPanelOpen(true)
   }
   const selectOnly = (id: string) => select({ ids: [id], anchor: id })
   const clearSelection = () => setSelection(EMPTY_SELECTION)
@@ -452,7 +449,6 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
     const showTab = (tab: InspectorTab) => {
       if (!one) return
       setInspectorTab(tab)
-      setPanelOpen(true)
     }
     const needOne = 'Select one chord to see its ideas'
     const invertable = (dir: 1 | -1) =>
@@ -817,7 +813,7 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
             tonic={tonic}
             mode={mode}
             selectedIds={selectedIds}
-            inspectedId={panelOpen && !multiSelected ? inspectedId : null}
+            inspectedId={!multiSelected ? inspectedId : null}
             isPlaying={isPlaying}
             playhead={playheadPos}
             onSeek={seek}
@@ -969,8 +965,8 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
           onSlide={slideGroove}
         />
 
-        {panelOpen && !multiSelected && inspected ? (
-          <section className="panel details-panel" aria-label="Chord details">
+        <section className="panel details-panel" aria-label="Chord details">
+          {!multiSelected && inspected ? (
             <ChordInspector
               key={inspected.id}
               chord={inspected.chord}
@@ -978,21 +974,19 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
               tab={inspectorTab}
               onTab={setInspectorTab}
               onChange={(chord, fresh) => setInspectedChord(inspected, chord, fresh)}
-              onClear={() => {
-                setClips((c) => c.map((x) => (x.id === inspected.id ? { ...x, chord: null } : x)))
-                setInspectorTab((t) => (t === 'flavors' ? 'ideas' : t))
-              }}
+              onRestore={(chord) => setClips((c) => c.map((x) => (x.id === inspected.id ? { ...x, chord } : x)))}
+              onMenu={(x, y) => openChordMenu(inspected, x, y)}
               onPreview={(chord, fresh) => !isPlaying && previewChord(fresh ? fitOctave(chord, otherChords(inspected.id)) : chord)}
               onHearInContext={(chord, fresh) => hearInContext(inspected, chord, fresh)}
-              onClose={() => setPanelOpen(false)}
             />
-          </section>
-        ) : (
-          // No chord's details are open: say what the next move is, where the details would be.
-          // (An empty track says it on the track itself.)
-          clips.length > 0 && (
+          ) : (
+            // Nothing to show yet: say what the next move is, in the same frame (same height).
             <p className="details-hint">
-              {multiSelected ? (
+              {clips.length === 0 ? (
+                <>
+                  <b>Chord details</b> show up here once there&apos;s a chord on the track.
+                </>
+              ) : multiSelected ? (
                 <>
                   <b>{selectedClips.length} chords selected.</b> Drag them to move them together (hold {COPY_KEY} to
                   copy), {DUPLICATE_KEY} duplicates them, ↑&nbsp;↓ changes their inversion, Delete removes them.
@@ -1003,8 +997,8 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
                 </>
               )}
             </p>
-          )
-        )}
+          )}
+        </section>
       </div>
 
       {menuAt && selectedClips.length > 0 && (

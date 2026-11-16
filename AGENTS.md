@@ -136,18 +136,16 @@ colors, fit dots and plain-language reasons, always relative to Home.
 
 ### Chord inspector, notes lane, progressions
 
-- The **details panel** under the track (like Ableton's detail view) is dismissable, not
-  collapsible: an X at its top right closes it. It shows the **inspected clip**: the last
-  clip selected on its own. Selecting a clip, adding one (double-click, + New, copy)
-  or stepping with ←/→ switches it and shows the panel; clicking elsewhere or Esc only
-  deselects (so nothing jumps). Selecting several clips (or none) hides it entirely; the
-  group voicing buttons are in Voicing. The inspected clip gets a dashed outline on the track
-  while it isn't selected.
-- **While no chord's details are open** (and the track has chords), a dashed one-line hint
-  sits where the panel would be (`p.details-hint` in `App.tsx`): "Click a chord to hear it and
-  see ideas for that spot" ("Tap" on touch screens, `TAP` in `platform.ts`), or, with several
-  chords selected, what a selection can do (drag, copy-drag, duplicate, inversion, delete). An
-  empty track shows nothing there: the track itself says where to start.
+- The **details panel** under the track (like Ableton's detail view) is **always there**, directly under
+  the track and above Voicing and Instruments, at a fixed height (25rem on desktop). It has no X
+  (`panelOpen` is retired; its key stays in `SESSION_KEYS` for cleanup). It shows the **inspected
+  clip**: the last clip selected on its own. Selecting a clip, adding one (double-click, + New, copy)
+  or stepping with ←/→ switches it; clicking elsewhere or Esc only deselects (so nothing jumps). With
+  no chord inspected, an empty track, or several clips selected, **the same frame shows an empty state**
+  (`p.details-hint` in `App.tsx`, dashed): "Click a chord to hear it and see ideas for that spot" ("Tap" on
+  touch screens, `TAP`), what a selection can do (drag, copy-drag, duplicate, inversion, delete), or
+  "Chord details show up here once there's a chord on the track". The group voicing buttons are in
+  Voicing. The inspected clip gets a dashed outline on the track while it isn't selected.
 - Inspector (`ChordInspector.tsx`): **one layout for chords and empty clips**: a header
   strip, then three tabs. The panel is **always the same height** (25rem on desktop):
   the tab content scrolls inside it.
@@ -155,41 +153,41 @@ colors, fit dots and plain-language reasons, always relative to Home.
     (+ "bass E"), and **one line** under the name: the fit badge, a tension badge only
     when it bites, and the plain explanation (`analysis.fit.detail`, truncated, full text
     on hover and in Notes); for an empty clip, where it sits ("After F, at the end…").
-    On the right: **Type a chord** (its reading shows in a popover under the box, so the
-    header never changes height), a quiet red **Clear** (the clip becomes empty, in
-    place) and the X.
+    On the right: **↺ Back to Cm** (only once the chord changed since it was selected: the
+    inspector remembers the chord it opened with and puts it back, one undo step), **Type a
+    chord** (its reading shows in a popover under the box, so the header never changes
+    height) and **⋯**, which opens the chord menu (`ChordMenu`, same rows as right-click;
+    Clear chord lives there, not next to anything that closes).
   - Tabs, in this order: **Ideas for this spot** (the songwriter's question, so first) |
-    **Flavors of {root}** (disabled on an empty clip: no root yet) | **Notes and bass**.
+    **Variations of {root}** (disabled on an empty clip: no root yet) | **Notes**.
     The spot's context ("Between C and Am.") sits at the right end of the tab bar.
   - **The tab is sticky**: it stays on whatever you used last (saved per session, default
-    Ideas), like a DAW's device view. An empty clip on Flavors shows Ideas; Clear chord
-    on Flavors switches the saved tab to Ideas.
+    Ideas), like a DAW's device view. An empty clip on Variations shows Ideas; Clear chord
+    on Variations switches the saved tab to Ideas.
   - **Ideas**: all four kinds side by side (Feel at home, Build tension, Flow smoothly,
     Add color; two columns under 900px), each with its short hint and up to 3 cards (name,
-    numeral, plain why). A kind with nothing to offer keeps its column ("Nothing obvious
+    numeral, plain why clamped to two lines, full text on hover). A kind with nothing to offer keeps its column ("Nothing obvious
     here."), so the layout never shifts.
-  - **Flavors**: other chords on the same root, under three fit headings (In key ·
+  - **Variations** (code: flavors): other chords on the same root, under three fit headings (In key ·
     Common moves · Outside the key, with the fit dot). Each card shows the name and its
     **feel** in plain words (`ChordType.feel`: "Soft and dreamy"). Within each group the
     most expected come first (`flavors.ts`); the first 6 per group show (plus the current
     flavor wherever it ranks), "Show all N" reveals the rest.
-  - **Hear it in place** (T2): every idea and flavor card has a small ▶ in its top-right
-    corner (inside the card's padding, so cards keep their size; muted until the card is
-    hovered, its own tab stop). It plays the chord before the spot, the card's chord, then
-    the chord after (`inContext` in `suggest.ts`: empty spots skipped, nothing before at the
-    start, the loop's first chord after the end of a looping track), without touching the
-    track. Each chord sounds as long as in a progression preview (a bar, at most 1.5 s);
-    ideas play in the track's octave (`fitOctave`), flavors in the clip's own voicing. Like
-    other previews it does nothing while the track plays. The tooltip spells the sequence
-    out ("Hear it in place: C → G → Am"). Clicking the card itself still uses the chord.
-  - **Notes and bass**: left, the Root picker (for an empty clip it sets a major chord)
+  - **Clicking an idea or variation uses it and plays it in place** (T22): the chord before the
+    spot, the card's chord, then the chord after (`inContext` in `suggest.ts`: empty spots skipped,
+    nothing before at the start, the loop's first chord after the end of a looping track). Each
+    chord sounds as long as in a progression preview (a bar, at most 1.5 s); ideas play in the
+    track's octave (`fitOctave`), variations in the clip's own voicing. While the track plays you
+    hear it in the loop instead (the preview is skipped). The tooltip spells the sequence out; undo
+    restores. There's no separate ▶ on cards any more.
+  - **Notes**: left, the Root picker (for an empty clip it sets a major chord)
     and the one-octave keyboard (lit = in the chord; note names outside the key in
     yellow, as a yellow pill on lit keys; each lit note's role (R, 3, b7…) small and
     gray above its name; click to add/remove, min 2 notes; on an empty clip, two clicked
-    notes make the chord) with a one-line legend. Right, for chords: the **Inversion** row
-    ("1st inversion (E on the bottom)", Lower/Higher; "the bass note stays C" is in the
-    tooltips), the **Bass note** row (chord tones as buttons, root first, plus "Other
-    note…"; the slash-chord explanation shows only when a slash bass is set), and **Why
+    notes make the chord) with a one-line legend. Right, for chords: the **Bass note** row
+    (chord tones as buttons, root first, plus "Other note…"; the slash-chord explanation shows
+    only when a slash bass is set), the **Shape** row (inversion "1st inversion (E on the
+    bottom)" with ↓/↑ and octave ↓/↑ buttons; "the bass note stays C" is in the tooltips), and **Why
     it sounds like this**: fit badge, explanation, theory term, out-of-key notes, tension.
 - **Type any chord** (`parse.ts`, `readChordInput`) is forgiving and shows how it reads
   the text while typing ("→ C#m7 (C# E G# B)", "Those notes make C", "bVII in C major
@@ -717,7 +715,7 @@ These were discussed and chosen deliberately; don't "fix" them without asking.
   slash chords are audible in "Just chords" too, while plain chords sound unchanged.
 - **Ableton's drag modifiers** (copy: Option/Ctrl; ignore grid: ⌘/Alt) rather than
   our own; on Mac this moved "ignore grid" from Alt to ⌘.
-- **The details panel never closes by itself** (only its X, or a multi-selection, hides it), chords and empty clips share one layout (header + tabs), and the panel has a fixed
+- **The details panel is always there** (T22: no X; an empty state in the same frame when there's nothing to show), chords and empty clips share one layout (header + tabs), and the panel has a fixed
   height with the tab content scrolling inside, so adding or switching clips never makes
   it jump.
 - **The inspector shows the songwriter's answer first.** Ideas ("what could go here?") is
@@ -760,8 +758,8 @@ These were discussed and chosen deliberately; don't "fix" them without asking.
   instead of a new insert rule, and **nudge only moves into empty space** (never pushes):
   one rule each, the same as with the mouse. On a full track ⌘D makes a short copy and
   squeezes the end, as a copy-drag would.
-- **Hearing an idea in place is a separate ▶, not a different click**: the card click
-  still uses it (one click, undo restores), the ▶ only listens.
+- **Clicking an idea uses it and plays it in place** (T22, reversing T2's separate ▶): trying ideas
+  one after another is the core loop, so one click does both; undo and "↺ Back to Cm" restore.
 - **Loading a progression switches the scale** to the progression's, so its chords
   read as in key rather than all borrowed.
 - **The hint under the track is an empty state, not always-on help**: it exists only while

@@ -34,7 +34,7 @@ export const SESSION_KEYS = [
   'selection',
   'inspectorTab',
   'inspected',
-  'panelOpen',
+  'panelOpen', // retired (T22: the details panel is always there); kept so old sessions clean up
 ]
 
 export type SessionMeta = {
