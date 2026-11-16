@@ -5,6 +5,7 @@ import {
   isAutoName,
   migrateMeta,
   prepareSessions,
+  sessionMusic,
   sessionPrefix,
   sortSessions,
   uniqueName,
@@ -12,6 +13,7 @@ import {
 } from './session'
 import { DEFAULT_TRACK } from './track'
 import { makeChord } from './music/chord'
+import { applyGroove, DEFAULT_GROOVE, GROOVES } from './music/grooves'
 
 const store = new Map<string, string>()
 beforeEach(() => {
@@ -108,5 +110,24 @@ describe('prepareSessions', () => {
     const { sessions, current } = prepareSessions()
     expect(sessions).toHaveLength(1)
     expect(sessions[0]).toMatchObject({ id: current, name: 'Untitled session' })
+  })
+})
+
+describe('sessionMusic', () => {
+  const funk = applyGroove(DEFAULT_GROOVE, GROOVES.find((g) => g.id === 'funk') ?? GROOVES[1])
+
+  it("hears an old session with the groove and tempo it was saved with", () => {
+    const { groove: _g, bpm: _b, ...oldPresent } = history(2).present
+    save(`${sessionPrefix('old')}track`, { past: [], present: oldPresent, future: [] })
+    save(`${sessionPrefix('old')}groove2`, funk)
+    save(`${sessionPrefix('old')}bpm`, 97)
+    expect(sessionMusic('old')).toMatchObject({ groove: funk, bpm: 97, names: ['C', 'C'] })
+  })
+
+  it('reads them from the track, ignoring stale old values', () => {
+    const h = history(1)
+    save(`${sessionPrefix('new')}track`, { ...h, present: { ...h.present, groove: funk, bpm: 140 } })
+    save(`${sessionPrefix('new')}bpm`, 97)
+    expect(sessionMusic('new')).toMatchObject({ groove: funk, bpm: 140 })
   })
 })

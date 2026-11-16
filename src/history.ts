@@ -77,7 +77,8 @@ type Persist = {
 export function readHistory<T>(stored: unknown, persist: Persist): History<T> | null {
   const s = stored as History<unknown>
   if (typeof s !== 'object' || s === null || !Array.isArray(s.past) || !Array.isArray(s.future)) return null
-  const up = persist.migrate ?? ((v: unknown) => v)
+  // One argument only: never hand `migrate` map's index.
+  const up = (v: unknown) => (persist.migrate ? persist.migrate(v) : v)
   const h = { past: s.past.map(up), present: up(s.present), future: s.future.map(up), gesture: null }
   return [...h.past, h.present, ...h.future].every(persist.isValid) ? (h as History<T>) : null
 }

@@ -14,14 +14,14 @@ import { SessionMenu } from './components/SessionBrowser'
 import { Timeline } from './components/Timeline'
 import { useChordDrag, type DragState } from './components/useChordDrag'
 import { describeDrop, heldName } from './dropLabel'
-import { sessionPrefix, useSessions, type Sessions } from './session'
+import { legacyMusic, sessionPrefix, useSessions, type Sessions } from './session'
 import { downloadBackup } from './backup'
 import { useHistory } from './history'
 import { usePersistentState } from './persist'
 import { clickSelect, EMPTY_SELECTION, pruneSelection, selectAll, type ClickMods, type Selection } from './selection'
 import { shortcutFor } from './shortcuts'
 import { COPY_KEY, DUPLICATE_KEY, TAP } from './platform'
-import { DEFAULT_TRACK, isTrack, migrateTrack } from './track'
+import { DEFAULT_TRACK, isTrack, migrateTrack, withMusic, type TrackMusic } from './track'
 import {
   ensureAudio,
   pausePlayback,
@@ -44,9 +44,7 @@ import { inContext } from './music/suggest'
 import { PROGRESSIONS, progressionChords, progressionClips, type Progression } from './music/progressions'
 import {
   applyGroove,
-  DEFAULT_GROOVE,
   GROOVES,
-  isGrooveSettings,
   matchingGroove,
   pickRandom,
   type GrooveSettings,
@@ -143,8 +141,6 @@ const KEEPS_SELECTION =
 /** Chord size for ideas. The Triads/7ths/9ths toggle is gone with the palette, so ideas use triads. */
 const flavor: PaletteFlavor = 'triads'
 
-const DEFAULT_BPM = 120
-
 /** Grooves random picks choose from: not plain "Just chords", and not the 3/4-only waltz. */
 const RANDOM_GROOVES = GROOVES.filter((g) => g.id !== 'just' && g.id !== 'waltz')
 
@@ -166,14 +162,10 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
   const k = (key: string) => prefix + key
   // Hidden by default: powerful, but a lot on first sight.
   const [moreOpen, setMoreOpen] = usePersistentState(k('moreOpen'), false)
-  const [bpm, setBpm] = usePersistentState(k('bpm'), DEFAULT_BPM)
   const [gridKey, setGridKey] = usePersistentState<GridKey>(k('grid'), '1/4', (v) => GRIDS.some((g) => g.key === v))
   const [loop, setLoop] = usePersistentState(k('loop'), true)
   const [metronomeOn, setMetronomeOn] = usePersistentState(k('metronome'), false)
   const [metronomeVolume, setMetronomeVolume] = usePersistentState(k('metronomeVolume'), 0.6)
-  // `groove2`: volumes saved before the measured level pass would be badly balanced
-  // against the new instrument trims, so everyone starts again from the default mix.
-  const [groove, setGroove] = usePersistentState<GrooveSettings>(k('groove2'), DEFAULT_GROOVE, isGrooveSettings)
   // The details panel's tab is sticky (like a DAW's device view): it stays on whatever you used last.
   const [inspectorTab, setInspectorTab] = usePersistentState<InspectorTab>(
     k('inspectorTab'),
@@ -188,8 +180,10 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
     (v) => v === null || typeof v === 'string',
   )
   const [panelOpen, setPanelOpen] = usePersistentState(k('panelOpen'), false)
-  // The track (clips, length, key, time signature) is the undoable, saved document.
-  const track = useHistory(DEFAULT_TRACK, { key: k('track'), isValid: isTrack, migrate: migrateTrack })
+  // The track (clips, length, key, time signature, instruments, tempo) is the undoable, saved
+  // document. Sessions saved before the instruments and tempo joined it get their old values.
+  const [legacy] = useState(() => legacyMusic(prefix))
+  const track = useHistory({ ...DEFAULT_TRACK, ...legacy }, { key: k('track'), isValid: isTrack, migrate: (v) => migrateTrack(v, legacy) })
   useEffect(() => {
     flushRef.current = track.flush
   })
@@ -208,8 +202,8 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
       return
     }
     touch.current()
-  }, [track.value, groove, bpm])
-  const { clips, bars, tonic, mode, sig } = track.value
+  }, [track.value])
+  const { clips, bars, tonic, mode, sig, groove, bpm } = track.value
   const barTicks = sigBarTicks(sig)
   const beatTicks = sigBeatTicks(sig)
   const gridTicks = gridStep(gridKey, barTicks)
@@ -218,6 +212,12 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
     return sameClips(next, t.clips) ? t : { ...t, clips: next }
   }
   const setClips = (update: (c: Clip[]) => Clip[]) => track.commit(withClips(update))
+  /** Instruments and tempo: one undo step per change (no step if nothing changed). */
+  const setMusic = (music: Partial<TrackMusic>) => track.commit((t) => withMusic(t, music))
+  const setBpm = (bpm: number) => setMusic({ bpm })
+  const setGroove = (groove: GrooveSettings) => setMusic({ groove })
+  /** A slider being dragged: the whole drag is one undo step, started by track.beginGesture. */
+  const slideGroove = (groove: GrooveSettings) => track.updateGesture((t) => withMusic(t, { groove }))
   // Saved too, so a session reopens with the same chord (and its panel) open.
   const [rawSelection, setSelection] = usePersistentState<Selection>(k('selection'), EMPTY_SELECTION, isSelection)
   const [playState, setPlayState] = useState<'stopped' | 'playing' | 'paused'>('stopped')
@@ -680,6 +680,8 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
           <GrooveMenu
             groove={groove}
             onChange={setGroove}
+            onSlideStart={track.beginGesture}
+            onSlide={slideGroove}
             isPlaying={isPlaying}
             onTogglePlay={togglePlay}
             onRandom={randomGroove}

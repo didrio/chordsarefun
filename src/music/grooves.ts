@@ -217,6 +217,17 @@ const part = (v: unknown, keys: string[]) => {
   )
 }
 
+/** Same settings (field by field: stored objects can list their keys in any order). */
+export function sameGroove(a: GrooveSettings, b: GrooveSettings): boolean {
+  const same = (x: object, y: object) => {
+    const xs = x as Record<string, unknown>
+    const ys = y as Record<string, unknown>
+    const keys = Object.keys(xs)
+    return keys.length === Object.keys(ys).length && keys.every((k) => xs[k] === ys[k])
+  }
+  return a === b || (same(a.chords, b.chords) && same(a.bass, b.bass) && same(a.drums, b.drums) && a.swing === b.swing)
+}
+
 /** Guards settings loaded from storage. */
 export function isGrooveSettings(v: unknown): v is GrooveSettings {
   const s = v as GrooveSettings

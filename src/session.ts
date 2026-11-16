@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { readHistory, type History } from './history'
 import { copyKeys, load, loadRaw, removeKeys, save, saveRaw } from './persist'
-import { isTrack, migrateTrack, type Track } from './track'
+import { DEFAULT_MUSIC, isBpm, isTrack, migrateTrack, type Track, type TrackMusic } from './track'
 import { chordClips, chordTimes, sigBarTicks } from './music/timeline'
-import { DEFAULT_GROOVE, isGrooveSettings, type GrooveSettings } from './music/grooves'
+import { isGrooveSettings, type GrooveSettings } from './music/grooves'
 import { chordName } from './music/chord'
 import type { SessionMusic } from './music/audio'
 import { keyName } from './music/theory'
@@ -118,14 +118,31 @@ export function filterSessions(list: SessionMeta[], view: SessionView, query = '
   )
 }
 
-const TRACK_HISTORY = { key: '', isValid: isTrack, migrate: migrateTrack }
+/**
+ * A session's groove and tempo as saved before they joined the track (its `groove2` and
+ * `bpm` values, no longer written), or the defaults. Only used to migrate old tracks.
+ */
+export function legacyMusic(prefix: string): TrackMusic {
+  return {
+    groove: load<GrooveSettings>(`${prefix}groove2`, DEFAULT_MUSIC.groove, isGrooveSettings),
+    bpm: load(`${prefix}bpm`, DEFAULT_MUSIC.bpm, isBpm),
+  }
+}
 
-const readTrack = (id: string | null): History<Track> | null =>
-  readHistory<Track>(load<unknown>(`${sessionPrefix(id)}track`, null, () => true), TRACK_HISTORY)
+/** How a session's stored track is read: old entries get that session's old groove and tempo. */
+function trackHistory(prefix: string) {
+  const legacy = legacyMusic(prefix)
+  return { key: `${prefix}track`, isValid: isTrack, migrate: (v: unknown) => migrateTrack(v, legacy) }
+}
+
+const readTrack = (id: string | null): History<Track> | null => {
+  const persist = trackHistory(sessionPrefix(id))
+  return readHistory<Track>(load<unknown>(persist.key, null, () => true), persist)
+}
 
 /** True if a stored track (with its history) has any work in it: chords, or anything to undo/redo. */
 export function trackHasWork(stored: unknown): boolean {
-  const h = readHistory<Track>(stored, TRACK_HISTORY)
+  const h = readHistory<Track>(stored, { key: '', isValid: isTrack, migrate: (v) => migrateTrack(v) })
   return !!h && (h.present.clips.length > 0 || h.past.length > 0 || h.future.length > 0)
 }
 
@@ -147,9 +164,8 @@ export function sessionKey(id: string): string | null {
 export function sessionMusic(id: string): (SessionMusic & { names: string[] }) | null {
   const h = readTrack(id)
   if (!h || chordClips(h.present.clips).length === 0) return null
-  const { clips, bars, sig } = h.present
-  const bpm = load(`${sessionPrefix(id)}bpm`, 120, (v) => typeof v === 'number' && v > 0)
-  const groove = load<GrooveSettings>(`${sessionPrefix(id)}groove2`, DEFAULT_GROOVE, isGrooveSettings)
+  // Groove and tempo are part of the track (old sessions get theirs from the old keys, see trackHistory).
+  const { clips, bars, sig, bpm, groove } = h.present
   return {
     clips,
     totalTicks: bars * sigBarTicks(sig),

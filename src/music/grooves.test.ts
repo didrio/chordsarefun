@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyGroove, DEFAULT_GROOVE, GROOVES, isGrooveSettings, matchingGroove, pickRandom, randomBpm } from './grooves'
+import { applyGroove, DEFAULT_GROOVE, GROOVES, isGrooveSettings, matchingGroove, sameGroove, pickRandom, randomBpm } from './grooves'
 import { GENRES } from './progressions'
 import { BASS_PATTERNS, CHORD_PATTERNS, DRUM_PATTERNS } from './patterns'
 import { BASS_SOUNDS, CHORD_SOUNDS, chordSound } from './sound'
@@ -61,6 +61,13 @@ describe('grooves', () => {
   it('a changed part no longer matches its preset', () => {
     const pop = applyGroove(DEFAULT_GROOVE, GROOVES.find((g) => g.id === 'pop')!)
     expect(matchingGroove({ ...pop, drums: { ...pop.drums, pattern: 'trap' } })).toBeNull()
+  })
+
+  it('compares settings field by field', () => {
+    const copy = JSON.parse(JSON.stringify(DEFAULT_GROOVE))
+    expect(sameGroove(copy, DEFAULT_GROOVE)).toBe(true)
+    expect(sameGroove({ ...copy, swing: 0.5 }, DEFAULT_GROOVE)).toBe(false)
+    expect(sameGroove({ ...copy, bass: { ...copy.bass, on: !copy.bass.on } }, DEFAULT_GROOVE)).toBe(false)
   })
 
   it('rejects malformed stored settings', () => {

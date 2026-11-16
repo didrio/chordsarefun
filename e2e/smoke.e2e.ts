@@ -226,6 +226,40 @@ describe('song popover', () => {
   })
 })
 
+describe('undo covers instruments and tempo', () => {
+  const undoKey = async (p: Page) => {
+    await p.keyboard.press('Escape')
+    await p.evaluate('document.activeElement.blur()')
+    await p.keyboard.press(`${CMD}+z`)
+  }
+
+  it('one ⌘Z restores a typed tempo', async () => {
+    const p = await start(full())
+    const bpm = p.locator('.song-menu .trigger-bpm')
+    const before = await bpm.textContent()
+    await p.locator('.song-menu .dropdown-trigger').click()
+    await p.locator('.song-panel input[aria-label="Tempo (BPM)"]').fill('93')
+    await undoKey(p)
+    expect(await bpm.textContent()).toBe(before)
+  })
+
+  it('a whole volume drag is one undo step', async () => {
+    const p = await start(full())
+    const openGroove = () => p.locator('.groove-menu .dropdown-trigger').click()
+    const volume = p.locator('input[aria-label="Chords volume"]')
+    await openGroove()
+    const before = await volume.inputValue()
+    const box = await volume.boundingBox()
+    if (!box) throw new Error('No slider')
+    const y = box.y + box.height / 2
+    await drag(p, [box.x + box.width * 0.9, y], [box.x + box.width * 0.1, y])
+    expect(Number(await volume.inputValue())).toBeLessThan(Number(before))
+    await undoKey(p)
+    await openGroove()
+    expect(await volume.inputValue()).toBe(before)
+  })
+})
+
 describe('sessions window', () => {
   const sessionNames = (p: Page) => p.locator('.session-row .session-title').allTextContents()
   const openWindow = async (p: Page) => {

@@ -7,7 +7,12 @@ import { arrowNav, useDropdown } from './useDropdown'
 
 type Props = {
   groove: GrooveSettings
+  /** A discrete change (toggle, picker, preset): one undo step. */
   onChange: (groove: GrooveSettings) => void
+  /** A slider is grabbed (pointer down or a key press): what follows until it's let go is one undo step. */
+  onSlideStart: () => void
+  /** A slider moved (part of the step onSlideStart began). */
+  onSlide: (groove: GrooveSettings) => void
   isPlaying: boolean
   onTogglePlay: () => void
   /** Pick a random groove preset. */
@@ -35,22 +40,39 @@ function Picker({ label, value, options, onChange }: { label: string; value: str
   )
 }
 
+/**
+ * A 0–1 slider whose drag is one undo step (like resizing a chord): grabbing it (pointer
+ * down, or each key press) starts the step, every move updates it.
+ */
+function Slider({ value, step = 0.01, onStart, onSlide, ...rest }: { value: number; step?: number; onStart: () => void; onSlide: (v: number) => void; className?: string; title?: string; 'aria-label'?: string }) {
+  return (
+    <input
+      type="range"
+      min={0}
+      max={1}
+      step={step}
+      value={value}
+      onPointerDown={onStart}
+      onKeyDown={onStart}
+      onChange={(e) => onSlide(Number(e.target.value))}
+      {...rest}
+    />
+  )
+}
+
 /** One part (like a DAW track header): on/off, volume, then its pickers. */
-function Part(props: { name: string; on: boolean; volume: number; onToggle: () => void; onVolume: (v: number) => void; children: ReactNode }) {
+function Part(props: { name: string; on: boolean; volume: number; onToggle: () => void; onSlideStart: () => void; onVolume: (v: number) => void; children: ReactNode }) {
   return (
     <div className={props.on ? 'part' : 'part off'}>
       <div className="part-head">
         <button className="toggle" aria-pressed={props.on} onClick={props.onToggle} title={`${props.name} on/off`}>
           {props.name}
         </button>
-        <input
-          type="range"
+        <Slider
           className="volume"
-          min={0}
-          max={1}
-          step={0.01}
           value={props.volume}
-          onChange={(e) => props.onVolume(Number(e.target.value))}
+          onStart={props.onSlideStart}
+          onSlide={props.onVolume}
           aria-label={`${props.name} volume`}
           title={`${props.name} volume`}
         />
@@ -64,7 +86,7 @@ function Part(props: { name: string; on: boolean; volume: number; onToggle: () =
  * "Groove": how the track is played. Presets set all three parts at once (sound,
  * pattern, on/off, swing); each part can then be changed, muted and leveled on its own.
  */
-export function GrooveMenu({ groove, onChange, isPlaying, onTogglePlay, onRandom }: Props) {
+export function GrooveMenu({ groove, onChange, onSlideStart, onSlide, isPlaying, onTogglePlay, onRandom }: Props) {
   const { open, setOpen, rootRef } = useDropdown()
   const listRef = useRef<HTMLDivElement>(null)
   const preset = matchingGroove(groove)
@@ -75,6 +97,8 @@ export function GrooveMenu({ groove, onChange, isPlaying, onTogglePlay, onRandom
   const { chords, bass, drums } = groove
   const set = <K extends 'chords' | 'bass' | 'drums'>(part: K, patch: Partial<GrooveSettings[K]>) =>
     onChange({ ...groove, [part]: { ...groove[part], ...patch } })
+  const slide = <K extends 'chords' | 'bass' | 'drums'>(part: K, patch: Partial<GrooveSettings[K]>) =>
+    onSlide({ ...groove, [part]: { ...groove[part], ...patch } })
 
   return (
     <div className="dropdown groove-menu" ref={rootRef}>
@@ -116,7 +140,8 @@ export function GrooveMenu({ groove, onChange, isPlaying, onTogglePlay, onRandom
               on={chords.on}
               volume={chords.volume}
               onToggle={() => set('chords', { on: !chords.on })}
-              onVolume={(volume) => set('chords', { volume })}
+              onSlideStart={onSlideStart}
+              onVolume={(volume) => slide('chords', { volume })}
             >
               <Picker
                 label="Sound"
@@ -129,18 +154,11 @@ export function GrooveMenu({ groove, onChange, isPlaying, onTogglePlay, onRandom
               <label className="slider-row">
                 Brightness
                 <span className="muted">dark</span>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={chords.brightness}
-                  onChange={(e) => set('chords', { brightness: Number(e.target.value) })}
-                />
+                <Slider value={chords.brightness} onStart={onSlideStart} onSlide={(brightness) => slide('chords', { brightness })} />
                 <span className="muted">bright</span>
               </label>
             </Part>
-            <Part name="Bass" on={bass.on} volume={bass.volume} onToggle={() => set('bass', { on: !bass.on })} onVolume={(volume) => set('bass', { volume })}>
+            <Part name="Bass" on={bass.on} volume={bass.volume} onToggle={() => set('bass', { on: !bass.on })} onSlideStart={onSlideStart} onVolume={(volume) => slide('bass', { volume })}>
               <Picker label="Sound" value={bass.sound} options={BASS_SOUNDS} onChange={(sound) => set('bass', { sound })} />
               <Picker label="Pattern" value={bass.pattern} options={BASS_PATTERNS} onChange={(pattern) => set('bass', { pattern })} />
             </Part>
@@ -149,7 +167,8 @@ export function GrooveMenu({ groove, onChange, isPlaying, onTogglePlay, onRandom
               on={drums.on}
               volume={drums.volume}
               onToggle={() => set('drums', { on: !drums.on })}
-              onVolume={(volume) => set('drums', { volume })}
+              onSlideStart={onSlideStart}
+              onVolume={(volume) => slide('drums', { volume })}
             >
               <Picker label="Pattern" value={drums.pattern} options={DRUM_PATTERNS} onChange={(pattern) => set('drums', { pattern })} />
             </Part>
@@ -158,13 +177,11 @@ export function GrooveMenu({ groove, onChange, isPlaying, onTogglePlay, onRandom
               <label className="slider-row">
                 Swing
                 <span className="muted">straight</span>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
+                <Slider
                   step={0.05}
                   value={groove.swing}
-                  onChange={(e) => onChange({ ...groove, swing: Number(e.target.value) })}
+                  onStart={onSlideStart}
+                  onSlide={(swing) => onSlide({ ...groove, swing })}
                   title="Pushes the in-between 8th notes late, for a shuffled, swung feel"
                 />
                 <span className="muted">swung</span>

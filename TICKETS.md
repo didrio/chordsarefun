@@ -4,9 +4,9 @@ Living, ordered backlog. One ticket per session: `/clear` → `/start Tn` → wo
 session updates this file and picks the next ticket, so each new session starts with a small, clear context.
 Rules: `.claude/skills/wrap/SKILL.md`. Capture ideas any time with `/ticket`.
 
-**Next:** T16 — Instruments and tempo join undo (Opus · high · plan mode on; saved data and migration). T17–T19 build
-on it; T20–T22 are independent (Sonnet · medium · plan off). T11–T15's e2e cases have only run on a Mac: if the `e2e`
-job is red, fix that first.
+**Next:** T17 — Instruments section replaces the Groove dropdown (Sonnet · medium · plan off). T18 can go before
+it (they don't touch the same files); T19 needs both. T20–T22 are independent (Sonnet · medium · plan off). If the
+`e2e` CI job is red, fix that first.
 
 ## In progress
 
@@ -41,32 +41,6 @@ and plays it in place, so the card ▶ goes (reverses T2's decision). Every tick
 widths), updates `AGENTS.md` (including the design decisions it reverses) and adds tests next to changed rules.
 T20–T22 don't depend on each other or on T16–T19.
 
-### T16 — Instruments and tempo join undo
-
-- **Status:** ready
-- **Session:** Opus · high effort · plan mode on (saved data and migration)
-- **Goal:** Groove settings and BPM become part of the undoable document, so replacing your instruments (T17's
-  presets, T19's "Use instruments") is one ⌘Z away, like every other edit.
-- **Done when:**
-  - [ ] `Track` (`src/track.ts`) gains `groove: GrooveSettings` and `bpm: number`; `DEFAULT_TRACK`, `isTrack`
-        (use `isGrooveSettings`) and `migrateTrack` updated. Workspace (`App.tsx`) reads them from `track.value`
-        instead of `usePersistentState(k('bpm'))` / `k('groove2')`.
-  - [ ] Old sessions: every history entry without them gets the session's saved `groove2` / `bpm` (or the
-        defaults), so undo never changes the sound of existing work. `migrateTrack` is called per entry by
-        `useHistory` without the session prefix: pass the values in (e.g. a migrate built per session) rather
-        than reading storage inside the pure function.
-  - [ ] Sliders (part volumes, brightness, swing) use `track.beginGesture` / `updateGesture` (one drag = one undo
-        step, like a resize); toggles, pickers, presets and the tempo field use `commit`. No-op edits add no step.
-  - [ ] `sessionMusic` (`src/session.ts`) reads groove and BPM from the stored track, falling back to the old
-        keys. `bpm` and `groove2` stay in `SESSION_KEYS` so copying and deleting still clean them up. Backups keep
-        working (`backup.ts` copies keys as they are).
-  - [ ] Tests: migration (old history gets the old values; new history round-trips), gestures, no-op edits.
-  - [ ] `AGENTS.md`: Undo/redo ("The undoable document is the Track…", and the line listing what isn't in
-        history), Persistence, Sessions.
-- **Context:** `history.ts` (`commit`, `beginGesture`, `updateGesture`, max 500 steps, saved with the session).
-  The metronome, grid, loop and selection stay outside history. Audio wiring: `setAudioGroove(groove)` and
-  `setTransportBpm(bpm)` effects in `App.tsx`.
-
 ### T17 — Instruments section replaces the Groove dropdown
 
 - **Status:** ready (after T15; best after T16)
@@ -88,7 +62,11 @@ T20–T22 don't depend on each other or on T16–T19.
   - [ ] `AGENTS.md`: the Groove section, Random, Visual design, the layout order.
 - **Context:** The chord-details panel is still the old one until T22 (it sits below Voicing today); keep the order
   Track → (details) → Voicing → Instruments in mind. Space plays/pauses inside dropdowns and sliders
-  (`App.tsx`'s key handler); keep that for the new selects.
+  (`App.tsx`'s key handler); keep that for the new selects. Since T16 every groove change is an undo step: reuse
+  `Slider` from `GrooveMenu.tsx` (pointer down / key down → `onSlideStart` = `track.beginGesture`, moves →
+  `onSlide` = `slideGroove` in `App.tsx`) so a drag stays one step, and `setGroove` (commit) for the rest; move
+  `Slider`, `Part` and `Picker` into the new file. The e2e case "a whole volume drag is one undo step" opens the
+  Groove dropdown: point it at the new panel.
 
 ### T18 — Every progression has its own instruments and tempo
 
@@ -223,6 +201,10 @@ T20–T22 don't depend on each other or on T16–T19.
 
 ## Done
 
+- T16 — Instruments and tempo join undo — 2026-11-16 — `Track` now holds `groove` and `bpm` (all undoable; sliders
+  one step per drag via `Slider` gestures, no-op changes no step via `withMusic`/`sameGroove`); old sessions'
+  history gets their saved `groove2`/`bpm` on open (`legacyMusic` → `migrateTrack`), `sessionMusic` reads the
+  track; `readHistory` no longer passes map's index to `migrate`. Owner to listen: undo while playing.
 - T15 — Song popover, one transport row, full-width track — 2026-11-16 — `SongMenu`: one "C minor · 127 BPM · 4/4" button (with the key-suggestion dot) opens Key (`KeyPanel`), tempo, time, length, grid, metronome; transport row now Play/Stop/Loop · Undo/Redo · "+ Add chord"; side buttons gone, track and lane full width; MIDI compact; phone header is two rows. Deviation: on phones the logo's title text is visually hidden so logo + session share row 1 (the full title can't fit beside the session at 320px); the transport wraps at 320px (Add chord on its own line). Owner to look at it on a real phone.
 - T14 — Session rows list their chords — 2026-11-16 — every row shows its chords (the sounding one lights up while heard) with key · folder · edited on the right (under the chords on phones); "4 chords" is gone.
 - T13 — Session preview loops — 2026-11-16 — the sessions window's ▶ loops the session (seamless, audio-clock scheduled pass by pass) until ■, closing the window or opening a session.
@@ -245,10 +227,3 @@ T20–T22 don't depend on each other or on T16–T19.
 - T4 — Remove the unused palette code — 2026-11-14 — `Palette.tsx`, `SpiceRow`, `diatonicChords`,
   `addChord`/`dropChord`, palette CSS and App's unreachable new-chord branches gone (`spiceChords` and the
   pure new-chord drop rules kept); theory tests now test `degreeChord` directly.
-- T6 — Phone layout — 2026-11-14 — ≤600px: bars wrap, menus open as full-width sheets, Groove panel stacks,
-  chord details header and tabs fit; no sideways scroll at 375px (layout only; touch not tested).
-- T1 — UI redesign — 2026-11-14 — chord details as a header + Ideas / Flavors / Notes tabs, song bar + Ableton-style
-  transport bar (Config menu gone, "Key" on screen), empty-track start buttons, one type scale and button weights
-  (8aabdc1…187a571).
-- T5 — Ticket workflow — 2026-11-14 — `/start`, `/wrap`, `/ticket` skills and this file (adapted from
-  mobile/base, minus its base backport), `npm run check`, shared `.claude/settings.json`; old roadmap moved here.

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { BAR_OPTIONS, GRIDS, sigLabel, type GridKey, type TimeSignature } from '../music/timeline'
+import { MAX_BPM, MIN_BPM } from '../track'
 import { TimeSignatureControl } from './TimeSignatureControl'
 
 type TimingProps = {
@@ -45,8 +46,6 @@ export function TimingFields({ sig, onSig, bars, onBars, gridKey, onGrid }: Timi
   )
 }
 
-const MIN_BPM = 30
-const MAX_BPM = 300
 
 /**
  * Tempo you can type freely: a value in range applies as soon as it's typed (so "127"

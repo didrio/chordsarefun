@@ -444,6 +444,11 @@ one undo step.
   pattern, on/off **and volume** (`mix`), plus swing and chord brightness: presets own
   the mix, like loading a DAW preset. Volume/brightness tweaks afterwards don't make it
   "Custom".
+- **Instruments and tempo are part of undo** (T16): every groove change and tempo change is
+  an undo step. Toggles, pickers, presets, the dice and the tempo field use `commit`; the
+  volume, brightness and swing sliders (`Slider` in `GrooveMenu.tsx`) are gestures, so a
+  whole drag is one step (each arrow-key press one step; grabbing and letting go in place,
+  none). Undo while playing changes the sound live.
   Each also has a home genre and natural tempo range (metadata for future smart
   randomizing; `randomBpm` exists but is unused). The trigger
   shows the matching preset, or "Custom" once a part is changed (`matchingGroove`); no
@@ -491,10 +496,12 @@ one undo step.
 ### Undo/redo (`src/history.ts`)
 
 Buttons plus ⌘Z / ⇧⌘Z (Ctrl+Z / Ctrl+Y). The undoable document is the **Track**:
-clips, bars, key, scale, time signature (`src/track.ts`). Discrete edits use `commit`
-(one step each); continuous drags use `beginGesture`/`updateGesture` (one step per
-drag). No-op edits add no step. Max 500 steps (saved with the session). Grid, BPM, loop, 7ths, metronome,
-selection and playhead are not part of history.
+clips, bars, key, scale, time signature, **groove (instruments) and BPM** (`src/track.ts`).
+Discrete edits use `commit` (one step each); continuous drags (resizing a chord, the groove
+sliders) use `beginGesture`/`updateGesture` (one step per drag). No-op edits add no step
+(`withMusic` returns the same track when the groove or tempo didn't really change, comparing
+grooves field by field with `sameGroove`). Max 500 steps (saved with the session). Grid, loop,
+metronome (on/off and volume), selection, panels and playhead are not part of history.
 
 ### Keyboard (`src/shortcuts.ts`)
 
@@ -518,7 +525,7 @@ The (i) tooltip next to the logo (`HelpTip.tsx`: how it works + every shortcut, 
 
 ### Sessions (`src/session.ts`, `SessionBrowser.tsx`, `src/backup.ts`)
 
-- A session is the whole workspace: the Track with its undo history, BPM, groove,
+- A session is the whole workspace: the Track with its undo history (groove and BPM included),
   grid, loop, metronome, notes lane, the selection, the inspected clip,
   the details panel (open/collapsed, tab) (`SESSION_KEYS`), so it reopens exactly as it was left.
 - You're always in one session and **every change is saved to it as you go**, like a DAW project that
@@ -540,7 +547,7 @@ The (i) tooltip next to the logo (`HelpTip.tsx`: how it works + every shortcut, 
   kept, back to no folder).
 - **Hear a session** (the row's ▶, ■ while it plays): it **loops over the whole track until stopped** (no
   metronome; handy for singing over a session), exactly as its own Play would: its tempo, time signature, patterns, swing, chord/bass sounds, brightness, mix and parts
-  on/off (`sessionMusic` reads them like the workspace does; `previewSession` in `audio.ts` renders it with
+  on/off (`sessionMusic` reads them from the stored track, migrated like the workspace's; `previewSession` in `audio.ts` renders it with
   `renderTrack` on a **separate sound graph** built from that session's groove, so the open session's sounds
   are untouched; each pass is scheduled on the audio clock when the one before starts, so loops are seamless;
   the graph is thrown away when it stops). While
@@ -548,7 +555,7 @@ The (i) tooltip next to the logo (`HelpTip.tsx`: how it works + every shortcut, 
   replaces any other preview, and stops on ■, on closing the window, or on opening a session. Disabled for
   sessions with no chords.
 - **Blank sessions don't pile up**: leaving a session that still has its automatic name ("Untitled session N"),
-  isn't starred and has no chords and nothing to undo removes it. Deleting the open session opens the most
+  isn't starred and has no chords and nothing to undo (a tempo or sound change counts) removes it. Deleting the open session opens the most
   recently edited other one (or a new blank one). Stored values of a session that's being left are removed
   only after its workspace unmounted (it saves its history on unmount): `pendingRemoval` in `useSessions`.
 - **Backups** (`backup.ts`): "Back up all sessions" downloads `chords-backup-YYYY-MM-DD.json`, a plain copy of
@@ -565,13 +572,17 @@ The (i) tooltip next to the logo (`HelpTip.tsx`: how it works + every shortcut, 
 
 Everything is saved to localStorage under `chords:v1:*` (per session, see above; a backup file is a copy of all of it): the
 Track **with its full undo/redo history** (debounced, and flushed on page hide, on
-unmount and on demand), BPM, grid, loop, notes-lane toggle, metronome
-on/off and volume, the selection, panels, and the groove settings
-(`groove2`: renamed after the level pass, so old, now-unbalanced volumes are dropped). Loaded data is validated (`isTrack`, type checks; note
+unmount and on demand; the groove and BPM are inside it), grid, loop, notes-lane toggle,
+metronome on/off and volume, the selection and panels. Loaded data is validated (`isTrack`, type checks; note
 names via `isNoteName`, since Tonal returns NaN, not undefined, for nonsense);
 invalid or corrupt data falls back to defaults, and storage errors are ignored. On
 shape changes, **migrate old data on load** so saved work survives (`migrateTrack`
-turns old `symbol: "Dm7"` clips into chords, across the whole undo history); bump
+turns old `symbol: "Dm7"` clips into chords, across the whole undo history). The groove and
+BPM used to be stored beside the track (`groove2`, `bpm`); history entries without them get
+that session's old values (`legacyMusic` in `session.ts`, passed into the pure `migrateTrack`;
+defaults if none), so undo never changes how old work sounds. Those keys are no longer
+written but stay in `SESSION_KEYS`, so old backups import and copying/deleting cleans up.
+`readHistory` calls `migrate` with one argument (never map's index). Bump
 `VERSION` in `persist.ts` only for changes that can't be migrated. The old palette size
 key (`flavor`) is no longer read; it stays in `SESSION_KEYS` so copying and deleting
 sessions still cleans it up. Old chords have no
@@ -775,7 +786,8 @@ them up.
   - `grooves.ts`: groove settings, presets, matching, validation.
   - `sound.ts`: instrument presets (Tone options as data), brightness → cutoff, levels.
   - `midi.ts`: MIDI export of any parts, from `renderTrack`.
-- `src/track.ts`: the `Track` document type, defaults, validation and migration of stored data.
+- `src/track.ts`: the `Track` document type (chords, key, meter, groove, BPM; tempo bounds), defaults,
+  validation, migration of stored data, `withMusic`.
 - `src/history.ts`: undo/redo (pure transitions + `useHistory`, optionally persisted).
 - `src/persist.ts`: localStorage helpers + `usePersistentState`, `copyKeys`/`removeKeys`.
 - `src/session.ts`: sessions (keys, list, folders, favorites, sort/filter, migration `prepareSessions`,
