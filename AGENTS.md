@@ -251,7 +251,7 @@ colors, fit dots and plain-language reasons, always relative to Home.
   first gap on the track, never longer than a bar even if the gap is bigger. With no gap
   it goes at the end, taking up to half of (and shortening) the last chord. It ignores
   the playhead on purpose (unexpected results). It's selected right away. **+ New
-  session** (in the sessions menu) shares the tint (`button.tinted`).
+  session** (in the sessions window) shares the tint (`button.tinted`).
 - **An empty track says where to start**: "Start your progression" with **Start from a
   progression** (the one accent button; opens the Progressions menu through its
   `ProgressionMenuHandle`) and **Add a chord** (+ New), plus "or double-click anywhere on
@@ -393,14 +393,24 @@ one undo step.
   relative homes (same notes, e.g. C major ↔ A minor) it says the chords still fit
   instead. The offer lasts while the chords are untouched; repeated home changes offer
   a move from the home the chords were written in. Not saved.
+- **Detect from your chords** (top of the Key menu; `keyCandidates`, `homeReason`): the best match
+  ("Best match") plus up to two major/minor second opinions that fit nearly as well (within 5%; usually the
+  relative key), each with a plain reason ("Every note fits · starts and ends on Am"); the current key is
+  marked "Current". Rare moods (Lydian…) only show when they're the best match. Picking one **only
+  re-labels, with no offer to move the chords** (`applyDetectedKey`: they're already in that key). With no
+  chords: "Add chords and the key can be detected from them." `rankHomes` scores every key × mood: fit, then
+  the home chord's presence (first/last chord), then mood commonness; `detectHome` is its first.
 - **Home suggestion** (`suggestHome`): if the chords fit another home noticeably better
-  (>5% more of the note-time in its scale), the trigger shows a dot and the menu offers
-  "Your chords fit E major best · Use it" (a re-label). Equal fits (relative keys) never
-  nag. `detectHome` scores fit, then the home chord's presence (first/last chord), then
-  mood commonness.
+  (>5% more of the note-time in its scale), the Key trigger shows a dot. Equal fits (relative keys) never
+  nag.
 
 ### Transport, playhead, metronome
 
+- **Opening a session is silent and never plays by itself**: the leaving workspace calls `silenceAll`
+  (`audio.ts`): stops the transport and previews (their pending chords too), fades the output out over 30 ms
+  and disposes the whole sound graph, which also kills the notes Tone already queued ahead (PolySynth keeps
+  them on timers that `releaseAll` doesn't cancel). A `generation` counter makes sounds still waiting for
+  `Tone.start()` bail. Stop/Pause keep normal release tails.
 - Play/Pause (one button, Space) and Stop (Shift+Space, always enabled: returns the
   playhead to the start even when stopped). Play works on an empty track (metronome
   only), like a DAW.
@@ -505,28 +515,44 @@ browser.
 
 The (i) tooltip next to the logo (`HelpTip.tsx`: how it works + every shortcut, shown on hover/focus) lists these; keep it in sync.
 
-### Sessions (`src/session.ts`, `SessionMenu.tsx`)
+### Sessions (`src/session.ts`, `SessionBrowser.tsx`, `src/backup.ts`)
 
 - A session is the whole workspace: the Track with its undo history, BPM, groove,
   grid, loop, metronome, notes lane, the selection, the inspected clip,
   the details panel (open/collapsed, tab) (`SESSION_KEYS`), so it reopens exactly as it was left.
-- You're always in one session and **every change is saved to it as you go**. The
-  sessions menu next to the logo shows its name like a document title ("Unsaved
-  session" for the scratch session). **+ New session** (first in that menu, no confirm:
-  everything is already saved) makes an empty "Untitled session" and opens it. On the unsaved session only, a name
-  box at the top of the list names it as a new session (the unsaved one starts over
-  empty). The list opens any session (newest created first, so rows never reorder, with "4 chords · C
-  major · 3 min ago"), and duplicates (⧉: adds "<name> copy", stays on the current
-  session, menu stays open), renames (✎) or deletes (×, with a confirm) them.
-- Each session's values live under its own key prefix (`session:<id>:`); the unsaved
-  session has no prefix, so work saved before sessions existed simply is the unsaved
-  session. `App` keys the `Workspace` by session, so switching remounts it and
-  everything loads from storage (the history flushes on unmount, playback stops). The
-  list and current session are global (`sessions`, `currentSession`).
+- You're always in one session and **every change is saved to it as you go**, like a DAW project that
+  never loses work. **Every session is a real, listed one**: there's no "Unsaved session" any more. On load,
+  `prepareSessions` upgrades old data: work in the old scratch (unprefixed keys) becomes a listed "Untitled
+  session" (copied, checked, then the scratch keys are removed), old list entries get their new fields
+  (`migrateMeta`), and with nothing to open a new empty session is made. Idempotent (StrictMode runs it twice).
+- The song bar's trigger reads like the document's name and opens the **sessions window**
+  (`SessionBrowser.tsx`, a modal, portalled to `body`; full screen on phones, the views as chips): views on
+  the left (**All sessions**, **★ Favorites**, **Folders**, one level, + to add), search, **+ New session**
+  (made in the folder being viewed) and a sort select (Last edited · Name · Date created, saved globally as
+  `sessionSort`). Rows: ☆/★ · name with an "Open" badge · "4 chords · C minor · folder · edited 3 min ago" ·
+  ⋯ menu (also right-click): Rename (inline; Enter/blur saves, Esc cancels), Duplicate ("<name> copy" in the
+  same folder, highlighted), Move to (No folder, folders, New folder…), Delete… (an inline confirm in the row).
+  Clicking a row opens it and closes the window. Keys: ↑/↓ between rows (from the search box too), Enter
+  opens, F2 renames, Esc closes (or closes a menu/confirm first); Tab stays inside; the app's shortcuts are
+  off while it's open (focus that falls out of it is taken back). Folder ⋯: Rename, Delete (its sessions are
+  kept, back to no folder).
+- **Blank sessions don't pile up**: leaving a session that still has its automatic name ("Untitled session N"),
+  isn't starred and has no chords and nothing to undo removes it. Deleting the open session opens the most
+  recently edited other one (or a new blank one). Stored values of a session that's being left are removed
+  only after its workspace unmounted (it saves its history on unmount): `pendingRemoval` in `useSessions`.
+- **Backups** (`backup.ts`): "Back up all sessions" downloads `chords-backup-YYYY-MM-DD.json`, a plain copy of
+  every `chords:v1:*` value (so a hand-made localStorage copy imports the same way). "Import backup…" adds the
+  file's sessions (`planImport`): new ids, so nothing is ever overwritten; a taken name becomes "Name
+  (imported)"; folders are matched by name (made if missing); favorites and dates are kept; the old scratch
+  inside a backup comes in as "Untitled session". If storage is full, nothing is added.
+- Each session's values live under its own key prefix (`session:<id>:`). `App` keys the `Workspace` by
+  session, so switching remounts it and everything loads from storage (the history flushes on unmount;
+  `silenceAll` stops every sound). The list, folders, sort and current session are global (`sessions`,
+  `folders`, `sessionSort`, `currentSession`).
 
 ### Persistence (`src/persist.ts`)
 
-Everything is saved to localStorage under `chords:v1:*` (per session, see above): the
+Everything is saved to localStorage under `chords:v1:*` (per session, see above; a backup file is a copy of all of it): the
 Track **with its full undo/redo history** (debounced, and flushed on page hide, on
 unmount and on demand), BPM, grid, loop, notes-lane toggle, metronome
 on/off and volume, the selection, panels, and the groove settings
@@ -552,7 +578,7 @@ tracks; drums on channel 10 with General MIDI notes) or one part alone.
 
 - Dark UI. The rule is **the song on top, then the chords, then one chord**. Top to bottom:
   - **Song bar** (`header.song-bar`): the piano icon + "create a chord progression", the (i)
-    help tooltip headed "chords are fun", the sessions menu (reads like the document's
+    help tooltip headed "chords are fun", the sessions trigger (opens the sessions window; reads like the document's
     name); right: **Key C Major ▾**, the tempo field (BPM), **4/4 · 4 bars ▾** (time,
     length, grid) and Download MIDI. On narrow windows the right group wraps under.
   - **Main toolbar** (dashed line above, solid below), like Ableton's transport bar: Play
@@ -653,7 +679,12 @@ These were discussed and chosen deliberately; don't "fix" them without asking.
   inspector keeps showing ideas so trying several is one click each (undo restores).
 - **Sessions autosave; naming is optional**, like a DAW project that never loses
   work. New session never asks "are you sure", and there's no Clear button: a new
-  session is the way to start over.
+  session is the way to start over. **Every session is listed** (the old "Unsaved session" next to
+  "Untitled session" confused people), blank ones clean themselves up, and the sessions live in a **modal
+  window**, not a dropdown: folders, favorites, sort and search need the room, and it's what people know
+  from "Open project" screens. Delete confirms inline (no browser dialogs); import never overwrites.
+- **A detected key only re-labels**: the chords are already in it, so offering to transpose them (as a
+  hand-picked key does) would be the opposite of what was asked.
 - **Home is context, not content.** Changing home re-labels; moving chords is an
   explicit, offered action. (Earlier, key changes rewrote the chords, which made
   C major → A minor turn C into Am despite identical notes.) Home and time signature
@@ -718,7 +749,8 @@ them up.
   - `theory.ts`: scales/modes (`MODE_INFO`), the key's chords (`degreeChord`, sizes in
     `FLAVORS`), `romanNumeral`, `rootDegree`, `chordToKey`, `stackChord` (chords from any scale).
   - `home.ts`: Home: what a home change means (`homeMove`, `sameNotes`), detection
-    (`detectHome`, `suggestHome`), and Spice chords (`spiceChords`, for "Add color").
+    (`rankHomes`, `detectHome`, `keyCandidates`, `homeReason`, `suggestHome`), and Spice chords
+    (`spiceChords`, for "Add color").
   - `analysis.ts`: fit to the key (diatonic / borrowed / secondary dominant / passing
     diminished / tritone sub / outside) and tension, in plain words.
   - `voicing.ts`: `smoothVoicing` (voice leading via inversions), `fitOctave`.
@@ -733,7 +765,9 @@ them up.
 - `src/track.ts`: the `Track` document type, defaults, validation and migration of stored data.
 - `src/history.ts`: undo/redo (pure transitions + `useHistory`, optionally persisted).
 - `src/persist.ts`: localStorage helpers + `usePersistentState`, `copyKeys`/`removeKeys`.
-- `src/session.ts`: sessions (keys, list, save as, summaries; `useSessions`).
+- `src/session.ts`: sessions (keys, list, folders, favorites, sort/filter, migration `prepareSessions`,
+  summaries; `useSessions`).
+- `src/backup.ts`: backup files (`downloadBackup`, `readBackup`, `planImport`).
 - `src/platform.ts`: Mac vs Windows modifiers (`copyKey`, `freeKey`, `nudgeKey`).
 - `src/selection.ts`: selection rules (`clickSelect`, `selectAll`, `pruneSelection`).
 - `src/shortcuts.ts`: key → action (`shortcutFor`); App executes actions.
@@ -750,7 +784,7 @@ them up.
   - `Panel.tsx`: the collapsible panel (Voicing). The chord details are a plain
     `section.details-panel`; their X lives in the inspector's header.
   - `ChordInspector.tsx`, `NotesLane.tsx`, `ProgressionMenu.tsx`, `HomeMenu.tsx`,
-    `HomeNotice.tsx`, `SessionMenu.tsx`,
+    `HomeNotice.tsx`, `SessionBrowser.tsx` (the sessions trigger + window),
     `GrooveMenu.tsx`, `MidiMenu.tsx` (+ `useDropdown.ts`): see Behavior.
     The lane renders inside `Timeline` and follows the playhead via the `--playhead`
     CSS variable set on `.timeline`.

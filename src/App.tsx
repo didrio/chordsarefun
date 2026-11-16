@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { ChordInspector, type InspectorTab } from './components/ChordInspector'
 import { NotesLane } from './components/NotesLane'
 import { ProgressionMenu, type ProgressionMenuHandle } from './components/ProgressionMenu'
@@ -11,11 +11,12 @@ import { HomeMenu } from './components/HomeMenu'
 import { TempoInput, TimingMenu } from './components/OptionsMenu'
 import { Panel } from './components/Panel'
 import { LoopIcon, PauseIcon, PlayIcon, PlusIcon, RedoIcon, StopIcon, UndoIcon } from './components/Icons'
-import { SessionMenu } from './components/SessionMenu'
+import { SessionMenu } from './components/SessionBrowser'
 import { Timeline } from './components/Timeline'
 import { useChordDrag, type DragState } from './components/useChordDrag'
 import { describeDrop, heldName } from './dropLabel'
-import { clearScratch, sessionPrefix, useSessions, type Sessions } from './session'
+import { sessionPrefix, useSessions, type Sessions } from './session'
+import { downloadBackup } from './backup'
 import { useHistory } from './history'
 import { usePersistentState } from './persist'
 import { clickSelect, EMPTY_SELECTION, pruneSelection, selectAll, type ClickMods, type Selection } from './selection'
@@ -32,13 +33,14 @@ import {
   setBpm as setTransportBpm,
   setMetronome,
   setGroove as setAudioGroove,
+  silenceAll,
   startPlayback,
   stopPlayback,
   stopPreview,
 } from './music/audio'
 import { canInvert, invert, shiftOctave, type Chord } from './music/chord'
 import { downloadMidi } from './music/midi'
-import { suggestHome, type Home } from './music/home'
+import { keyCandidates, suggestHome, type Home } from './music/home'
 import { inContext } from './music/suggest'
 import { PROGRESSIONS, progressionChords, progressionClips, type Progression } from './music/progressions'
 import {
@@ -90,40 +92,41 @@ import {
  */
 export default function App() {
   const sessions = useSessions()
-  const resetScratch = useRef(false)
   const flushRef = useRef<() => void>(() => {})
-  // After saving the unsaved session under a name, start the unsaved one over. Runs after
-  // the old workspace unmounted (its last save) and the new one loaded.
-  useEffect(() => {
-    if (!resetScratch.current) return
-    resetScratch.current = false
-    clearScratch()
-  }, [sessions.current])
-  const saveAs = (name: string) => {
-    flushRef.current()
-    const fromScratch = sessions.current === null
-    const id = sessions.saveAs(name)
-    resetScratch.current = fromScratch
+  /** Save what's on screen first, so a switch, copy or backup has the latest edits and undo history. */
+  const flush = () => flushRef.current()
+  const open = (id: string) => {
+    flush()
     sessions.open(id)
   }
-  /** Save what's on screen first, so a copy has the latest edits and undo history. */
-  const duplicate = (id: string | null) => {
-    if (id === sessions.current) flushRef.current()
-    sessions.duplicate(id)
+  const duplicate = (id: string) => {
+    if (id === sessions.current) flush()
+    return sessions.duplicate(id)
   }
-  const newSession = () => {
-    flushRef.current()
-    sessions.open(sessions.create())
+  const newSession = (folder: string | null) => {
+    flush()
+    sessions.create(folder)
+  }
+  const backup = () => {
+    flush()
+    downloadBackup()
   }
   return (
     <Workspace
-      key={sessions.current ?? 'scratch'}
-      onDuplicate={duplicate}
-      onNew={newSession}
+      key={sessions.current}
       prefix={sessionPrefix(sessions.current)}
       sessions={sessions}
-      onSaveAs={saveAs}
       flushRef={flushRef}
+      sessionMenu={
+        <SessionMenu
+          sessions={sessions}
+          onFlush={flush}
+          onOpen={open}
+          onNew={newSession}
+          onDuplicate={duplicate}
+          onBackup={backup}
+        />
+      }
     />
   )
 }
@@ -134,7 +137,8 @@ const isSelection = (v: unknown) => {
 }
 
 /** Elements whose clicks don't clear the clip selection. */
-const KEEPS_SELECTION = '.clip, button, input, select, label, summary, .ruler, .panel, .notes-lane, .dropdown, .home-notice'
+const KEEPS_SELECTION =
+  '.clip, button, input, select, label, summary, .ruler, .panel, .notes-lane, .dropdown, .home-notice, .session-backdrop'
 
 /** Chord size for ideas. The Triads/7ths/9ths toggle is gone with the palette, so ideas use triads. */
 const flavor: PaletteFlavor = 'triads'
@@ -151,14 +155,13 @@ type WorkspaceProps = {
   /** Storage key prefix of the session (see session.ts). */
   prefix: string
   sessions: Sessions
-  onSaveAs: (name: string) => void
-  onDuplicate: (id: string | null) => void
-  onNew: () => void
+  /** The sessions trigger (and window), shown in the song bar. */
+  sessionMenu: ReactNode
   /** Set to this workspace's "save everything now", so a session can be copied right away. */
   flushRef: { current: () => void }
 }
 
-function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }: WorkspaceProps) {
+function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) {
   // Everything here is saved in the session (keys listed in SESSION_KEYS).
   const k = (key: string) => prefix + key
   // Hidden by default: powerful, but a lot on first sight.
@@ -190,8 +193,9 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
   useEffect(() => {
     flushRef.current = track.flush
   })
-  // Leaving the session (switching): stop the music it was playing.
-  useEffect(() => () => stopPlayback(), [])
+  // Leaving the session (switching): silence everything it was playing or previewing, so
+  // nothing from it sounds in the session that opens next (which never starts playing by itself).
+  useEffect(() => () => silenceAll(), [])
   // "Last edited" in the session list.
   const touch = useRef(sessions.touch)
   useEffect(() => {
@@ -227,6 +231,7 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
   // Undo can shorten the track under the playhead.
   const playheadPos = playhead < totalTicks ? playhead : 0
   const homeSuggestion = useMemo(() => suggestHome(clips, { tonic, mode }), [clips, tonic, mode])
+  const detectedKeys = useMemo(() => keyCandidates(clips), [clips])
   /**
    * After a home change: the home the chords were written in, offered as "move them".
    * It lasts while the chords are untouched (same clips array) and home is still `to`.
@@ -468,6 +473,8 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
       const t = e.target
       const typing = (t instanceof HTMLInputElement && t.type !== 'range') || t instanceof HTMLSelectElement
       if (typing) return
+      // The sessions window is modal: it handles its own keys.
+      if (document.querySelector('.session-backdrop')) return
       // Dropdowns and sliders handle their own keys (arrows, Enter, Esc), but Space
       // still plays/pauses so changes can be heard without leaving them.
       if (t instanceof Element && t.closest('.dropdown, input[type="range"]') && e.key !== ' ') return
@@ -562,6 +569,16 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
     setHomeOffer(chordClips(clips).length > 0 ? { from, to, clips } : null)
   }
 
+  /**
+   * Use a key detected from the chords (one undo step). Only a re-label: the chords are
+   * already in that key, so no offer to move them (and any earlier offer goes away).
+   */
+  const applyDetectedKey = (to: Home) => {
+    if (to.tonic === tonic && to.mode === mode) return
+    track.commit((t) => ({ ...t, ...to }))
+    setHomeOffer(null)
+  }
+
   /** Move the chords from the home they were written in to the current one (one undo step). */
   const moveChordsHome = () => {
     if (!activeOffer) return
@@ -594,9 +611,15 @@ function Workspace({ prefix, sessions, onSaveAs, onDuplicate, onNew, flushRef }:
           <h1>create a chord progression</h1>
           <HelpTip />
         </div>
-        <SessionMenu sessions={sessions} onSaveAs={onSaveAs} onDuplicate={onDuplicate} onOpen={sessions.open} onNew={onNew} />
+        {sessionMenu}
         <div className="song-settings">
-          <HomeMenu home={{ tonic, mode }} suggestion={homeSuggestion} onChange={changeHome} />
+          <HomeMenu
+            home={{ tonic, mode }}
+            suggestion={homeSuggestion}
+            detected={detectedKeys}
+            onChange={changeHome}
+            onDetect={applyDetectedKey}
+          />
           <label className="tempo-field" title="Tempo in beats (quarter notes) per minute">
             <TempoInput bpm={bpm} onBpm={setBpm} />
             <span className="tempo-unit">BPM</span>

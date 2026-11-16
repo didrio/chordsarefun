@@ -62,35 +62,79 @@ export function homeFit(clips: Clip[], home: Home): number {
   return total ? inside / total : 1
 }
 
-/** How strongly the track points at a home: fit first, then whether its home chord is there (and first/last). */
-function homeScore(clips: Clip[], home: Home): number {
-  const sorted = chordClips(clips).sort((a, b) => a.start - b.start)
-  const tonicTriad = degreeChord(home.tonic, home.mode, 0, 3)
-  const isHomeChord = (c: Chord) =>
+/** The home chord of a home: its tonic triad (C in C major, Am in A minor). */
+const homeChordOf = (home: Home) => degreeChord(home.tonic, home.mode, 0, 3)
+
+const isHomeChordOf = (home: Home) => {
+  const tonicTriad = homeChordOf(home)
+  return (c: Chord) =>
     Note.chroma(c.root) === Note.chroma(home.tonic) && chordType(c.type).lower === chordType(tonicTriad.type).lower
+}
+
+/** One possible home for the chords, with what it was judged on. */
+export type RankedHome = {
+  home: Home
+  /** homeFit: share of the note-time in the home's scale. */
+  fit: number
+  /** Whether the first / last chord is the home chord. */
+  startsHome: boolean
+  endsHome: boolean
+  score: number
+}
+
+/** How strongly the track points at a home: fit first, then whether its home chord is there (and first/last). */
+function rankHome(clips: Clip[], home: Home): RankedHome {
+  const sorted = chordClips(clips).sort((a, b) => a.start - b.start)
+  const isHomeChord = isHomeChordOf(home)
   const total = sorted.reduce((s, c) => s + c.length, 0) || 1
   const homeShare = sorted.filter((c) => isHomeChord(c.chord)).reduce((s, c) => s + c.length, 0) / total
-  return (
-    homeFit(sorted, home) * 10 +
-    homeShare * 2 +
-    (sorted[0] && isHomeChord(sorted[0].chord) ? 0.6 : 0) +
-    (sorted.length > 1 && isHomeChord(sorted[sorted.length - 1].chord) ? 0.3 : 0) +
-    MODE_COMMONNESS[home.mode] * 0.1
-  )
+  const fit = homeFit(sorted, home)
+  const startsHome = !!sorted[0] && isHomeChord(sorted[0].chord)
+  const endsHome = sorted.length > 1 && isHomeChord(sorted[sorted.length - 1].chord)
+  const score = fit * 10 + homeShare * 2 + (startsHome ? 0.6 : 0) + (endsHome ? 0.3 : 0) + MODE_COMMONNESS[home.mode] * 0.1
+  return { home, fit, startsHome, endsHome, score }
+}
+
+/** Every key and mood, the one the chords point to most strongly first. Empty for a track with no chords. */
+export function rankHomes(clips: Clip[]): RankedHome[] {
+  if (chordClips(clips).length === 0) return []
+  return KEYS.flatMap((tonic) => MODES.map((mode) => rankHome(clips, { tonic, mode }))).sort((a, b) => b.score - a.score)
 }
 
 /** The home the chords point to most strongly, or null for an empty track. */
 export function detectHome(clips: Clip[]): Home | null {
-  if (chordClips(clips).length === 0) return null
-  let best: { home: Home; score: number } | null = null
-  for (const tonic of KEYS) {
-    for (const mode of MODES) {
-      const home = { tonic, mode }
-      const score = homeScore(clips, home)
-      if (!best || score > best.score) best = { home, score }
-    }
-  }
-  return best!.home
+  return rankHomes(clips)[0]?.home ?? null
+}
+
+/** Moods everyone knows: the only ones offered as second opinions when detecting a key. */
+const EVERYDAY_MOODS: ModeName[] = ['ionian', 'aeolian']
+
+/**
+ * Keys to offer for "Detect from your chords": the best match, then up to two close
+ * second opinions in major or minor (the relative key, usually) that fit nearly as well.
+ * Rare moods only show when they're the best match, so C G Am F reads "C major, A minor",
+ * not "F Lydian".
+ */
+export function keyCandidates(clips: Clip[], max = 3): RankedHome[] {
+  const [best, ...rest] = rankHomes(clips)
+  if (!best) return []
+  const others = rest.filter((r) => EVERYDAY_MOODS.includes(r.home.mode) && r.fit >= best.fit - 0.05)
+  return [best, ...others].slice(0, max)
+}
+
+/** Why a key was detected, in plain words: "Every note fits · starts and ends on C". */
+export function homeReason(r: RankedHome): string {
+  const fit = r.fit >= 0.995 ? 'Every note fits' : `${Math.round(r.fit * 100)}% of the notes fit`
+  const name = chordName(homeChordOf(r.home))
+  const where =
+    r.startsHome && r.endsHome
+      ? `starts and ends on ${name}`
+      : r.startsHome
+        ? `starts on ${name}`
+        : r.endsHome
+          ? `ends on ${name}`
+          : null
+  return where ? `${fit} · ${where}` : fit
 }
 
 /**

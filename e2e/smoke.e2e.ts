@@ -187,3 +187,99 @@ describe('key-change notice', () => {
     expect(await top()).toBe(before)
   })
 })
+
+describe('detect key', () => {
+  it('lists keys from the chords and uses one without offering to move them', async () => {
+    const p = await start(full())
+    await p.locator('.home-menu .dropdown-trigger').click()
+    const items = p.locator('.home-detect-item .menu-title')
+    expect(await items.allTextContents()).toEqual(['C MajorBest matchCurrent', 'A Minor'])
+    await items.nth(1).click()
+    expect(await p.locator('.home-menu .trigger-value').textContent()).toBe('A Minor')
+    expect(await p.locator('.home-notice').count()).toBe(0)
+  })
+})
+
+describe('sessions window', () => {
+  const sessionNames = (p: Page) => p.locator('.session-row .session-title').allTextContents()
+  const openWindow = async (p: Page) => {
+    await p.locator('.session-trigger').click()
+    await p.locator('.session-browser').waitFor()
+  }
+  const rowMenu = async (p: Page, name: string, item: string | RegExp) => {
+    await p.getByRole('button', { name: `More options for ${name}`, exact: true }).click()
+    await p.locator('.session-popup button', { hasText: item }).click()
+  }
+
+  it('makes, renames, stars, files, sorts, copies and deletes sessions', async () => {
+    const p = await start(full())
+    // The old unsaved work arrives as a listed session.
+    expect(await p.locator('.session-trigger').textContent()).toContain('Untitled session')
+    await openWindow(p)
+    await p.locator('button.session-new').click()
+    expect(await p.locator('.session-browser').count()).toBe(0)
+    expect(await names(p)).toEqual([])
+    expect(await p.locator('.session-trigger').textContent()).toContain('Untitled session 2')
+
+    // Leaving a blank, untouched session throws it away.
+    await openWindow(p)
+    await p.locator('.session-open', { hasText: /^Untitled session(?! 2)/ }).click()
+    expect(await names(p)).toEqual(['C', 'F', 'G', 'Am'])
+    await openWindow(p)
+    expect(await sessionNames(p)).toEqual(['Untitled session'])
+
+    // Rename inline.
+    await rowMenu(p, 'Untitled session', 'Rename')
+    await p.keyboard.type('My song')
+    await p.keyboard.press('Enter')
+    expect(await sessionNames(p)).toEqual(['My song'])
+    expect(await p.locator('.session-trigger').textContent()).toContain('My song')
+
+    // Star it.
+    await p.getByRole('button', { name: 'Add My song to favorites' }).click()
+    await p.locator('.session-view', { hasText: 'Favorites' }).click()
+    expect(await sessionNames(p)).toEqual(['My song'])
+
+    // A folder, then move the session into it from its menu.
+    await p.getByRole('button', { name: 'New folder', exact: true }).click()
+    await p.keyboard.type('Album')
+    await p.keyboard.press('Enter')
+    await p.locator('.session-view', { hasText: 'All sessions' }).click()
+    await rowMenu(p, 'My song', 'Album')
+    await p.locator('.session-view', { hasText: 'Album' }).click()
+    expect(await sessionNames(p)).toEqual(['My song'])
+
+    // Duplicate stays in the folder; sort by name.
+    await rowMenu(p, 'My song', 'Duplicate')
+    expect((await sessionNames(p)).sort()).toEqual(['My song', 'My song copy'])
+    await p.locator('.session-sort select').selectOption('name')
+    expect(await sessionNames(p)).toEqual(['My song', 'My song copy'])
+
+    // Delete asks first, in place.
+    await rowMenu(p, 'My song copy', 'Delete')
+    await p.locator('.session-row.confirming button', { hasText: 'Delete' }).click()
+    expect(await sessionNames(p)).toEqual(['My song'])
+
+    // Esc closes and keeps the session open.
+    await p.keyboard.press('Escape')
+    expect(await p.locator('.session-browser').count()).toBe(0)
+    expect(await names(p)).toEqual(['C', 'F', 'G', 'Am'])
+  })
+
+  it('backs up everything to one file and imports it without overwriting', async () => {
+    const p = await start(full())
+    await openWindow(p)
+    const [download] = await Promise.all([
+      p.waitForEvent('download'),
+      p.locator('button', { hasText: 'Back up all sessions' }).click(),
+    ])
+    expect(download.suggestedFilename()).toMatch(/^chords-backup-\d{4}-\d\d-\d\d\.json$/)
+    const file = await download.path()
+    await p.locator('.session-backup input[type="file"]').setInputFiles(file)
+    await p.locator('.session-browser-foot [role="status"]', { hasText: 'Imported 1 session' }).waitFor()
+    expect((await sessionNames(p)).sort()).toEqual(['Untitled session', 'Untitled session (imported)'])
+    // The copy has the chords.
+    await p.locator('.session-open', { hasText: '(imported)' }).click()
+    expect(await names(p)).toEqual(['C', 'F', 'G', 'Am'])
+  })
+})

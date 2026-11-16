@@ -1656,17 +1656,40 @@ input[type='text'][aria-invalid='true'] {
   font-size: var(--fs-sm);
 }
 
-.home-suggest {
+.home-detect {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-bottom: 0.4rem;
+}
+
+.home-detect-item[aria-current='true'] {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.home-detect-item .menu-title {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.6rem;
-  margin: 0.1rem 0.1rem 0.4rem;
-  padding: 0.5rem 0.6rem;
-  font-size: var(--fs-sm);
-  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  gap: 0.4rem;
+}
+
+.home-detect-tag {
+  padding: 0.05rem 0.4rem;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--accent);
   border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
-  border-radius: 8px;
+  border-radius: 999px;
+}
+
+.home-detect-tag.current {
+  color: var(--muted);
+  border-color: var(--border);
+}
+
+.home-detect-empty {
+  margin: 0 0.4rem 0.5rem;
+  font-size: var(--fs-sm);
 }
 
 .suggest-dot {
@@ -1796,102 +1819,447 @@ button.dice {
   white-space: nowrap;
 }
 
-.session-panel {
-  left: 0;
-  width: 26rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding: 1rem;
-  color: var(--text);
-}
-
-.session-save {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.session-save input {
-  flex: 1;
-  min-width: 0;
-}
-
-.session-note {
-  margin: 0.5rem 0 0;
-  font-size: var(--fs-xs);
-  line-height: 1.4;
-}
-
-.session-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  max-height: 18rem;
-  margin: 0;
-  padding: 0;
-  overflow-y: auto;
-  list-style: none;
-}
-
-.session-list li {
+/* The sessions window: a modal over the page (backdrop centers it, no transform, so its
+   popup menus can be position: fixed). Fixed size: views left, list right, list scrolls. */
+.session-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  justify-content: center;
+  padding: 1rem;
+  background: #0009;
 }
 
-.session-item {
+.session-browser {
+  display: grid;
+  grid-template-columns: 12rem minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'head head'
+    'side main'
+    'foot foot';
+  width: min(48rem, 100%);
+  height: min(34rem, 100%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 24px 64px #000c;
+  outline: none;
+}
+
+.session-browser-head {
+  grid-area: head;
   display: flex;
-  flex: 1;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.15rem;
-  min-width: 0;
-  padding: 0.5rem 0.75rem;
-  text-align: left;
-  border-color: transparent;
-  background: transparent;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.75rem 0.75rem 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
 }
 
-.session-item:hover {
+.session-browser-head h2 {
+  font-size: var(--fs-lg);
+  margin-right: auto;
+}
+
+input.session-search {
+  flex: 0 1 15rem;
+  min-width: 0;
+  font: inherit;
+  font-size: var(--fs-sm);
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+}
+
+button.session-new {
+  flex: none;
+  white-space: nowrap;
+}
+
+button.session-close {
+  flex: none;
+  padding: 0.2rem 0.6rem;
+  font-size: var(--fs-lg);
+  line-height: 1;
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+}
+
+.session-sidebar {
+  grid-area: side;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-height: 0;
+  padding: 0.6rem;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+}
+
+button.session-view {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  min-width: 0;
+  padding: 0.4rem 0.55rem;
+  font-size: var(--fs-sm);
+  text-align: left;
+  background: transparent;
+  border-color: transparent;
+}
+
+button.session-view[aria-current='true'] {
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.session-view-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-count {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+
+.session-folders-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0.7rem 0 0.1rem;
+  padding-left: 0.55rem;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.session-folder {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.session-sidebar-note {
+  margin: 0.2rem 0.55rem;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+
+.session-folder-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.5rem;
+  font-size: var(--fs-xs);
+  line-height: 1.35;
+  background: color-mix(in srgb, var(--tension-2) 10%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--tension-2) 40%, transparent);
+  border-radius: 6px;
+}
+
+.session-folder-confirm-buttons {
+  display: flex;
+  gap: 0.3rem;
+}
+
+/* Ghost buttons: ⋯ menus, the folder +. */
+button.session-more {
+  flex: none;
+  padding: 0.15rem 0.45rem;
+  font-size: var(--fs-md);
+  line-height: 1.2;
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+}
+
+button.session-more:hover:not(:disabled),
+button.session-more[aria-expanded='true'] {
+  color: var(--text);
   background: var(--surface-hover);
 }
 
-.session-item .session-title {
-  max-width: 100%;
+.session-main {
+  grid-area: main;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.session-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.6rem 0.75rem 0.4rem 1rem;
+}
+
+.session-view-title {
+  min-width: 0;
   overflow: hidden;
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.session-item .muted {
+.session-sort {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.session-sort select {
+  padding: 0.25rem 0.5rem;
+  font-size: var(--fs-sm);
+}
+
+.session-rows {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0 0.5rem 0.5rem;
+  overflow-y: auto;
+  list-style: none;
+}
+
+/* Every row the same height, whatever it's showing (name, rename box, delete confirm). */
+.session-row {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  height: 3.4rem;
+  padding: 0 0.25rem;
+  border-radius: 8px;
+}
+
+.session-row:hover {
+  background: color-mix(in srgb, var(--surface-hover) 60%, transparent);
+}
+
+.session-row.flash {
+  animation: session-flash 1.6s ease-out;
+}
+
+@keyframes session-flash {
+  from {
+    background: color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+}
+
+button.session-star {
+  flex: none;
+  width: 2rem;
+  padding: 0.2rem 0;
+  font-size: var(--fs-md);
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+}
+
+button.session-star[aria-pressed='true'] {
+  color: var(--tension-1);
+}
+
+.session-open {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.15rem;
+  min-width: 0;
+  height: 100%;
+  padding: 0 0.5rem;
+  text-align: left;
+  background: transparent;
+  border-color: transparent;
+}
+
+button.session-open:hover:not(:disabled) {
+  background: transparent;
+}
+
+button.session-open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.session-title-line {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
   max-width: 100%;
+}
+
+.session-title {
+  min-width: 0;
   overflow: hidden;
-  font-size: var(--fs-xs);
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.session-item[aria-current='true'] {
-  border-color: var(--accent);
-  background: var(--surface-hover);
-}
-
-.session-item[aria-current='true'] .session-title::before {
-  content: '● ';
+.session-badge {
+  flex: none;
+  padding: 0.02rem 0.4rem;
+  font-size: var(--fs-xs);
   color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  border-radius: 999px;
 }
 
-.session-action {
-  align-self: center;
-  border-color: transparent;
-  background: transparent;
+.session-meta {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-open.renaming input {
+  flex: none;
+  width: 100%;
+  padding: 0.2rem 0.45rem;
+  font-weight: 600;
+}
+
+.session-name-input {
+  width: 100%;
+}
+
+.session-sidebar .session-name-input {
+  flex: none;
+  padding: 0.3rem 0.5rem;
+  font-size: var(--fs-sm);
+}
+
+.session-row.confirming {
+  gap: 0.4rem;
+  padding: 0 0.5rem;
+  background: color-mix(in srgb, var(--tension-2) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tension-2) 40%, transparent);
+}
+
+.session-confirm-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--fs-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+button.danger-fill {
+  color: var(--bg);
+  font-weight: 600;
+  background: var(--tension-2);
+  border-color: var(--tension-2);
+}
+
+button.danger-fill:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--tension-2) 85%, white);
+}
+
+.session-empty {
+  margin: 1rem;
+  font-size: var(--fs-sm);
   color: var(--muted);
 }
 
-.session-action:hover {
-  color: var(--text);
+/* ⋯ menus: fixed on screen, placed by the button (or right-click) that opened them. */
+.session-popup {
+  position: fixed;
+  z-index: 41;
+  display: flex;
+  flex-direction: column;
+  width: 210px;
+  max-height: 60vh;
+  padding: 0.3rem;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px #000a;
 }
+
+.session-popup button {
+  flex: none;
+  padding: 0.35rem 0.6rem;
+  font-size: var(--fs-sm);
+  text-align: left;
+  background: transparent;
+  border-color: transparent;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-popup button[aria-checked='true']::after {
+  content: ' ✓';
+  color: var(--accent);
+}
+
+.session-popup button.danger {
+  color: var(--tension-2);
+}
+
+.session-popup input {
+  flex: none;
+  margin: 0.1rem 0;
+  font-size: var(--fs-sm);
+}
+
+.session-popup hr {
+  width: 100%;
+  margin: 0.25rem 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
+.session-popup-label {
+  padding: 0.4rem 0.6rem 0.15rem;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.session-browser-foot {
+  grid-area: foot;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 0.6rem 0.75rem 0.6rem 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.session-browser-foot .muted {
+  flex: 1 1 14rem;
+  font-size: var(--fs-xs);
+}
+
+.session-backup {
+  display: flex;
+  gap: 0.4rem;
+}
+
 
 /* Details panel: a bar to collapse/expand it, like a DAW's detail view. */
 .panel-bar {
@@ -2510,11 +2878,6 @@ button.show-all {
   font-size: var(--fs-sm);
 }
 
-/* + New session, first in the sessions menu. */
-button.session-new {
-  align-self: flex-start;
-}
-
 /*
  * Three button weights: accent (Play, + New, the empty track's start button), bordered
  * (menus and settings: the default), and ghost for small utility icons (dice, undo,
@@ -2791,5 +3154,78 @@ button.dice:hover:not(:disabled),
 
   .ideas-grid {
     gap: 0.6rem;
+  }
+
+  /* The sessions window fills the screen; the views become a row of chips over the list. */
+  .session-backdrop {
+    padding: 0;
+  }
+
+  .session-browser {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-areas: 'head' 'side' 'main' 'foot';
+    width: 100%;
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .session-browser-head {
+    flex-wrap: wrap;
+  }
+
+  /* Title, + New session and the close button on one row, the search under them. */
+  button.session-new {
+    order: 1;
+  }
+
+  button.session-close {
+    order: 2;
+  }
+
+  input.session-search {
+    order: 3;
+    flex: 1 1 100%;
+  }
+
+  .session-sidebar {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.5rem 0.75rem;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .session-sidebar > *,
+  button.session-view {
+    flex: none;
+    width: auto;
+  }
+
+  .session-folders-head {
+    margin: 0 0 0 0.4rem;
+    padding: 0;
+  }
+
+  .session-folders-head > span,
+  .session-sidebar-note {
+    display: none;
+  }
+
+  .session-view-name {
+    max-width: 9rem;
+  }
+
+  .session-sidebar .session-name-input {
+    width: 9rem;
+  }
+
+  .session-folder-confirm {
+    flex-direction: row;
+    align-items: center;
+    max-width: 22rem;
   }
 }

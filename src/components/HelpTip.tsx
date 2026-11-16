@@ -81,8 +81,8 @@ export function HelpTip() {
             signature, length and grid are under <b>4/4 · 4 bars</b>.
           </li>
           <li>
-            <b>Keep it.</b> Everything saves as you go. Name a session to keep it, and Download MIDI to take the chords
-            into your DAW.
+            <b>Keep it.</b> Everything saves as you go. The session name at the top opens all your sessions (folders,
+            favorites, a backup file), and Download MIDI takes the chords into your DAW.
           </li>
         </ol>
         </div>

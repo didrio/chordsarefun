@@ -31,6 +31,25 @@ export function removeKeys(keys: string[], prefix: string) {
   }
 }
 
+/** The raw stored string under a key, or null (e.g. to check that a copy arrived intact). */
+export function loadRaw(key: string): string | null {
+  try {
+    return localStorage.getItem(storageKey(key))
+  } catch {
+    return null
+  }
+}
+
+/** Store a raw (already JSON) value, e.g. one restored from a backup. Returns false if storage failed (full?). */
+export function saveRaw(key: string, raw: string): boolean {
+  try {
+    localStorage.setItem(storageKey(key), raw)
+    return true
+  } catch {
+    return false
+  }
+}
+
 export function load<T>(key: string, fallback: T, isValid: (v: unknown) => boolean): T {
   try {
     const raw = localStorage.getItem(storageKey(key))

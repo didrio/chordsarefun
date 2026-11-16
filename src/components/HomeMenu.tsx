@@ -1,24 +1,33 @@
 import { useEffect, useRef } from 'react'
-import type { Home } from '../music/home'
+import { homeReason, type Home, type RankedHome } from '../music/home'
 import { KEYS, keyName, MODE_INFO, MODE_LABELS, MODES } from '../music/theory'
 import { arrowNav, useDropdown } from './useDropdown'
 
 type Props = {
   home: Home
-  /** A home the chords fit clearly better, if any. */
+  /** A home the chords fit clearly better, if any (a dot on the trigger). */
   suggestion: Home | null
+  /** Keys detected from the chords, best first (keyCandidates); empty with no chords. */
+  detected: RankedHome[]
+  /** Picked by hand: re-labels, then offers to move the chords. */
   onChange: (home: Home) => void
+  /** A detected key: re-labels only (the chords are already in it). */
+  onDetect: (home: Home) => void
 }
 
 /** "C major" with a capital mood word for the trigger: "C Major", "A Minor", "D Dorian". */
 const title = (h: Home) => keyName(h.tonic, h.mode).replace(/ (\w)/, (_, c: string) => ` ${c.toUpperCase()}`)
 
+const isSame = (a: Home, b: Home) => a.tonic === b.tonic && a.mode === b.mode
+
 /**
  * The song's key, shown as "Key" (the word people know; "home" is how the app explains
- * it): the 12 notes as buttons and the mood (described), most common first. Changing it
- * re-labels the chords and never changes them (the app then offers to move them).
+ * it): first the keys detected from the chords (best match, then close second opinions),
+ * then the 12 notes as buttons and the mood (described), most common first. Changing it
+ * re-labels the chords and never changes them (picked by hand, the app then offers to move
+ * them; a detected key needs no move, the chords are already in it).
  */
-export function HomeMenu({ home, suggestion, onChange }: Props) {
+export function HomeMenu({ home, suggestion, detected, onChange, onDetect }: Props) {
   const { open, setOpen, rootRef } = useDropdown()
   const panelRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -44,20 +53,33 @@ export function HomeMenu({ home, suggestion, onChange }: Props) {
       </button>
       {open && (
         <div className="dropdown-panel home-panel" role="dialog" aria-label="Key" ref={panelRef}>
-          {suggestion && (
-            <div className="home-suggest">
-              <span>
-                Your chords fit <strong>{keyName(suggestion.tonic, suggestion.mode)}</strong> best.
-              </span>
-              <button
-                className="small"
-                onClick={() => {
-                  onChange(suggestion)
-                  setOpen(false)
-                }}
-              >
-                Use it
-              </button>
+          <div className="home-section-label">Detect from your chords</div>
+          {detected.length === 0 ? (
+            <p className="home-detect-empty muted">Add chords and the key can be detected from them.</p>
+          ) : (
+            <div className="home-detect" role="group" aria-label="Detected keys">
+              {detected.map((r, i) => {
+                const current = isSame(r.home, home)
+                return (
+                  <button
+                    key={`${r.home.tonic} ${r.home.mode}`}
+                    className="menu-item home-detect-item"
+                    aria-current={current}
+                    title={current ? 'Your song is already in this key' : 'Use this key (your chords stay as they are)'}
+                    onClick={() => {
+                      if (!current) onDetect(r.home)
+                      setOpen(false)
+                    }}
+                  >
+                    <span className="menu-title">
+                      {title(r.home)}
+                      {i === 0 && <span className="home-detect-tag">Best match</span>}
+                      {current && <span className="home-detect-tag current">Current</span>}
+                    </span>
+                    <span className="menu-desc">{homeReason(r)}</span>
+                  </button>
+                )
+              })}
             </div>
           )}
           <div className="home-section-label">Home note</div>

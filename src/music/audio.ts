@@ -23,6 +23,10 @@ let graph: {
   bassVolume: Tone.Volume
   drumVolume: Tone.Volume
   kit: Kit
+  /** Every node above, for dispose(). */
+  nodes: { dispose: () => void }[]
+  /** Master output after the limiter: faded to silence when everything stops at once (silenceAll). */
+  out: Tone.Gain
 } | null = null
 let chordSynth: { id: string; synth: Poly } | null = null
 let bassSynth: { id: string; synth: Poly } | null = null
@@ -35,7 +39,7 @@ export function makePoly(inst: Instrument, out: Tone.InputNode): Poly {
   return new Tone.PolySynth(voice, inst.options as Partial<Tone.SynthOptions>).connect(out)
 }
 
-type Kit = { trigger: (voice: DrumVoice, time: number, velocity: number) => void }
+type Kit = { trigger: (voice: DrumVoice, time: number, velocity: number) => void; dispose: () => void }
 
 /**
  * Each drum voice's level in dB, balanced by measured peak (offline render): snare about
@@ -58,8 +62,10 @@ export function makeKit(out: Tone.InputNode): Kit {
     envelope: { attack: 0.001, decay: 0.12, sustain: 0, release: 0.02 },
     volume: KIT_LEVELS.snareBody,
   }).connect(out)
+  const filters: Tone.Filter[] = []
   const noise = (decay: number, freq: number, type: BiquadFilterType, volume: number) => {
     const filter = new Tone.Filter(freq, type).connect(out)
+    filters.push(filter)
     return new Tone.NoiseSynth({
       noise: { type: 'white' },
       envelope: { attack: 0.001, decay, sustain: 0, release: 0.01 },
@@ -76,6 +82,9 @@ export function makeKit(out: Tone.InputNode): Kit {
     volume: KIT_LEVELS.rim,
   }).connect(out)
   return {
+    dispose() {
+      for (const node of [kick, body, snare, hat, openhat, ride, rim, ...filters]) node.dispose()
+    },
     trigger(voice, time, velocity) {
       switch (voice) {
         case 'kick':
@@ -98,18 +107,23 @@ export function makeKit(out: Tone.InputNode): Kit {
 
 function getGraph() {
   if (!graph) {
-    const limiter = new Tone.Limiter(-1).toDestination()
+    const out = new Tone.Gain(1).toDestination()
+    const limiter = new Tone.Limiter(-1).connect(out)
     const chordVolume = new Tone.Volume().connect(limiter)
     const bassVolume = new Tone.Volume().connect(limiter)
     const drumVolume = new Tone.Volume().connect(limiter)
+    const chordFilter = new Tone.Filter({ type: 'lowpass', frequency: cutoffHz(groove.chords.brightness), rolloff: -24 }).connect(
+      chordVolume,
+    )
+    const kit = makeKit(drumVolume)
     graph = {
-      chordFilter: new Tone.Filter({ type: 'lowpass', frequency: cutoffHz(groove.chords.brightness), rolloff: -24 }).connect(
-        chordVolume,
-      ),
+      chordFilter,
       chordVolume,
       bassVolume,
       drumVolume,
-      kit: makeKit(drumVolume),
+      kit,
+      out,
+      nodes: [chordFilter, chordVolume, bassVolume, drumVolume, limiter, out, kit],
     }
     applyGroove()
   }
@@ -199,7 +213,9 @@ export async function ensureAudio() {
  * audible). Parts that are off stay silent, except that chords always sound.
  */
 async function soundChord(chord: Chord, seconds: number) {
+  const gen = generation
   await ensureAudio()
+  if (gen !== generation) return // everything was silenced meanwhile (another session opened)
   getGraph()
   const notes = chordPartVoicing(chord, groove.bass.on)
   chordSynth?.synth.triggerAttackRelease(notes.map(freq), seconds, undefined, chordVelocity(notes.length))
@@ -207,6 +223,12 @@ async function soundChord(chord: Chord, seconds: number) {
 }
 
 let previewTimers: number[] = []
+
+/**
+ * Bumped by silenceAll(). Sounds that wait for the audio to start (`await ensureAudio()`)
+ * check it afterwards, so nothing started before a session switch sounds after it.
+ */
+let generation = 0
 
 /** Stop a preview of several chords (previewProgression) before its next chord. */
 export function stopPreview() {
@@ -306,7 +328,9 @@ const releaseAll = () => {
 
 /** Start (or resume) playback from `fromTicks`. */
 export async function startPlayback(fromTicks: number) {
+  const gen = generation
   await ensureAudio()
+  if (gen !== generation) return
   transport().start(undefined, `${toneTicks(fromTicks)}i`)
   soundAt(fromTicks)
 }
@@ -325,6 +349,33 @@ export function stopPlayback() {
   t.stop()
   t.position = 0
   releaseAll()
+}
+
+/**
+ * Stop every sound right now, for opening another session: playback, previews (and their
+ * pending chords), release tails, and the notes Tone has already queued a little ahead
+ * (PolySynth keeps them on timers that releaseAll() doesn't cancel; disposing the synths
+ * does). The output fades out over a few ms to avoid a click, then the whole sound graph
+ * is thrown away; the next sound builds a fresh one.
+ */
+export function silenceAll() {
+  generation++
+  stopPreview()
+  const t = transport()
+  t.stop()
+  t.position = 0
+  t.cancel(0)
+  const old = { graph, chord: chordSynth, bass: bassSynth }
+  graph = null
+  chordSynth = null
+  bassSynth = null
+  if (!old.graph) return
+  old.graph.out.gain.rampTo(0, 0.03)
+  window.setTimeout(() => {
+    old.chord?.synth.dispose()
+    old.bass?.synth.dispose()
+    old.graph!.nodes.forEach((n) => n.dispose())
+  }, 100)
 }
 
 /** Jump the playhead while playing. */
