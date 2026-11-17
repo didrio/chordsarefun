@@ -7,6 +7,8 @@ import { Panel } from './Panel'
 
 type Props = {
   groove: GrooveSettings
+  /** The section these instruments belong to, named when the song has several. */
+  section?: string
   open: boolean
   onToggle: () => void
   /** A discrete change (toggle, picker, preset): one undo step. */
@@ -89,7 +91,7 @@ const PLAIN = GROOVES.filter((g) => g.id === 'just')
  * strips like DAW tracks (Chords, Bass, Drums) and swing. A preset sets every part's sound,
  * pattern, on/off, volume and swing, never the tempo; any part can then be changed alone.
  */
-export function InstrumentsPanel({ groove, open, onToggle, onChange, onSlideStart, onSlide }: Props) {
+export function InstrumentsPanel({ groove, section, open, onToggle, onChange, onSlideStart, onSlide }: Props) {
   const preset = matchingGroove(groove)
   const { chords, bass, drums } = groove
   const set = <K extends 'chords' | 'bass' | 'drums'>(part: K, patch: Partial<GrooveSettings[K]>) =>
@@ -134,7 +136,7 @@ export function InstrumentsPanel({ groove, open, onToggle, onChange, onSlideStar
     <Panel
       className="instruments-panel"
       title="Instruments"
-      hint="sounds and patterns for chords, bass and drums"
+      hint={section ? `for ${section}: chords, bass and drums` : 'sounds and patterns for chords, bass and drums'}
       open={open}
       onToggle={onToggle}
       actions={presetPicker}

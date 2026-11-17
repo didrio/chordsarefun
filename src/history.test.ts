@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { beginGesture, commit, initHistory, redo, undo, updateGesture } from './history'
+import { beginGesture, commit, initHistory, readHistory, redo, undo, updateGesture } from './history'
 
 const inc = (n: number) => n + 1
 
@@ -50,5 +50,24 @@ describe('history', () => {
     h = beginGesture(h)
     h = updateGesture(h, inc)
     expect(undo(h).present).toBe(1)
+  })
+
+  it('decodes what was saved before migrating and validating it', () => {
+    const persist = {
+      key: 'k',
+      isValid: (v: unknown) => Number.isFinite(v),
+      migrate: (v: unknown) => (typeof v === 'string' ? Number(v) : v),
+      // Saved as an offset: every value stored relative to `base`.
+      decode: (s: unknown) => {
+        const p = s as { base?: number; past: number[]; present: number; future: number[] }
+        if (p.base === undefined) return s
+        const up = (n: number) => n + p.base!
+        return { past: p.past.map(up), present: up(p.present), future: p.future.map(up) }
+      },
+    }
+    expect(readHistory({ base: 10, past: [1], present: 2, future: [3] }, persist)).toMatchObject({ past: [11], present: 12, future: [13] })
+    // Older saves (no `base`) pass through, then migrate.
+    expect(readHistory({ past: ['1'], present: 2, future: [] }, persist)).toMatchObject({ past: [1], present: 2 })
+    expect(readHistory({ past: ['x'], present: 2, future: [] }, persist)).toBeNull()
   })
 })

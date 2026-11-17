@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { load, save } from './persist'
 import {
   filterSessions,
+  hasWork,
   isAutoName,
   migrateMeta,
   prepareSessions,
+  sessionKey,
   sessionMusic,
   sessionPrefix,
   sortSessions,
@@ -12,6 +14,7 @@ import {
   type SessionMeta,
 } from './session'
 import { DEFAULT_TRACK } from './track'
+import { addSection, MAIN_SECTION, packSongHistory, sectionTrack, songFromTrack, withSectionTrack } from './song'
 import { makeChord } from './music/chord'
 import { applyGroove, DEFAULT_GROOVE, GROOVES } from './music/grooves'
 
@@ -131,3 +134,40 @@ describe('sessionMusic', () => {
     expect(sessionMusic('new')).toMatchObject({ groove: funk, bpm: 140 })
   })
 })
+
+describe('sessions hold songs', () => {
+  /** A saved song (packed, as the workspace saves it): an empty main section and a Chorus with `n` chords in D minor. */
+  const song = (n: number) => {
+    const base = addSection({ ...songFromTrack(DEFAULT_TRACK), tonic: 'D', mode: 'aeolian' as const, bpm: 101 }, 'chorus', 'Chorus', MAIN_SECTION)
+    const clips = history(n).present.clips
+    return withSectionTrack(base, 'chorus', { ...sectionTrack(base, 'chorus'), clips })
+  }
+  const store = (id: string, n: number) => save(`${sessionPrefix(id)}track`, packSongHistory({ past: [], present: song(n), future: [] }))
+
+  it('finds work and the key in any section', () => {
+    store('s', 2)
+    expect(hasWork('s')).toBe(true)
+    expect(sessionKey('s')).toBe('D minor')
+    store('blank', 0)
+    expect(hasWork('blank')).toBe(false)
+    expect(sessionKey('blank')).toBeNull()
+  })
+
+  it('plays the section being edited, or the first with chords', () => {
+    store('s', 2)
+    expect(sessionMusic('s')).toMatchObject({ bpm: 101, names: ['C', 'C'] })
+    save(`${sessionPrefix('s')}section`, MAIN_SECTION)
+    expect(sessionMusic('s')?.names).toEqual(['C', 'C'])
+    store('blank', 0)
+    expect(sessionMusic('blank')).toBeNull()
+    // Both have chords: the one being edited plays.
+    const both = song(1)
+    const withMain = withSectionTrack(both, MAIN_SECTION, { ...sectionTrack(both, MAIN_SECTION), clips: [{ id: 'f', chord: makeChord('F', ''), start: 0, length: 1920 }] })
+    save(`${sessionPrefix('both')}track`, packSongHistory({ past: [], present: withMain, future: [] }))
+    save(`${sessionPrefix('both')}section`, 'chorus')
+    expect(sessionMusic('both')?.names).toEqual(['C'])
+    save(`${sessionPrefix('both')}section`, MAIN_SECTION)
+    expect(sessionMusic('both')?.names).toEqual(['F'])
+  })
+})
+

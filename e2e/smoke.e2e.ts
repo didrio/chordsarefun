@@ -190,6 +190,63 @@ describe('adding and previewing', () => {
   })
 })
 
+describe('sections', () => {
+  const chips = (p: Page) => p.locator('.section-chip-name').allTextContents()
+  const current = (p: Page) => p.locator('.section-chip.current .section-chip-name').textContent()
+  const addSection = async (p: Page, label: string) => {
+    await p.locator('.add-section .dropdown-trigger').click()
+    await p.getByRole('menuitem', { name: new RegExp(`^${label} `) }).click()
+  }
+  const chip = (p: Page, name: string) => p.locator('.section-chip-name').filter({ hasText: new RegExp(`^${name}$`) })
+
+  it('makes a Verse and a Chorus, edits each, and undo switches to the section it changes', async () => {
+    const p = await start(full())
+    // An old session: one unnamed section.
+    expect(await chips(p)).toEqual(['Progression'])
+
+    // Rename it from its ▾ menu.
+    await p.locator('.section-chip-menu').first().click()
+    await p.getByRole('menuitem', { name: 'Rename' }).click()
+    await p.locator('.section-name-input').fill('Verse')
+    await p.keyboard.press('Enter')
+    expect(await chips(p)).toEqual(['Verse'])
+
+    // + Section → Chorus: a new, empty section, opened right away.
+    await addSection(p, 'Chorus')
+    expect(await chips(p)).toEqual(['Verse', 'Chorus'])
+    expect(await current(p)).toBe('Chorus')
+    expect(await names(p)).toEqual([])
+    await p.getByRole('button', { name: 'Add a chord' }).click()
+    await p.getByLabel('Type any chord').fill('Dm')
+    await p.keyboard.press('Enter')
+    expect(await names(p)).toEqual(['Dm'])
+
+    // The Verse kept its chords; delete one there.
+    await chip(p, 'Verse').click()
+    expect(await names(p)).toEqual(['C', 'F', 'G', 'Am'])
+    await p.mouse.click(...(await pointIn(p, 0, 0.5)))
+    await p.keyboard.press('Delete')
+    expect(await names(p)).toEqual(['F', 'G', 'Am'])
+
+    // Back in the Chorus, ⌘Z changes the Verse: it opens the Verse to show it.
+    await chip(p, 'Chorus').click()
+    expect(await names(p)).toEqual(['Dm'])
+    await p.keyboard.press(`${CMD}+z`)
+    expect(await current(p)).toBe('Verse')
+    expect(await names(p)).toEqual(['C', 'F', 'G', 'Am'])
+    // The next ⌘Z changes the Chorus (the typed chord): back to it.
+    await p.keyboard.press(`${CMD}+z`)
+    expect(await current(p)).toBe('Chorus')
+    expect(await names(p)).toEqual(['?'])
+
+    // Reopening keeps both sections and the one being edited.
+    await p.reload()
+    await p.waitForSelector('.track')
+    expect(await chips(p)).toEqual(['Verse', 'Chorus'])
+    expect(await current(p)).toBe('Chorus')
+  })
+})
+
 describe('chord menu', () => {
   it('closes when you click a chord, and stays closed', async () => {
     const p = await start(full())
@@ -204,7 +261,7 @@ describe('chord menu', () => {
 
 describe('layout at every width', () => {
   // Phones (smallest first), the widths between phone and desktop (where the toolbar wraps), tablet, laptop.
-  for (const width of [320, 360, 375, 430, 600, 640, 768, 1024, 1280]) {
+  for (const width of [320, 360, 375, 430, 600, 640, 768, 900, 1024, 1280]) {
     it(`${width}px: nothing runs off-screen, the progression browser included`, async () => {
       const p = await start(full())
       await p.setViewportSize({ width, height: 900 })

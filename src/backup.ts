@@ -1,4 +1,4 @@
-import { migrateMeta, SESSION_KEYS, sessionPrefix, trackHasWork, uniqueName, type Folder, type SessionMeta } from './session'
+import { migrateMeta, SESSION_KEYS, sessionPrefix, songHasWork, uniqueName, type Folder, type SessionMeta } from './session'
 
 /**
  * Backups: every session (chords, undo history, groove, settings, folders, favorites) in
@@ -128,7 +128,7 @@ export function planImport(
 
   // Sources: listed sessions, plus the old unsaved session if it has work.
   const sources: { meta: SessionMeta; prefix: string }[] = listed.map((meta) => ({ meta, prefix: sessionPrefix(meta.id) }))
-  if (trackHasWork(parse(storage.track))) {
+  if (songHasWork(parse(storage.track))) {
     sources.push({
       meta: { id: '', name: 'Untitled session', created: now, updated: now, favorite: false, folder: null },
       prefix: sessionPrefix(null),

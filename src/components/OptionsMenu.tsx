@@ -8,6 +8,8 @@ type TimingProps = {
   onSig: (sig: TimeSignature) => void
   bars: number
   onBars: (bars: number) => void
+  /** "Length", or "Length of Chorus" when each section has its own. */
+  lengthLabel?: string
   gridKey: GridKey
   onGrid: (key: GridKey) => void
 }
@@ -16,14 +18,14 @@ type TimingProps = {
 export const timingLabel = (sig: TimeSignature, bars: number) => `${sigLabel(sig)} · ${bars} ${bars === 1 ? 'bar' : 'bars'}`
 
 /** Time signature, length and grid, one setting per row (the body of the song popover's right column). */
-export function TimingFields({ sig, onSig, bars, onBars, gridKey, onGrid }: TimingProps) {
+export function TimingFields({ sig, onSig, bars, onBars, lengthLabel = 'Length', gridKey, onGrid }: TimingProps) {
   return (
     <>
       <span className="field field-time">
         <TimeSignatureControl sig={sig} onChange={onSig} />
       </span>
       <label className="field">
-        Length
+        {lengthLabel}
         <select value={bars} onChange={(e) => onBars(Number(e.target.value))}>
           {BAR_OPTIONS.map((n) => (
             <option key={n} value={n}>

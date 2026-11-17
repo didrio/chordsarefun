@@ -66,16 +66,23 @@ export function redo<T>(h: History<T>): History<T> {
   }
 }
 
-type Persist = {
+/** What's saved: the steps, without the gesture state. */
+export type StoredHistory<T = unknown> = { past: T[]; present: T; future: T[] }
+
+export type Persist = {
   key: string
   isValid: (value: unknown) => boolean
   /** Upgrades a stored value from an older shape before it's validated. */
   migrate?: (value: unknown) => unknown
+  /** Turns the history into what's saved (e.g. parts shared between steps stored once). */
+  encode?: (history: StoredHistory) => unknown
+  /** Reverses `encode` on what's loaded, before values are migrated; older saves pass through as they are. */
+  decode?: (stored: unknown) => unknown
 }
 
-/** A stored history, with every value migrated; null if it isn't a valid history. */
+/** A stored history, decoded, with every value migrated; null if it isn't a valid history. */
 export function readHistory<T>(stored: unknown, persist: Persist): History<T> | null {
-  const s = stored as History<unknown>
+  const s = (persist.decode ? persist.decode(stored) : stored) as History<unknown>
   if (typeof s !== 'object' || s === null || !Array.isArray(s.past) || !Array.isArray(s.future)) return null
   // One argument only: never hand `migrate` map's index.
   const up = (v: unknown) => (persist.migrate ? persist.migrate(v) : v)
@@ -96,12 +103,13 @@ export function useHistory<T>(initial: T, persist?: Persist) {
   // page is closed/hidden, on unmount (switching sessions) and on demand (flush), so
   // the last edit isn't lost.
   const persistKey = persist?.key
+  const encode = persist?.encode
   const latest = useRef(h)
   const dirty = useRef(false)
   const write = () => {
     if (!persistKey || !dirty.current) return
     const { past, present, future } = latest.current
-    save(persistKey, { past, present, future })
+    save(persistKey, encode ? encode({ past, present, future }) : { past, present, future })
     dirty.current = false
   }
   const writeRef = useRef(write)
@@ -126,6 +134,10 @@ export function useHistory<T>(initial: T, persist?: Persist) {
     /** Save now (e.g. before copying the saved session). */
     flush: () => writeRef.current(),
     value: h.present,
+    /** What undo would go back to (so the caller can show where the change is), if anything. */
+    previous: h.past[h.past.length - 1] as T | undefined,
+    /** What redo would go forward to, if anything. */
+    next: h.future[0] as T | undefined,
     canUndo: h.past.length > 0,
     canRedo: h.future.length > 0,
     commit: (update: (value: T) => T) => setH((s) => commit(s, update)),

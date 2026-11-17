@@ -21,6 +21,8 @@ type Props = {
   onSig: (sig: TimeSignature) => void
   bars: number
   onBars: (bars: number) => void
+  /** The Length row's label: "Length of Chorus" once the song has several sections (each has its own). */
+  lengthLabel: string
   gridKey: GridKey
   onGrid: (key: GridKey) => void
   metronomeOn: boolean
@@ -47,6 +49,7 @@ export function SongMenu({
   onSig,
   bars,
   onBars,
+  lengthLabel,
   gridKey,
   onGrid,
   metronomeOn,
@@ -101,7 +104,7 @@ export function SongMenu({
                 <span className="tempo-unit">BPM</span>
               </span>
             </label>
-            <TimingFields sig={sig} onSig={onSig} bars={bars} onBars={onBars} gridKey={gridKey} onGrid={onGrid} />
+            <TimingFields sig={sig} onSig={onSig} bars={bars} onBars={onBars} lengthLabel={lengthLabel} gridKey={gridKey} onGrid={onGrid} />
             <div className="home-section-label">Metronome</div>
             <div className="field">
               <button

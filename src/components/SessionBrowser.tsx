@@ -95,7 +95,19 @@ function menuAt(id: string, x: number, top: number, bottom: number): MenuAt {
 }
 
 /** A text box for naming something: Enter or leaving it saves, Esc cancels (null). */
-function NameInput({ initial = '', placeholder, label, onDone }: { initial?: string; placeholder: string; label: string; onDone: (name: string | null) => void }) {
+export function NameInput({
+  initial = '',
+  placeholder,
+  label,
+  className = 'session-name-input',
+  onDone,
+}: {
+  initial?: string
+  placeholder: string
+  label: string
+  className?: string
+  onDone: (name: string | null) => void
+}) {
   const [value, setValue] = useState(initial)
   const done = useRef(false)
   const finish = (name: string | null) => {
@@ -106,7 +118,7 @@ function NameInput({ initial = '', placeholder, label, onDone }: { initial?: str
   return (
     <input
       type="text"
-      className="session-name-input"
+      className={className}
       value={value}
       placeholder={placeholder}
       aria-label={label}

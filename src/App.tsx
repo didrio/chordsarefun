@@ -13,17 +13,38 @@ import { SongMenu } from './components/SongMenu'
 import { Panel } from './components/Panel'
 import { LoopIcon, PauseIcon, PlayIcon, PlusIcon, RedoIcon, StopIcon, UndoIcon } from './components/Icons'
 import { SessionMenu } from './components/SessionBrowser'
+import { SectionBar } from './components/SectionBar'
 import { Timeline } from './components/Timeline'
 import { useChordDrag, type DragState } from './components/useChordDrag'
 import { describeDrop, heldName } from './dropLabel'
-import { legacyMusic, sessionPrefix, useSessions, type Sessions } from './session'
+import { legacyMusic, sessionPrefix, songHistory, useSessions, type Sessions } from './session'
 import { downloadBackup } from './backup'
 import { useHistory } from './history'
 import { usePersistentState } from './persist'
 import { clickSelect, EMPTY_SELECTION, pruneSelection, selectAll, type ClickMods, type Selection } from './selection'
 import { shortcutFor } from './shortcuts'
 import { COPY_KEY, DUPLICATE_KEY, IS_MAC, TAP } from './platform'
-import { DEFAULT_TRACK, isTrack, migrateTrack, withMusic, type TrackMusic } from './track'
+import { DEFAULT_TRACK, withMusic, type Track, type TrackMusic } from './track'
+import {
+  addSection,
+  changedSection,
+  copySection,
+  MAIN_SECTION,
+  mapSongChords,
+  removeSection,
+  renameSection,
+  rescaleSong,
+  sectionName,
+  sectionOf,
+  sectionTrack,
+  songClips,
+  songFromTrack,
+  songHasChords,
+  songWithProgression,
+  withSectionTrack,
+  type Section,
+  type Song,
+} from './song'
 import {
   ensureAudio,
   pausePlayback,
@@ -43,7 +64,7 @@ import { canInvert, chordName, invert, shiftOctave, type Chord } from './music/c
 import { downloadMidi } from './music/midi'
 import { keyCandidates, suggestHome, type Home } from './music/home'
 import { inContext } from './music/suggest'
-import { PROGRESSIONS, progressionTrack, type Progression, type ProgressionParts } from './music/progressions'
+import { PROGRESSIONS, type Progression, type ProgressionParts } from './music/progressions'
 import {
   applyGroove,
   GROOVES,
@@ -70,7 +91,6 @@ import {
   planDrop,
   planDuplicate,
   playbackEnd,
-  rescaleClips,
   removeClip,
   resizeClip,
   sameClips,
@@ -182,12 +202,30 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
     null,
     (v) => v === null || typeof v === 'string',
   )
-  // The track (clips, length, key, time signature, instruments, tempo) is the undoable, saved
-  // document. Sessions saved before the instruments and tempo joined it get their old values.
+  // The song (key, tempo, time signature, and its sections: chords, length, instruments) is the
+  // undoable, saved document. Sessions saved before songs open as a song with one unnamed
+  // section; those saved before the instruments and tempo joined the track get their old values.
   const [legacy] = useState(() => legacyMusic(prefix))
-  const track = useHistory({ ...DEFAULT_TRACK, ...legacy }, { key: k('track'), isValid: isTrack, migrate: (v) => migrateTrack(v, legacy) })
+  const [songPersist] = useState(() => songHistory(prefix, legacy))
+  const song = useHistory<Song>(songFromTrack({ ...DEFAULT_TRACK, ...legacy }), songPersist)
+  // The section being edited: session state, not part of undo (like the selection). A stale id means the first.
+  const [storedSection, setStoredSection] = usePersistentState<string>(k('section'), MAIN_SECTION, (v) => typeof v === 'string')
+  const section = sectionOf(song.value, storedSection)
+  const sectionId = section.id
+  /** An edit of the edited section's track, as an edit of the song (key, tempo and meter go to the song). */
+  const inSection = (update: (t: Track) => Track) => (s: Song) => withSectionTrack(s, sectionId, update(sectionTrack(s, sectionId)))
+  /**
+   * Edits of the edited section seen as a track (its chords, length and instruments with the
+   * song's key, tempo and time signature). Everything that edits chords goes through this and
+   * never needs to know about songs; song-wide changes (key, meter) use `song` directly.
+   */
+  const track = {
+    commit: (update: (t: Track) => Track) => song.commit(inSection(update)),
+    beginGesture: song.beginGesture,
+    updateGesture: (update: (t: Track) => Track) => song.updateGesture(inSection(update)),
+  }
   useEffect(() => {
-    flushRef.current = track.flush
+    flushRef.current = song.flush
   })
   // Leaving the session (switching): silence everything it was playing or previewing, so
   // nothing from it sounds in the session that opens next (which never starts playing by itself).
@@ -204,12 +242,13 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
       return
     }
     touch.current()
-  }, [track.value])
-  const { clips, bars, tonic, mode, sig, groove, bpm } = track.value
+  }, [song.value])
+  const { tonic, mode, sig, bpm, sections } = song.value
+  const { clips, bars, groove } = section
   const barTicks = sigBarTicks(sig)
   const beatTicks = sigBeatTicks(sig)
   const gridTicks = gridStep(gridKey, barTicks)
-  const withClips = (update: (c: Clip[]) => Clip[]) => (t: typeof track.value) => {
+  const withClips = (update: (c: Clip[]) => Clip[]) => (t: Track) => {
     const next = update(t.clips)
     return sameClips(next, t.clips) ? t : { ...t, clips: next }
   }
@@ -232,15 +271,17 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
   const totalTicks = bars * barTicks
   // Undo can shorten the track under the playhead.
   const playheadPos = playhead < totalTicks ? playhead : 0
-  const homeSuggestion = useMemo(() => suggestHome(clips, { tonic, mode }), [clips, tonic, mode])
-  const detectedKeys = useMemo(() => keyCandidates(clips), [clips])
+  // The key is the song's: detection and the suggestion look at every section's chords.
+  const allClips = useMemo(() => songClips({ sections, sig }), [sections, sig])
+  const homeSuggestion = useMemo(() => suggestHome(allClips, { tonic, mode }), [allClips, tonic, mode])
+  const detectedKeys = useMemo(() => keyCandidates(allClips), [allClips])
   /**
    * After a home change: the home the chords were written in, offered as "move them".
-   * It lasts while the chords are untouched (same clips array) and home is still `to`.
+   * It lasts while every section is untouched (same sections array) and home is still `to`.
    */
-  const [homeOffer, setHomeOffer] = useState<{ from: Home; to: Home; clips: Clip[] } | null>(null)
+  const [homeOffer, setHomeOffer] = useState<{ from: Home; to: Home; sections: Section[] } | null>(null)
   const activeOffer =
-    homeOffer && homeOffer.clips === clips && homeOffer.to.tonic === tonic && homeOffer.to.mode === mode ? homeOffer : null
+    homeOffer && homeOffer.sections === sections && homeOffer.to.tonic === tonic && homeOffer.to.mode === mode ? homeOffer : null
   // Undo/delete can remove selected clips; ignore ids that no longer exist.
   const selection = pruneSelection(rawSelection, clips)
   const selectedIds = selection.ids
@@ -355,6 +396,53 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
     setClips((c) => c.filter((clip) => !selectedIds.includes(clip.id)))
     clearSelection()
   }
+
+  /**
+   * Edit another section: its chords show on the track, and the selection and chord details
+   * start fresh. Playback keeps going, now with this section's chords and instruments.
+   */
+  const switchSection = (id: string) => {
+    if (id === sectionId) return
+    setStoredSection(id)
+    setSelection(EMPTY_SELECTION)
+    setInspectedId(null)
+    setMenuAt(null)
+  }
+
+  /** "+ Section": a new, empty section with this one's instruments and length; you go straight to it. */
+  const newSection = (label: string) => {
+    const id = crypto.randomUUID()
+    song.commit((s) => addSection(s, id, label, sectionId))
+    switchSection(id)
+    return id
+  }
+
+  /** "Make a new section from this": an independent copy to change, opened right away. */
+  const forkSection = (id: string) => {
+    const copyId = crypto.randomUUID()
+    song.commit((s) => copySection(s, id, copyId))
+    switchSection(copyId)
+  }
+
+  /** Delete a section (undoable). Deleting the one being edited opens its neighbor. */
+  const deleteSection = (id: string) => {
+    if (sections.length <= 1) return
+    if (id === sectionId) {
+      const i = sections.findIndex((s) => s.id === id)
+      switchSection((sections[i - 1] ?? sections[i + 1]).id)
+    }
+    song.commit((s) => removeSection(s, id))
+  }
+
+  /** Undo/redo for the whole song. A step that changes another section opens it first, so no change happens off screen. */
+  const showStep = (to: Song | undefined) => {
+    if (!to) return false
+    const show = changedSection(song.value, to, sectionId)
+    if (show !== sectionId) switchSection(show)
+    return true
+  }
+  const undo = () => showStep(song.previous) && song.undo()
+  const redo = () => showStep(song.next) && song.redo()
 
   // Clicking anywhere non-interactive deselects, like a typical editor. Clips handle
   // their own selection; palette chords act on the selection (replace), and controls
@@ -511,7 +599,7 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
   const lastProgression = useRef<Progression | null>(null)
   /**
    * Take a progression's chords (in its scale), its instruments and tempo, or both: one undo
-   * step (progressionTrack). New chords send the playhead back to the top; while playing it
+   * step (songWithProgression: into the section being edited). New chords send the playhead back to the top; while playing it
    * keeps playing (so progressions can be auditioned one after another): the restart happens
    * once the new clips are scheduled.
    */
@@ -523,7 +611,7 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
       else stop()
       clearSelection()
     }
-    track.commit((t) => progressionTrack(t, prog, parts))
+    song.commit((s) => songWithProgression(s, sectionId, prog, parts))
   }
 
   const randomProgression = (instruments: boolean) =>
@@ -559,9 +647,9 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
       if (e.target instanceof HTMLButtonElement) e.target.blur()
       switch (shortcut.type) {
         case 'undo':
-          return track.undo()
+          return undo()
         case 'redo':
-          return track.redo()
+          return redo()
         case 'playPause':
           return togglePlay()
         case 'stop':
@@ -645,8 +733,8 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
   const changeHome = (to: Home) => {
     if (to.tonic === tonic && to.mode === mode) return
     const from = activeOffer ? activeOffer.from : { tonic, mode }
-    track.commit((t) => ({ ...t, ...to }))
-    setHomeOffer(chordClips(clips).length > 0 ? { from, to, clips } : null)
+    song.commit((s) => ({ ...s, ...to }))
+    setHomeOffer(songHasChords(song.value) ? { from, to, sections } : null)
   }
 
   /**
@@ -655,15 +743,15 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
    */
   const applyDetectedKey = (to: Home) => {
     if (to.tonic === tonic && to.mode === mode) return
-    track.commit((t) => ({ ...t, ...to }))
+    song.commit((s) => ({ ...s, ...to }))
     setHomeOffer(null)
   }
 
-  /** Move the chords from the home they were written in to the current one (one undo step). */
+  /** Move every section's chords from the home they were written in to the current one (one undo step). */
   const moveChordsHome = () => {
     if (!activeOffer) return
     const { from, to } = activeOffer
-    setClips((c) => c.map((clip) => (clip.chord ? { ...clip, chord: chordToKey(clip.chord, from, to) } : clip)))
+    song.commit((s) => mapSongChords(s, (chord) => chordToKey(chord, from, to)))
     setHomeOffer(null)
   }
 
@@ -671,10 +759,10 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
     track.commit((t) => ({ ...t, bars: n, clips: fitToLength(t.clips, n * sigBarTicks(t.sig)) }))
   }
 
-  /** Changing time signature stretches clips with the bars, so one chord per bar stays one per bar. */
+  /** Changing time signature stretches every section's chords with the bars, so one chord per bar stays one per bar. */
   const changeSig = (next: TimeSignature) => {
     const factor = sigBarTicks(next) / barTicks
-    track.commit((t) => ({ ...t, sig: next, clips: rescaleClips(t.clips, sigBarTicks(next) / sigBarTicks(t.sig)) }))
+    song.commit((s) => rescaleSong(s, next))
     // Keep the playhead at the same spot in the music (also while playing). Not via
     // seek(): that clamps to the old track length.
     const scaled = Math.round(playheadPos * factor)
@@ -705,6 +793,7 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
             onSig={changeSig}
             bars={bars}
             onBars={changeBars}
+            lengthLabel={sections.length > 1 ? `Length of ${sectionName(section)}` : 'Length'}
             gridKey={gridKey}
             onGrid={setGridKey}
             metronomeOn={metronomeOn}
@@ -736,10 +825,10 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
             <LoopIcon />
           </button>
           <span className="transport-gap" aria-hidden />
-          <button className="icon ghost" onClick={track.undo} disabled={!track.canUndo} aria-label="Undo" title="Undo (⌘Z / Ctrl+Z)">
+          <button className="icon ghost" onClick={undo} disabled={!song.canUndo} aria-label="Undo" title="Undo (⌘Z / Ctrl+Z)">
             <UndoIcon />
           </button>
-          <button className="icon ghost" onClick={track.redo} disabled={!track.canRedo} aria-label="Redo" title="Redo (⇧⌘Z / Ctrl+Y)">
+          <button className="icon ghost" onClick={redo} disabled={!song.canRedo} aria-label="Redo" title="Redo (⇧⌘Z / Ctrl+Y)">
             <RedoIcon />
           </button>
           <span className="transport-gap" aria-hidden />
@@ -791,11 +880,21 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
         </div>
       </div>
 
+      <SectionBar
+        sections={sections}
+        current={sectionId}
+        onSwitch={switchSection}
+        onAdd={newSection}
+        onRename={(id, name) => song.commit((s) => renameSection(s, id, name))}
+        onFork={forkSection}
+        onDelete={deleteSection}
+      />
+
       {activeOffer && (
         <HomeNotice
           from={activeOffer.from}
           to={activeOffer.to}
-          outside={chordClips(clips).filter((c) => !isDiatonic(c.chord, tonic, mode)).length}
+          outside={chordClips(allClips).filter((c) => !isDiatonic(c.chord, tonic, mode)).length}
           onMove={moveChordsHome}
           onDismiss={() => setHomeOffer(null)}
         />
@@ -958,6 +1057,7 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
 
         <InstrumentsPanel
           groove={groove}
+          section={sections.length > 1 ? sectionName(section) : undefined}
           open={instrumentsOpen}
           onToggle={() => setInstrumentsOpen((o) => !o)}
           onChange={setGroove}

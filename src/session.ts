@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { readHistory, type History } from './history'
+import { readHistory, type History, type Persist, type StoredHistory } from './history'
+import { uniqueName } from './names'
 import { copyKeys, load, loadRaw, removeKeys, save, saveRaw } from './persist'
-import { DEFAULT_MUSIC, isBpm, isTrack, migrateTrack, type Track, type TrackMusic } from './track'
+import { DEFAULT_MUSIC, isBpm, type TrackMusic } from './track'
+import { isSong, migrateSong, packSongHistory, sectionOf, unpackSongHistory, type Song } from './song'
 import { chordClips, chordTimes, sigBarTicks } from './music/timeline'
 import { isGrooveSettings, type GrooveSettings } from './music/grooves'
 import { chordName } from './music/chord'
@@ -22,6 +24,7 @@ import { keyName } from './music/theory'
 /** Every stored value that belongs to a session (not global). Keep in sync with the workspace's persisted state. */
 export const SESSION_KEYS = [
   'track',
+  'section', // the section being edited (songs, T23)
   'bpm',
   'grid',
   'loop',
@@ -90,13 +93,7 @@ const AUTO_NAME = 'Untitled session'
 /** True for the names new sessions get ("Untitled session", "Untitled session 3"). */
 export const isAutoName = (name: string) => /^Untitled session( \d+)?$/.test(name)
 
-/** `base`, or "base 2", "base 3", … whichever isn't taken yet. */
-export function uniqueName(base: string, taken: Iterable<string>): string {
-  const names = new Set(taken)
-  let n = 1
-  while (names.has(n === 1 ? base : `${base} ${n}`)) n++
-  return n === 1 ? base : `${base} ${n}`
-}
+export { uniqueName }
 
 const byName = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
 
@@ -130,43 +127,58 @@ export function legacyMusic(prefix: string): TrackMusic {
   }
 }
 
-/** How a session's stored track is read: old entries get that session's old groove and tempo. */
-function trackHistory(prefix: string) {
-  const legacy = legacyMusic(prefix)
-  return { key: `${prefix}track`, isValid: isTrack, migrate: (v: unknown) => migrateTrack(v, legacy) }
+/**
+ * How a session's song (with its undo history) is stored, under its `track` key: each section
+ * version saved once (packSongHistory). Sessions from before songs stored a track there; it's
+ * read as a song with one unnamed section, and entries from before the groove and tempo
+ * joined the track get that session's old values (`legacy`).
+ */
+export function songHistory(prefix: string, legacy: TrackMusic = legacyMusic(prefix)): Persist {
+  return {
+    key: `${prefix}track`,
+    isValid: isSong,
+    migrate: (v: unknown) => migrateSong(v, legacy),
+    encode: (h: StoredHistory) => packSongHistory(h as StoredHistory<Song>),
+    decode: unpackSongHistory,
+  }
 }
 
-const readTrack = (id: string | null): History<Track> | null => {
-  const persist = trackHistory(sessionPrefix(id))
-  return readHistory<Track>(load<unknown>(persist.key, null, () => true), persist)
+const readSong = (id: string | null): History<Song> | null => {
+  const persist = songHistory(sessionPrefix(id))
+  return readHistory<Song>(load<unknown>(persist.key, null, () => true), persist)
 }
 
-/** True if a stored track (with its history) has any work in it: chords, or anything to undo/redo. */
-export function trackHasWork(stored: unknown): boolean {
-  const h = readHistory<Track>(stored, { key: '', isValid: isTrack, migrate: (v) => migrateTrack(v) })
-  return !!h && (h.present.clips.length > 0 || h.past.length > 0 || h.future.length > 0)
+/** True if a stored song (with its history) has any work in it: chords in any section, or anything to undo/redo. */
+export function songHasWork(stored: unknown): boolean {
+  const h = readHistory<Song>(stored, { ...songHistory('', DEFAULT_MUSIC), key: '' })
+  return !!h && (h.present.sections.some((s) => s.clips.length > 0) || h.past.length > 0 || h.future.length > 0)
 }
 
 /** True if a stored session has any work in it. */
-export const hasWork = (id: string | null) => trackHasWork(load<unknown>(`${sessionPrefix(id)}track`, null, () => true))
+export const hasWork = (id: string | null) => songHasWork(load<unknown>(`${sessionPrefix(id)}track`, null, () => true))
 
-/** A stored session's key ("C major"), or null if it has no chords (an empty track has no key worth showing). */
+/** A stored session's key ("C major"), or null if it has no chords (an empty song has no key worth showing). */
 export function sessionKey(id: string): string | null {
-  const h = readTrack(id)
-  if (!h || chordClips(h.present.clips).length === 0) return null
+  const h = readSong(id)
+  if (!h || !h.present.sections.some((s) => chordClips(s.clips).length > 0)) return null
   return keyName(h.present.tonic, h.present.mode)
 }
 
 /**
- * Everything needed to hear a stored session as its Play button plays it (its track, tempo
- * and groove, read the way the workspace reads them), plus its chord names in order; null
- * if it has no chords.
+ * Everything needed to hear a stored session as its Play button plays it (the section being
+ * edited, or the first with chords if that one is empty, with its instruments and the song's
+ * tempo, read the way the workspace reads them), plus its chord names in order; null if it
+ * has no chords. Whole songs come with the song timeline (T24/T25).
  */
 export function sessionMusic(id: string): (SessionMusic & { names: string[] }) | null {
-  const h = readTrack(id)
-  if (!h || chordClips(h.present.clips).length === 0) return null
-  // Groove and tempo are part of the track (old sessions get theirs from the old keys, see trackHistory).
-  const { clips, bars, sig, bpm, groove } = h.present
+  const h = readSong(id)
+  if (!h) return null
+  const song = h.present
+  const edited = sectionOf(song, load(`${sessionPrefix(id)}section`, '', (v) => typeof v === 'string'))
+  const section = chordClips(edited.clips).length > 0 ? edited : song.sections.find((s) => chordClips(s.clips).length > 0)
+  if (!section) return null
+  const { clips, bars, groove } = section
+  const { sig, bpm } = song
   return {
     clips,
     totalTicks: bars * sigBarTicks(sig),

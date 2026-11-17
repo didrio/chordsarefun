@@ -45,7 +45,7 @@ export function withMusic(t: Track, music: Partial<TrackMusic>): Track {
 
 const isNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
 
-const isClip = (v: unknown): v is Clip => {
+export const isClip = (v: unknown): v is Clip => {
   const c = v as Clip
   return (
     typeof c === 'object' &&

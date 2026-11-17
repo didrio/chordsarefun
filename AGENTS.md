@@ -84,7 +84,18 @@ colors, fit dots and plain-language reasons, always relative to Home.
 
 ## Core model: the workspace
 
-- **One workspace**: a single horizontal track = one chord progression.
+- **A session is a song** (`src/song.ts`, T23): one or more **sections** (a progression with a label: Intro,
+  Verse, Chorus…; `Section = { id, name, clips, bars, groove }`) and, from T24, an **arrangement** (`Block[]`,
+  `{ id, section }`: where sections play in the song; two blocks of one section are the same music). **Shared
+  song-wide**: key (tonic + mood), tempo, time signature (the "C minor · 120 BPM · 4/4" button is the song's).
+  **Per section**: chords, length (bars), instruments. A session from before songs is one unnamed section (id
+  `main`, shown as "Progression") with nothing arranged: exactly the app as it was.
+- **One section is edited at a time, as a `Track`**: `sectionTrack(song, id)` is the section seen with the song's
+  shared settings, `withSectionTrack(song, id, track)` writes it back (shared fields → song, the rest → section;
+  other sections keep their objects; the same song back when nothing changed). So `planDrop`, `progressionTrack`
+  and every chord edit work on a Track and never know about songs. Song-wide changes (key, meter, moving every
+  chord to a new key) are song functions (`rescaleSong`, `mapSongChords`).
+- **One workspace**: a single horizontal track = the chord progression of the section being edited.
 - **Fixed length** in bars of a chosen time signature (1, 2, 4 or 8 bars). Playback
   time depends only on bars, time signature and BPM, **never on how many chords there
   are**. Adding chords subdivides the same span; it never makes the track longer.
@@ -237,10 +248,13 @@ colors, fit dots and plain-language reasons, always relative to Home.
   (`previewSession`, until ■; the sounding chip lights up, like hearing a session; it pauses the song first);
   ↑/↓ (from the search box too) move the selection and keep playing if something was playing. The footer
   (always there; buttons disabled until a row is selected) takes what you like, each one undo step
-  (`progressionTrack`) that closes the window: **Use chords** (its chords, **an octave up**, around C4, root
+  (`progressionTrack`, through `songWithProgression`: always into the section being edited) that closes the
+  window: **Use chords** (its chords, **an octave up**, around C4, root
   position, `progressionChords`, one chord per bar repeated while it fits or shared evenly on shorter tracks,
   on your length and meter, in its scale; your instruments and tempo stay), **Use instruments** (its preset +
-  its tempo; your chords stay), **Use both** (the primary button; also Enter and double-clicking a row). Taking
+  its tempo; your chords stay), **Use both** (the primary button; also Enter and double-clicking a row). Its
+  tempo becomes the song's; its scale becomes the song's mood **only when no other section has chords** (the
+  key is shared, and the other sections were written in it). Random acts on the edited section the same way. Taking
   chords returns the playhead to the start and, if playing, playback continues from there (the seek happens
   when the new clips are scheduled). Previews stop on close, on use, on Play and on opening a session.
 - **Every progression knows how it's meant to sound** (T18): a groove preset and a tempo (`groove`, `bpm` on
@@ -393,9 +407,10 @@ one undo step.
   bar lines are always snap points. Grid Off draws beat lines dotted.
 - Time signature: presets 4/4, 3/4, 2/4, 5/4, 6/8, 7/8, 9/8, 12/8, or Custom (beats
   1–16 / note value 2, 4, 8, 16, chosen from menus so half-typed values never apply).
-  Changing it **rescales clips with the bars** (`rescaleClips`): one chord per bar stays
+  Changing it **rescales every section's clips with the bars** (`rescaleSong`): one chord per bar stays
   one per bar. Part of undo.
-- Length change trims/drops clips past the new end (`fitToLength`). Part of undo.
+- Length is per section ("Length of Chorus" in the song popover once there are 2+ sections). A change trims/drops
+  clips past the new end (`fitToLength`). Part of undo.
 
 ### Home (`home.ts`, `KeyPanel.tsx`, `HomeNotice.tsx`)
 
@@ -408,13 +423,15 @@ one undo step.
   open; picking a mood closes it.
 - **Changing home only re-labels** (colors, numerals, fit); chords never change. Part of
   undo.
+- The key is the song's: detection, the suggestion dot and the move below cover **every section's chords**
+  (`songClips` lays the sections end to end for detection).
 - Right after, a notice (`HomeNotice`, a floating bar pinned bottom-center of the window, `position: fixed`, so showing or dismissing it never moves the page; z-index 15; clicking it keeps the selection) offers to move the chords, worded for what it does
   (`homeMove`): "Transpose chords to D major" (same mood), "Reshape chords for Dorian"
   (same key), "Move chords to D Dorian" (both). It uses `chordToKey`: chords all in the
   old key keep their scale degree (V stays V, Em in C major → E♭ in C minor; sizes,
-  edits, inversion kept); others move by the tonic distance. One undo step. For
+  edits, inversion kept); others move by the tonic distance. Every section moves (`mapSongChords`). One undo step. For
   relative homes (same notes, e.g. C major ↔ A minor) it says the chords still fit
-  instead. The offer lasts while the chords are untouched; repeated home changes offer
+  instead. The offer lasts while every section is untouched (same `sections` array); repeated home changes offer
   a move from the home the chords were written in. Not saved.
 - **Detect from your chords** (top of the Key menu; `keyCandidates`, `homeReason`): the best match
   ("Best match") plus up to two major/minor second opinions that fit nearly as well (within 5%; usually the
@@ -482,6 +499,8 @@ one undo step.
   progression used last. Instruments picks a random preset (not Just chords or the 3/4 waltz)
   and keeps the tempo. The key and time signature are never randomized. Under 400px wide the
   word "Random" hides (the dice stays).
+- **Instruments belong to a section**: the panel edits the section being edited (its hint names it, "for Chorus",
+  once there are 2+ sections); a new section starts with the instruments of the one you were on.
 - **The Instruments section** (`InstrumentsPanel.tsx`, built on `Panel.tsx`, **under Voicing**; open
   state saved per session as `instrumentsOpen`, closed by default). Its bar holds a native preset
   `<select>` grouped by genre (`<optgroup>`; "Just chords" first) that works while collapsed and reads
@@ -524,8 +543,12 @@ one undo step.
   a safety net. MIDI velocities use the accent only.
 ### Undo/redo (`src/history.ts`)
 
-Buttons plus ⌘Z / ⇧⌘Z (Ctrl+Z / Ctrl+Y). The undoable document is the **Track**:
-clips, bars, key, scale, time signature, **groove (instruments) and BPM** (`src/track.ts`).
+Buttons plus ⌘Z / ⇧⌘Z (Ctrl+Z / Ctrl+Y). The undoable document is the **Song** (`src/song.ts`): key, scale,
+time signature, BPM, and every section (clips, bars, groove) plus adding, renaming, copying and deleting sections.
+**One history for the whole song.** A step that changes another section opens that section first
+(`changedSection`: the edited one stays when it changed or only shared settings did; undoing "+ Section" goes to
+the section before it; a section that comes back opens), so undo never changes something off screen. The
+`previous` / `next` values from `useHistory` say where undo/redo would go. Which section is edited is not history.
 Discrete edits use `commit` (one step each); continuous drags (resizing a chord, the groove
 sliders) use `beginGesture`/`updateGesture` (one step per drag). No-op edits add no step
 (`withMusic` returns the same track when the groove or tempo didn't really change, comparing
@@ -554,8 +577,8 @@ The (i) tooltip next to the logo (`HelpTip.tsx`: how it works + every shortcut, 
 
 ### Sessions (`src/session.ts`, `SessionBrowser.tsx`, `src/backup.ts`)
 
-- A session is the whole workspace: the Track with its undo history (groove and BPM included),
-  grid, loop, metronome, notes lane, the selection, the inspected clip,
+- A session is the whole workspace: the Song with its undo history (sections, groove and BPM included),
+  the section being edited (`section`), grid, loop, metronome, notes lane, the selection, the inspected clip,
   the details panel (open/collapsed, tab) (`SESSION_KEYS`), so it reopens exactly as it was left.
 - You're always in one session and **every change is saved to it as you go**, like a DAW project that
   never loses work. **Every session is a real, listed one**: there's no "Unsaved session" any more. On load,
@@ -574,7 +597,8 @@ The (i) tooltip next to the logo (`HelpTip.tsx`: how it works + every shortcut, 
   opens, F2 renames, Esc closes (or closes a menu/confirm first); Tab stays inside; the app's shortcuts are
   off while it's open (focus that falls out of it is taken back). Folder ⋯: Rename, Delete (its sessions are
   kept, back to no folder).
-- **Hear a session** (the row's ▶, ■ while it plays): it **loops over the whole track until stopped** (no
+- **Hear a session** (the row's ▶, ■ while it plays): it plays the section being edited (or the first with chords;
+  whole songs come with T24/T25) and **loops over it until stopped** (no
   metronome; handy for singing over a session), exactly as its own Play would: its tempo, time signature, patterns, swing, chord/bass sounds, brightness, mix and parts
   on/off (`sessionMusic` reads them from the stored track, migrated like the workspace's; `previewSession` in `audio.ts` renders it with
   `renderTrack` on a **separate sound graph** built from that session's groove, so the open session's sounds
@@ -600,13 +624,19 @@ The (i) tooltip next to the logo (`HelpTip.tsx`: how it works + every shortcut, 
 ### Persistence (`src/persist.ts`)
 
 Everything is saved to localStorage under `chords:v1:*` (per session, see above; a backup file is a copy of all of it): the
-Track **with its full undo/redo history** (debounced, and flushed on page hide, on
+Song **with its full undo/redo history** (debounced, and flushed on page hide, on
 unmount and on demand; the groove and BPM are inside it), grid, loop, notes-lane toggle,
-metronome on/off and volume, the selection and panels. Loaded data is validated (`isTrack`, type checks; note
+metronome on/off and volume, the selection, the section being edited and panels. Loaded data is validated (`isSong`, type checks; note
 names via `isNoteName`, since Tonal returns NaN, not undefined, for nonsense);
 invalid or corrupt data falls back to defaults, and storage errors are ignored. On
-shape changes, **migrate old data on load** so saved work survives (`migrateTrack`
-turns old `symbol: "Dm7"` clips into chords, across the whole undo history). The groove and
+shape changes, **migrate old data on load** so saved work survives: the song lives under the same `track` key
+(`songHistory` in `session.ts`); a stored Track (every session from before songs) becomes a song with one unnamed
+section with the fixed id `main` (`migrateSong`, step by step across the whole undo history), after `migrateTrack`
+turns old `symbol: "Dm7"` clips into chords. **The history is saved packed** (`packSongHistory` /
+`unpackSongHistory`, via `Persist.encode` / `decode` in `history.ts`): each section version is stored once in a
+`pool` and steps point at it, since an edit changes one section and keeps the others. Unpacking restores the
+shared objects. Without it a 4-section song's 500 steps would be ~2.9 MB of the browser's ~5 MB; packed it's
+about one section per step (~0.7 MB). Old unpacked histories pass through `decode` untouched. The groove and
 BPM used to be stored beside the track (`groove2`, `bpm`); history entries without them get
 that session's old values (`legacyMusic` in `session.ts`, passed into the pure `migrateTrack`;
 defaults if none), so undo never changes how old work sounds. Those keys are no longer
@@ -637,6 +667,15 @@ tracks; drums on channel 10 with General MIDI notes) or one part alone.
   - **Main toolbar** (dashed line above, solid below), like Ableton's transport bar: Play
     (accent tint), Stop, Loop · Undo, Redo (ghost) · **+ Add chord** (tinted) on the left;
     Browse progressions and the Random group (Chords | Instruments | Both) on the right (fixed-width trigger).
+  - **Sections bar** (`SectionBar.tsx`, `.sections-bar`): "Song", one chip per section (its kind's color from
+    `SECTION_LABELS`, gray for unnamed/other; the edited one lit, color only so nothing shifts; "Progression" for a
+    lone unnamed one), then **+ Section ▾** (the labels with what each is for and the name it'll get, "Verse 2";
+    Other… adds "Section" and starts renaming it). Clicking a chip edits that section (selection and chord details
+    start fresh; playback keeps going with it). A chip's ▾ or right-click opens `ChordMenu`: Rename (inline),
+    Make a new section from this (an independent numbered copy right after it, opened), Delete section (undoable;
+    never the last one; its blocks go too). The chips scroll sideways when they don't fit, keeping the edited one
+    in view (only the row scrolls, never the page). T24 turns the bar into a collapsible panel holding the song
+    timeline.
   - **The timeline** (no panel around it) runs the full width; the notes lane lines up with it.
   - Three panels (`Panel.tsx`), Voicing, Instruments and the chord details:
     - **Voicing** (collapsible, closed by default, saved per session as `moreOpen`): the **header bar** holds the
@@ -688,9 +727,9 @@ tracks; drums on channel 10 with General MIDI notes) or one part alone.
   "Type a chord" on its own row, and the tabs scroll sideways instead of wrapping (the
   spot's context is hidden). No horizontal page scroll down to 320px. Touch drags are untested
   on a real device.
-- **Narrow windows and small tablets (≤ 800px)**: the main toolbar wraps, Browse progressions and
-  Random sharing a full-width row under the transport (its two halves need ~750px side by
-  side). Otherwise tablets use the desktop layout. `e2e` checks nine widths from 320 to 1280px
+- **Narrow windows and tablets (≤ 1000px)**: the main toolbar wraps, Browse progressions and
+  Random sharing a full-width row under the transport (its two halves need ~985px side by
+  side; it was 800px until T23's wrap found it overflowing at 900). Otherwise tablets use the desktop layout. `e2e` checks ten widths from 320 to 1280px
   for sideways overflow and an off-screen progression browser, and the phone header's rows.
 
 ## Design decisions (and why)
@@ -777,6 +816,17 @@ These were discussed and chosen deliberately; don't "fix" them without asking.
   "I – V – vi – IV" choose by "Uplifting and familiar"; the numerals stay visible for those
   who can.
 
+- **Songs are sections sharing one key, tempo and meter** (owner, T23–T25): you write a chorus and try verses
+  against it, so the parts must agree on key and tempo; chords, length and instruments differ per section.
+  **Repeats are linked** (two Chorus blocks are one Chorus; "Make a new section from this" forks an independent
+  copy). **The song area is on top** (song, then chords, then one chord).
+- **`Track` stays as "one section seen with the song's settings"** (lenses) rather than every function learning
+  about songs: the chord editing rules didn't change at all.
+- **One undo history for the song**, and undo opens the section it changes, rather than a history per section
+  (which would make undoing a key change ambiguous).
+- **The saved history stores each section once** (owner's call in T23): plain copies would let one big song fill the
+  browser's storage, and full storage silently stops saving.
+
 ## Planned / possible next
 
 Lives in `TICKETS.md` (Up next, then Backlog), not here.
@@ -826,9 +876,13 @@ them up.
   - `grooves.ts`: groove settings, presets, matching, validation.
   - `sound.ts`: instrument presets (Tone options as data), brightness → cutoff, levels.
   - `midi.ts`: MIDI export of any parts, from `renderTrack`.
-- `src/track.ts`: the `Track` document type (chords, key, meter, groove, BPM; tempo bounds), defaults,
-  validation, migration of stored data, `withMusic`.
-- `src/history.ts`: undo/redo (pure transitions + `useHistory`, optionally persisted).
+- `src/song.ts`: the `Song` document (sections, arrangement, shared key/tempo/meter), validation (`isSong`),
+  migration from tracks (`migrateSong`), packed history storage, the lenses (`sectionTrack`, `withSectionTrack`),
+  section edits (add / rename / copy / remove), labels and colors, `changedSection`, song-wide changes.
+- `src/track.ts`: the `Track` type (one section seen with the song's settings: chords, key, meter, groove, BPM;
+  tempo bounds), defaults, validation, migration of stored tracks, `withMusic`.
+- `src/names.ts`: `uniqueName` ("Verse 2", "Untitled session 3").
+- `src/history.ts`: undo/redo (pure transitions + `useHistory`, optionally persisted, with `encode`/`decode`).
 - `src/persist.ts`: localStorage helpers + `usePersistentState`, `copyKeys`/`removeKeys`.
 - `src/session.ts`: sessions (keys, list, folders, favorites, sort/filter, migration `prepareSessions`,
   summaries; `useSessions`).
@@ -850,14 +904,16 @@ them up.
     `section.details-panel`; their X lives in the inspector's header.
   - `Modal.tsx`: the modal window both browsers use (portal, backdrop, Esc, Tab kept inside, focus taken
     back; the app's shortcuts are off while a `.modal-backdrop` exists).
-  - `ChordMenu.tsx`: the right-click / ⋯ menu of actions on chords (rows come from `App`).
+  - `ChordMenu.tsx`: the right-click / ⋯ menu of actions on chords (rows come from `App`), reused for sections.
+  - `SectionBar.tsx`: the section chips and "+ Section" (see Visual design).
   - `ChordInspector.tsx`, `NotesLane.tsx`, `ProgressionBrowser.tsx` (the progression window),
     `HomeNotice.tsx`, `SessionBrowser.tsx` (the sessions trigger + window),
     `InstrumentsPanel.tsx`, `MidiMenu.tsx` (+ `useDropdown.ts`): see Behavior.
     The lane renders inside `Timeline` and follows the playhead via the `--playhead`
     CSS variable set on `.timeline`.
 - `e2e/`: browser smoke tests (`harness.ts` starts Vite + Chrome and seeds tracks; `smoke.e2e.ts`).
-- `src/App.tsx`: `App` (the sessions shell) and `Workspace` (state: track history,
+- `src/App.tsx`: `App` (the sessions shell) and `Workspace` (state: the song history and the edited section,
+  edited through a small `track` adapter over the lenses,
   settings, selection, play state, playhead; wiring and layout), keyed by session. Drag previews are `planDrop(...)` rendered in place of the clips.
 
 ## Conventions
@@ -884,7 +940,7 @@ them up.
   `playwright-core` with the installed Chrome (`CHROME_PATH` overrides; Mac and Linux paths are
   tried), seeds `chords:v1:track` in localStorage (`seedTrack` in `e2e/harness.ts`) and reads
   clips from the DOM. Add a case there when a new pointer or keyboard flow lands. It also
-  checks the layout at nine widths (no sideways scroll, the progression browser on screen) and
+  checks the layout at ten widths (no sideways scroll, the progression browser on screen) and
   that the phone header keeps its two rows.
 - For UI: run the dev server and drive the installed Chrome headlessly, e.g.
   `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new

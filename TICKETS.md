@@ -4,7 +4,7 @@ Living, ordered backlog. One ticket per session: `/clear` → `/start Tn` → wo
 session updates this file and picks the next ticket, so each new session starts with a small, clear context.
 Rules: `.claude/skills/wrap/SKILL.md`. Capture ideas any time with `/ticket`.
 
-**Next:** T23 — Sections (Opus · extra high · plan on). It changes the saved data shape, so get the migration right first. If the `e2e` CI job is red, fix that first.
+**Next:** T24 — Song timeline and song playback (Opus · high · plan on). If the `e2e` CI job is red, fix that first. T27 (chord details back under the track) is a quick Sonnet fix that can go any time.
 
 ## In progress
 
@@ -62,7 +62,7 @@ Owner's decisions:
   section from this" forks an independent copy ("Chorus 2").
 - **The song area is on top**, between the toolbar and the chord track, collapsed by default (song first, then
   chords, then one chord).
-- **Three tickets**, not one shot.
+- **Three tickets**, not one shot. T23 (sections) is done; T24 and T25 remain.
 
 Agent's calls the owner accepted (in the proposal):
 - **Model** (`src/song.ts`, new, pure): `Section = { id, name: string | null, clips, bars, groove }`,
@@ -85,45 +85,9 @@ Agent's calls the owner accepted (in the proposal):
   The editor never jumps while the song plays: the chord track shows its playhead only while the edited section
   is the one sounding.
 
-### T23 — Sections
-
-- **Status:** ready
-- **Session:** Opus · extra high effort · plan mode on (saved data shape + migration)
-- **Goal:** A session holds several labelled progressions (sections) you can switch between and edit, with key,
-  tempo and meter shared; old sessions open exactly as before.
-- **Done when:**
-  - [ ] `src/song.ts` + `song.test.ts`: types, `DEFAULT_SONG`, `isSong`, `migrateSong` (wraps a stored Track,
-        incl. old `symbol` clips and legacy groove/BPM via `migrateTrack`), the two lenses, add / rename / copy /
-        delete section (never the last one; deleting removes its blocks), labels (Intro, Verse, Pre-chorus,
-        Chorus, Bridge, Breakdown, Drop, Outro, Other…) with auto-numbering ("Verse 2") and a color per label
-        kind, `changedSection`.
-  - [ ] `Workspace` holds a `Song` history (`useHistory<Song>` on the `track` key with `migrateSong`) and edits the
-        current section through the lenses; `section` session key (in `SESSION_KEYS`). Switching section clears
-        the selection and inspected chord; a playing section keeps playing, now the new one.
-  - [ ] Song bar above the track (not collapsible yet; T24 adds the body): one chip per section, the edited one
-        lit; chip ▾ / right-click (rename, "Make a new section from this", Delete section); **+ Section ▾** picks a
-        label, makes an empty section with the current one's instruments and length, and switches to it. A lone
-        unnamed section's chip reads "Progression ▾".
-  - [ ] Shared vs per section: the song popover's Length is the edited section's ("Length of Chorus" with 2+
-        sections); a time signature change rescales every section; `HomeNotice`'s move and key detection /
-        suggestion cover every section's chords; progression browser and Random act on the edited section, and
-        "Use chords" changes the song's mood only when no other section has chords; a progression's tempo sets
-        the song's.
-  - [ ] Sessions: `hasWork` / `trackHasWork`, `sessionKey`, `sessionMusic` (plays the edited section for now),
-        and blank-session cleanup read songs.
-  - [ ] Tests: migration over a stored history (old sessions open unchanged), lenses, no-op edits add no undo
-        step. e2e: make Verse + Chorus, switch, edit each, undo across sections switches back.
-  - [ ] `AGENTS.md`: core model (song, sections), Undo, Sessions/Persistence, Visual design (Song bar), the
-        Songs design decisions above.
-- **Context:** `src/track.ts` (`Track`, `withMusic`, `migrateTrack`), `src/history.ts` (`readHistory` calls
-  `migrate` with one argument), `src/session.ts` (`SESSION_KEYS`, `trackHistory`, `trackHasWork`, `sessionMusic`,
-  `legacyMusic`), `App.tsx` (`Workspace`: `track = useHistory(...)`, `withClips`, `setMusic`, `changeHome`,
-  `moveChordsHome`, `changeBars`, `changeSig`, `takeProgression`, `homeSuggestion`/`detectedKeys`),
-  `progressions.ts` (`progressionTrack` sets `mode`), `SongMenu.tsx`/`OptionsMenu.tsx` (Length row).
-
 ### T24 — Song timeline and song playback
 
-- **Status:** blocked — needs T23
+- **Status:** ready
 - **Session:** Opus · high effort · plan mode on (audio scheduling)
 - **Goal:** Arrange sections into a whole song and hear it, each section with its own instruments.
 - **Done when:**
@@ -148,6 +112,33 @@ Agent's calls the owner accepted (in the proposal):
   (`renderTrack`), `selection.ts`, `ChordMenu.tsx`, `Panel.tsx`, `useChordDrag.ts` (pattern only: its drop rules
   are tick-based; a small block-drag hook is simpler), `dropLabel.ts`, `shortcuts.ts`. Owner listens: section
   changes switch sounds cleanly, no stuck notes, seeking into the middle of a song.
+- **Handoff from T23:** the model is in place in `src/song.ts`: `Block = { id, section }` and `Song.arrangement`
+  exist (validated by `isSong`, always `[]` so far; `removeSection` already drops a section's blocks); nothing
+  writes blocks yet. `SectionBar.tsx` is a plain `div.sections-bar` with a muted "Song" label: make it a `Panel`
+  (title "Song", the chips + "+ Section" in `actions`, `songOpen` in `SESSION_KEYS`) and put the timeline in its
+  body. `App.tsx` `Workspace`: `song` is the history, `sectionId` / `switchSection` the edited section, `track` a
+  small adapter over the lenses; undo/redo go through `showStep` + `changedSection` (an arrangement-only change
+  changes no section's music, so it never switches: probably right for block edits). `songClips` lays sections in
+  *section* order for key detection; consider arrangement order once there are blocks. Switching section while
+  playing already keeps playing (the schedule/groove effects re-run). `sessionMusic` still plays one section
+  (T25). The packed history (`packSongHistory`) stores sections by reference; blocks are small and stay inline.
+
+### T27 — Chord details directly under the track
+
+- **Status:** ready
+- **Session:** Sonnet · low effort · plan mode off
+- **Goal:** The layout the redesign agreed on (2026-11-16): chord details sit directly under the track, above
+  Voicing and Instruments, so opening those panels never moves the panel used most. In the app they've been under
+  Instruments since at least T19 (`App.tsx` renders Timeline, Voicing, Instruments, then `section.details-panel`);
+  `AGENTS.md` (Behavior → "Chord inspector" and Visual design) already describes the target.
+- **Done when:**
+  - [ ] `section.details-panel` renders right after `.timeline-row` inside `.panels` (desktop and phones; check the
+        phone `order` rules at the end of `index.css` don't fight it).
+  - [ ] Opening/closing Voicing and Instruments doesn't move the details panel (e2e: its top before/after, like
+        the key-change notice case).
+  - [ ] `AGENTS.md` Visual design list order matches (Voicing and Instruments after the chord details).
+- **Context:** `App.tsx` (the `.panels` JSX), `index.css` (`.details-panel`, the phone block), `e2e/smoke.e2e.ts`.
+  Ask the owner first if they've grown used to it below Instruments.
 
 ### T25 — Song MIDI, sessions window, phones, polish
 
@@ -213,6 +204,7 @@ Agent's calls the owner accepted (in the proposal):
 
 ## Done
 
+- T23 — Sections — 2026-11-17 — a session is a song (`src/song.ts`): sections with their own chords, length and instruments, sharing key/tempo/meter; old sessions open as one "Progression" section (`migrateSong`, fixed id `main`); one undo history that opens the section a step changes (`changedSection`); history saved packed, each section version once (owner's call; `history.ts` `encode`/`decode`); `SectionBar.tsx` chips (+ Section with labels and colors, rename, "Make a new section from this", delete); key detection/move and meter changes cover every section; progressions take the song's mood only when no other section has chords. Also: the toolbar now wraps up to 1000px (it overflowed at 900; e2e checks 900). Owner to listen: switching sections while playing.
 - T22 — Chord details rework — 2026-11-16 — panel is always present (fixed height, no X, `panelOpen` retired; same frame shows an empty state); header gained "↺ Back to Cm" and ⋯ (opens `ChordMenu`; Clear lives there); tabs are Ideas · Variations of C · Notes; clicking an idea/variation uses it and plays it in place (card ▶ removed, why-text clamped to 2 lines); Notes tab has Bass note, Shape (inversion + octave), Why. Also fixed: the chord menu stayed open when you clicked a chord (clips stop pointerdown; the menu's outside-click listener is now capture-phase; e2e added). Owner to look at the panel on a phone and listen to click-to-hear.
 - T21 — Chord menu — 2026-11-16 — `ChordMenu.tsx`: right-click (or long-press) a chord, or the ⋯ on a selected one, opens actions on the selection (Ideas, Variations, inversion, octave, Duplicate, Clear, Delete) with shortcuts; right-click selects an unselected chord first; Mac Ctrl+click still toggles selection. Rows built in `chordMenuGroups` (App.tsx), so T22 can reuse it. Owner to try a real right-click and the ⋯ on a phone.
 - T20 — Voicing you can understand at a glance — 2026-11-16 — Inversion [↓ Lower][Higher ↑], Octave and Smooth voicing moved into the Voicing header (work while collapsed) after a scope label ("All 4 chords" / "F" / "2 selected chords"); clicking a chord in `NotesLane` selects it (`onSelect` → `selectClip`, so it also previews it); the header wraps below the title on narrow windows. Deviation: the panel hint moved into the expanded legend (no room in the bar); Smooth voicing keeps its old rule (selection only if 2+), so with one chord selected the label names that chord but Smooth acts on all (its tooltip says so). e2e: scope label, lane click + ↑. Owner to look at the header on a phone.

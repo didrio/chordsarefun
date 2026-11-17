@@ -317,6 +317,115 @@ h1 {
 }
 
 /*
+ * The song's sections, between the toolbar and the track: one chip per section (its kind's
+ * color, the edited one lit), then "+ Section". Chips scroll sideways rather than wrap, so the
+ * bar is always one slim row. The lit chip changes color only (never weight), so nothing shifts.
+ */
+.sections-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+  padding: 0.35rem 0.5rem 0.35rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.sections-label {
+  flex: none;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.section-chips {
+  display: flex;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.section-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.section-chip button {
+  font-size: var(--fs-sm);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+.section-chip button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--tint) 14%, transparent);
+}
+
+.section-chip-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.5rem 0.25rem 0.6rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.section-chip .section-chip-menu {
+  padding: 0.25rem 0.45rem;
+  color: var(--muted);
+  border-left: 1px solid var(--border);
+}
+
+.section-chip.current {
+  border-color: var(--tint);
+  background: color-mix(in srgb, var(--tint) 20%, var(--surface));
+}
+
+.section-chip.current .section-chip-name {
+  color: var(--text);
+}
+
+.section-chip.current .section-chip-menu {
+  border-left-color: color-mix(in srgb, var(--tint) 50%, transparent);
+}
+
+.section-dot {
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--tint);
+}
+
+input[type='text'].section-name-input {
+  width: 9rem;
+  padding: 0.2rem 0.5rem;
+  font-size: var(--fs-sm);
+  border: none;
+  border-radius: 0;
+}
+
+.add-section {
+  flex: none;
+}
+
+.add-section-panel {
+  width: 17rem;
+}
+
+.add-section-panel .menu-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+/*
  * The song popover: the key on the left, tempo / time / length / grid / metronome on the right,
  * one setting per row with labels on the left and controls lined up. It scrolls inside itself on
  * short windows rather than running off the bottom.
@@ -3088,10 +3197,10 @@ button.show-all {
  */
 
 /*
- * Narrow windows and small tablets (up to 800px): the toolbar's two halves no longer fit on
+ * Narrow windows and tablets (up to 1000px): the toolbar's two halves no longer fit on
  * one row, so Progressions and Random get a row of their own and share it evenly.
  */
-@media (max-width: 800px) {
+@media (max-width: 1000px) {
   .main-toolbar {
     flex-wrap: wrap;
   }
@@ -3130,18 +3239,21 @@ button.show-all {
   }
 
   .song-bar,
-  .main-toolbar {
+  .main-toolbar,
+  .sections-bar {
     position: relative;
   }
 
   .song-bar .dropdown,
   .main-toolbar .dropdown,
+  .sections-bar .dropdown,
   .help {
     position: static;
   }
 
   .song-bar .dropdown-panel,
   .main-toolbar .dropdown-panel,
+  .sections-bar .dropdown-panel,
   .help-tip {
     left: 0;
     right: 0;
