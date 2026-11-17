@@ -1,7 +1,8 @@
-import type { Clip } from './music/timeline'
+/** Anything on a timeline that can be selected: chords (clips) and the song's blocks. */
+export type Selectable = { id: string; start: number }
 
 /**
- * Clip selection, DAW-style. `anchor` is the clip a Shift+click range extends from
+ * Selection of clips or song blocks, DAW-style. `anchor` is the clip a Shift+click range extends from
  * (the last plain or ⌘/Ctrl-clicked clip).
  */
 export type Selection = { ids: string[]; anchor: string | null }
@@ -10,7 +11,7 @@ export const EMPTY_SELECTION: Selection = { ids: [], anchor: null }
 
 export type ClickMods = { shift: boolean; toggle: boolean }
 
-const byStart = (clips: Clip[]) => [...clips].sort((a, b) => a.start - b.start)
+const byStart = (clips: Selectable[]) => [...clips].sort((a, b) => a.start - b.start)
 
 /**
  * Selection after clicking clip `id`:
@@ -18,7 +19,7 @@ const byStart = (clips: Clip[]) => [...clips].sort((a, b) => a.start - b.start)
  * - Shift: everything from the anchor to it (inclusive), in track order
  * - ⌘/Ctrl: add or remove that clip, keeping the rest
  */
-export function clickSelect(sel: Selection, clips: Clip[], id: string, mods: ClickMods): Selection {
+export function clickSelect(sel: Selection, clips: Selectable[], id: string, mods: ClickMods): Selection {
   if (mods.shift && sel.anchor && clips.some((c) => c.id === sel.anchor)) {
     const order = byStart(clips).map((c) => c.id)
     const [a, b] = [order.indexOf(sel.anchor), order.indexOf(id)].sort((x, y) => x - y)
@@ -31,13 +32,13 @@ export function clickSelect(sel: Selection, clips: Clip[], id: string, mods: Cli
   return { ids: [id], anchor: id }
 }
 
-export function selectAll(clips: Clip[], sel: Selection): Selection {
+export function selectAll(clips: Selectable[], sel: Selection): Selection {
   const ids = byStart(clips).map((c) => c.id)
   return { ids, anchor: sel.anchor ?? ids[0] ?? null }
 }
 
 /** Drop ids of clips that no longer exist (e.g. after undo or delete). */
-export function pruneSelection(sel: Selection, clips: Clip[]): Selection {
+export function pruneSelection(sel: Selection, clips: Selectable[]): Selection {
   const exists = new Set(clips.map((c) => c.id))
   const ids = sel.ids.filter((id) => exists.has(id))
   const anchor = sel.anchor && exists.has(sel.anchor) ? sel.anchor : null

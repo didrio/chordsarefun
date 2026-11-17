@@ -147,8 +147,8 @@ colors, fit dots and plain-language reasons, always relative to Home.
 
 ### Chord inspector, notes lane, progressions
 
-- The **details panel** under the track (like Ableton's detail view) is **always there**, directly under
-  the track and above Voicing and Instruments, at a fixed height (25rem on desktop). It has no X
+- The **details panel** (like Ableton's detail view) is **always there**, under Voicing and Instruments
+  (the owner's choice: it stays there), at a fixed height (25rem on desktop). It has no X
   (`panelOpen` is retired; its key stays in `SESSION_KEYS` for cleanup). It shows the **inspected
   clip**: the last clip selected on its own. Selecting a clip, adding one (double-click, + New, copy)
   or stepping with ←/→ switches it; clicking elsewhere or Esc only deselects (so nothing jumps). With
@@ -444,6 +444,39 @@ one undo step.
   (>5% more of the note-time in its scale), the Key trigger shows a dot. Equal fits (relative keys) never
   nag.
 
+### The song timeline (`SongPanel.tsx`, `useBlockDrag.ts`, arrangement edits in `song.ts`; T24)
+
+- **The Song panel** (`Panel`, title "Song", `songOpen` per session, closed by default) sits between the toolbar
+  and the chord track. Its bar (works collapsed) holds the section chips and "+ Section" (`SectionBar`), then
+  **▶ Song** and the song's length ("2:08", bars in the tooltip). Its body is the **song timeline**: a bar ruler
+  (numbers at block starts, its own playhead, `--song-playhead`; click/drag to seek, snapped to bars, ⌘/Alt free)
+  over the lane of **blocks**: the sections in the order they play, back to back, as wide as they are long
+  (`blockSpans`), over at least 16 bars of width (`MIN_SONG_BARS`, so a short song isn't one giant block and
+  there's room to drop), at least 1.75rem per bar (it scrolls sideways when long). A block shows the section's name
+  in its color, its bars and its chord names. **Blocks of the edited section have a dashed outline** (linked repeats
+  at a glance); the sounding one is outlined while the song plays. On screen a block is "a part of the song";
+  "block" is internal. Empty: "Drag sections here, or [Add every section in order]".
+- **Linked repeats**: a block only points at a section (`Block = { id, section }`), so two Chorus blocks are the
+  same music. "Make a new section from this" on a block (`forkBlock`) copies the section and makes *that block*
+  play the copy (Ableton's "make unique"); the other repeats stay linked. On a chip it only adds the copy.
+- **Edits** (pure, tested, one undo step each, never switching the edited section): `insertBlocks`, `moveBlocks`
+  (the selection gathered into one run, at a **gap** 0…n counted before it's lifted out; same order = same song, no
+  step), `duplicateBlocks` (linked copies right after the last selected), `removeBlocks` (the sections stay),
+  `stepGap` (⌥←/→). Deleting a section removes its blocks.
+- **Dragging** (`useBlockDrag`, a small hook: the song has an order, no grid or lengths): drag a **chip** onto the
+  lane to add its section, or drag **blocks** to move them (Option/Ctrl copies them, linked). The target is the gap
+  nearest the pointer (`blockGap`: the first half of a block is before it), shown as an accent line; moved blocks
+  fade; the ghost says what will happen (`describeBlockDrop`: "Add Chorus after Verse", "Move Chorus before Verse",
+  "Move 2 parts after Intro", "Already here", "Release to cancel", "Open Song to arrange" when the panel is
+  collapsed). Esc cancels. A chip's own click is ignored only when it ends a drag.
+- **Selection** (`selection.ts` works on anything with `{ id, start }`): click a block to select it **and edit its
+  section** (Shift range, ⌘/Ctrl toggle); clicking the lane's background deselects. Block and chord selections are
+  exclusive: selecting one clears the other. Right-click (or ⋯ on a selected block) selects it *without* switching
+  section and opens `ChordMenu`: Edit this section · Duplicate (⌘D), Make a new section from this (one block) ·
+  Remove from song (⌫). With blocks selected the keys act on them (see Keyboard).
+- **Key detection hears the song**: `songClips` lays out the arranged sections in song order (repeats count again),
+  then the sections that aren't in it.
+
 ### Transport, playhead, metronome
 
 - **Opening a session is silent and never plays by itself**: the leaving workspace calls `silenceAll`
@@ -451,13 +484,30 @@ one undo step.
   and disposes the whole sound graph, which also kills the notes Tone already queued ahead (PolySynth keeps
   them on timers that `releaseAll` doesn't cancel). A `generation` counter makes sounds still waiting for
   `Tone.start()` bail. Stop/Pause keep normal release tails.
-- Play/Pause (one button, Space) and Stop (Shift+Space, always enabled: returns the
-  playhead to the start even when stopped). Play works on an empty track (metronome
-  only), like a DAW.
+- **One transport, two things it can play** (`playScope`, not saved): the transport's Play plays the **edited
+  section** (shows ⏸ only while the section plays); **▶ Song** (Song bar) plays the **arrangement** (disabled with no
+  blocks). Starting one stops the other (its position kept) and starts once the new one is scheduled
+  (`pendingStart`). **Space** pauses whatever plays, or resumes the one used last; **Stop** (Shift+Space, always
+  enabled) returns that one to its start. Loop and the metronome apply to both. Each has its own playhead (section
+  ticks, song ticks). Seeking a ruler (or clicking empty track space) while stopped makes that scope the one Space
+  plays; while the other one plays it only moves that playhead. A song that loses its last block falls back to the
+  section. Play works on an empty track (metronome only), like a DAW.
+- **The editor never jumps while the song plays**: the edited section stays, and the chord track (and notes lane)
+  shows its playhead and lit chord only while a block of the edited section is sounding (`playheadAt`; otherwise
+  `data-playhead-off` hides it). Editing the section while the song plays is heard live in every block of it.
 - Loop toggle (L) loops the whole track. Play once ends at the end of the last clip,
   or the track end when empty (`playbackEnd`), then the playhead returns to the start.
 - BPM changes and edits apply live while playing. Starting or seeking into the middle
-  of a clip sounds that chord for its remaining length.
+  of a clip sounds that chord for its remaining length (with the levels of the block under the playhead).
+- **How it's scheduled** (`schedule` in `audio.ts`, `segments.ts`): what plays is a list of **segments** (`{ start,
+  length, clips, groove }`): one for the section (`sectionSegments`), one per block for the song (`songSegments`).
+  `renderSegments` renders each with its own patterns, swing and parts (`renderTrack`, restarting per block), offset
+  by its start; parts that are off (or at volume 0) play nothing there. **One synth per sound in use** (chords and
+  bass, each through its own trim `Volume` for `trimDb`), and every note goes to its own section's synth, so
+  nothing is swapped or disposed mid-song (tails ring out, no stuck notes); unused sounds are disposed a few seconds
+  after nothing refers to them. At each block start a transport callback ramps (20 ms) the part volumes and the
+  chord brightness to that block's; parts off in a block are left alone so the notes before ring out. While
+  stopped or paused the levels are the edited section's (previews use them).
 - Playhead: triangle in the ruler band plus a line through the track, always visible.
   Click/drag anywhere on the ruler to move it (only the triangle shows a pointer
   cursor). Clicking empty track space moves it there; clicking a clip doesn't move it. Snaps to the grid (free with grid Off or ⌘/Alt). ← / → move it one
@@ -562,7 +612,7 @@ browser.
 
 | Keys | Action |
 |---|---|
-| Space · Shift+Space | Play/pause · stop |
+| Space · Shift+Space | Play/pause (what played last: the section or the song) · stop |
 | L · M | Loop · metronome on/off |
 | ← / → | Previous/next clip (with a selection), else move playhead one grid step |
 | ↑ / ↓ | Selected chords (or all) one inversion higher/lower |
@@ -572,6 +622,10 @@ browser.
 | ⌥← / ⌥→ (Mac) · Ctrl+← / Ctrl+→ | Nudge the selected chords one grid step (into empty space only) |
 | ⌘A / Ctrl+A | Select all |
 | ⌘Z · ⇧⌘Z / Ctrl+Y | Undo · redo |
+
+With **blocks of the song selected** instead of chords: ← / → previous/next block (selected and edited, like a
+click), ⌘D / Ctrl+D linked copies right after them, Delete/Backspace out of the song, ⌥← / ⌥→ (Ctrl on
+Windows/Linux) one place earlier/later, ⌘A every block, Esc deselect. ↑/↓ still act on the chords.
 
 The (i) tooltip next to the logo (`HelpTip.tsx`: how it works + every shortcut, shown on hover/focus) lists these; keep it in sync.
 
@@ -598,7 +652,7 @@ The (i) tooltip next to the logo (`HelpTip.tsx`: how it works + every shortcut, 
   off while it's open (focus that falls out of it is taken back). Folder ⋯: Rename, Delete (its sessions are
   kept, back to no folder).
 - **Hear a session** (the row's ▶, ■ while it plays): it plays the section being edited (or the first with chords;
-  whole songs come with T24/T25) and **loops over it until stopped** (no
+  whole songs come with T25) and **loops over it until stopped** (no
   metronome; handy for singing over a session), exactly as its own Play would: its tempo, time signature, patterns, swing, chord/bass sounds, brightness, mix and parts
   on/off (`sessionMusic` reads them from the stored track, migrated like the workspace's; `previewSession` in `audio.ts` renders it with
   `renderTrack` on a **separate sound graph** built from that session's groove, so the open session's sounds
@@ -667,17 +721,17 @@ tracks; drums on channel 10 with General MIDI notes) or one part alone.
   - **Main toolbar** (dashed line above, solid below), like Ableton's transport bar: Play
     (accent tint), Stop, Loop · Undo, Redo (ghost) · **+ Add chord** (tinted) on the left;
     Browse progressions and the Random group (Chords | Instruments | Both) on the right (fixed-width trigger).
-  - **Sections bar** (`SectionBar.tsx`, `.sections-bar`): "Song", one chip per section (its kind's color from
+  - **Song panel** (`SongPanel.tsx`, `.song-arranger`; see The song timeline), whose bar holds the
+    **sections bar** (`SectionBar.tsx`, `.sections-bar`): one chip per section (its kind's color from
     `SECTION_LABELS`, gray for unnamed/other; the edited one lit, color only so nothing shifts; "Progression" for a
     lone unnamed one), then **+ Section ▾** (the labels with what each is for and the name it'll get, "Verse 2";
     Other… adds "Section" and starts renaming it). Clicking a chip edits that section (selection and chord details
     start fresh; playback keeps going with it). A chip's ▾ or right-click opens `ChordMenu`: Rename (inline),
     Make a new section from this (an independent numbered copy right after it, opened), Delete section (undoable;
     never the last one; its blocks go too). The chips scroll sideways when they don't fit, keeping the edited one
-    in view (only the row scrolls, never the page). T24 turns the bar into a collapsible panel holding the song
-    timeline.
+    in view (only the row scrolls, never the page). Chips drag onto the song timeline.
   - **The timeline** (no panel around it) runs the full width; the notes lane lines up with it.
-  - Three panels (`Panel.tsx`), Voicing, Instruments and the chord details:
+  - Three panels under the track (`Panel.tsx`), Voicing, Instruments and the chord details:
     - **Voicing** (collapsible, closed by default, saved per session as `moreOpen`): the **header bar** holds the
       scope label, Inversion [↓ Lower] [Higher ↑], Octave [↓] [↑] and Smooth voicing, usable while collapsed (the
       bar wraps onto a second line when the window is too narrow). Expanded: a one-line legend (what the lines
@@ -685,9 +739,8 @@ tracks; drums on channel 10 with General MIDI notes) or one part alone.
       lane runs to the panel's left edge, like the track; `--side` is the right column).
     - **Instruments** (collapsible, closed by default, `instrumentsOpen`; see Instruments above), directly
       under Voicing.
-    - **Chord details** (`section.details-panel`, no title bar): not collapsible; it appears
-      when one chord is selected or stepped to, and goes away with the X in its header (or
-      when several chords are selected, or none). Selecting a chord again brings it back.
+    - **Chord details** (`section.details-panel`, no title bar), under Instruments: not collapsible and
+      always there (see Chord inspector); it shows an empty state when no single chord is inspected.
   The playhead CSS variable lives on the `.panels` wrapper (`data-playhead-scope`), so the
   timeline and the notes lane share one playhead.
 - **Type scale**: every font size is one of six CSS variables in `:root` (`--fs-micro` 0.6rem
@@ -824,6 +877,14 @@ These were discussed and chosen deliberately; don't "fix" them without asking.
   about songs: the chord editing rules didn't change at all.
 - **One undo history for the song**, and undo opens the section it changes, rather than a history per section
   (which would make undoing a key change ambiguous).
+- **One scheduler for a section and the song** (T24, instead of a separate `scheduleSong`): a section is a song of
+  one block, so the two can't drift apart.
+- **A synth per sound, not a synth swap at each block start** (T24): swapping disposes the old synth, which cuts its
+  tails and races the notes Tone already queued ahead; keeping one per sound in use avoids both.
+- **"Make a new section from this" on a block makes that block unique** (T24): the natural reading on a timeline
+  (Ableton's "make unique"); the other repeats stay linked to the original.
+- **Right-click on a block doesn't switch section; a click does**, so the menu's "Edit this section" means something
+  and right-clicking around the song doesn't move the editor.
 - **The saved history stores each section once** (owner's call in T23): plain copies would let one big song fill the
   browser's storage, and full storage silently stops saving.
 
@@ -869,8 +930,10 @@ them up.
   - `progressions.ts`: the progression library (genres, each progression's preset and tempo), its layout on
     a track, `progressionMusic` (a progression ready to hear), `progressionTrack` (taking its chords,
     instruments or both) and `searchProgressions` (the browser's list).
-  - `audio.ts`: Tone.js playback of the three parts (synths, drum kit, per-part
-    volume, limiter), seeking, metronome. The only module touching Web Audio.
+  - `segments.ts`: what plays as segments (a section, or one per song block): `renderSegments`, `segmentAt`,
+    `segmentsEnd`, pure (T25's MIDI and T26's WAV can reuse it).
+  - `audio.ts`: Tone.js playback of the three parts (a synth per sound in use, drum kit, per-part
+    volume, limiter), one `schedule` for a section or the song, seeking, metronome. The only module touching Web Audio.
     Previews (`previewChord`, `previewProgression`, `previewSession`: loops, or `passes` times) and `silenceAll`.
   - `patterns.ts`: chord/bass/drum patterns and `renderTrack` (all notes played), pure.
   - `grooves.ts`: groove settings, presets, matching, validation.
@@ -878,7 +941,9 @@ them up.
   - `midi.ts`: MIDI export of any parts, from `renderTrack`.
 - `src/song.ts`: the `Song` document (sections, arrangement, shared key/tempo/meter), validation (`isSong`),
   migration from tracks (`migrateSong`), packed history storage, the lenses (`sectionTrack`, `withSectionTrack`),
-  section edits (add / rename / copy / remove), labels and colors, `changedSection`, song-wide changes.
+  section edits (add / rename / copy / remove), labels and colors, `changedSection`, song-wide changes, the
+  arrangement (`blockSpans`, `songTicks`, `songSegments`, `insertBlocks`, `moveBlocks`, `duplicateBlocks`,
+  `removeBlocks`, `forkBlock`, `blockGap`, `stepGap`) and `formatDuration`.
 - `src/track.ts`: the `Track` type (one section seen with the song's settings: chords, key, meter, groove, BPM;
   tempo bounds), defaults, validation, migration of stored tracks, `withMusic`.
 - `src/names.ts`: `uniqueName` ("Verse 2", "Untitled session 3").
@@ -888,9 +953,9 @@ them up.
   summaries; `useSessions`).
 - `src/backup.ts`: backup files (`downloadBackup`, `readBackup`, `planImport`).
 - `src/platform.ts`: Mac vs Windows modifiers (`copyKey`, `freeKey`, `nudgeKey`).
-- `src/selection.ts`: selection rules (`clickSelect`, `selectAll`, `pruneSelection`).
+- `src/selection.ts`: selection rules (`clickSelect`, `selectAll`, `pruneSelection`), for clips and song blocks.
 - `src/shortcuts.ts`: key → action (`shortcutFor`); App executes actions.
-- `src/dropLabel.ts`: drag preview label (`describeDrop`, `heldName`).
+- `src/dropLabel.ts`: drag preview labels (`describeDrop`, `heldName`; `describeBlockDrop` for the song).
 - `src/components/`
   - `Timeline.tsx`: ruler + playhead, track, clips, resize handles, drag preview tags,
     and the empty track's start buttons (passed in as `emptyState`).
@@ -900,12 +965,13 @@ them up.
   - `TimeSignatureControl.tsx`: preset menu + Custom pickers.
   - `SongMenu.tsx`: the song button and popover; `KeyPanel.tsx` (the key, its left half) and
     `OptionsMenu.tsx` (`TempoInput`, `TimingFields`: time signature, length, grid) fill it.
-  - `Panel.tsx`: the collapsible panel (Voicing, Instruments). The chord details are a plain
-    `section.details-panel`; their X lives in the inspector's header.
+  - `Panel.tsx`: the collapsible panel (Song, Voicing, Instruments). The chord details are a plain
+    `section.details-panel` (no X).
   - `Modal.tsx`: the modal window both browsers use (portal, backdrop, Esc, Tab kept inside, focus taken
     back; the app's shortcuts are off while a `.modal-backdrop` exists).
   - `ChordMenu.tsx`: the right-click / ⋯ menu of actions on chords (rows come from `App`), reused for sections.
-  - `SectionBar.tsx`: the section chips and "+ Section" (see Visual design).
+  - `SectionBar.tsx`: the section chips and "+ Section" (see Visual design); `tint.ts` their color.
+  - `SongPanel.tsx` (the Song panel and song timeline) + `useBlockDrag.ts` (see The song timeline).
   - `ChordInspector.tsx`, `NotesLane.tsx`, `ProgressionBrowser.tsx` (the progression window),
     `HomeNotice.tsx`, `SessionBrowser.tsx` (the sessions trigger + window),
     `InstrumentsPanel.tsx`, `MidiMenu.tsx` (+ `useDropdown.ts`): see Behavior.

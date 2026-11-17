@@ -4,7 +4,7 @@ Living, ordered backlog. One ticket per session: `/clear` → `/start Tn` → wo
 session updates this file and picks the next ticket, so each new session starts with a small, clear context.
 Rules: `.claude/skills/wrap/SKILL.md`. Capture ideas any time with `/ticket`.
 
-**Next:** T24 — Song timeline and song playback (Opus · high · plan on). If the `e2e` CI job is red, fix that first. T27 (chord details back under the track) is a quick Sonnet fix that can go any time.
+**Next:** T25 — Song MIDI, sessions window, phones, polish (Sonnet · medium · plan off). If the `e2e` CI job is red, fix that first.
 
 ## In progress
 
@@ -23,15 +23,15 @@ the instruments, or both); chord details always in the same place. Target layout
 [▶][■][⟲]  [↶][↷]  [+ Add chord]          [🎲 Random: Chords│Instruments│Both] [Browse progressions]
 1            2            3            4                                       (track, full width)
 [ Cm       ][ Eb       ][ Bb       ][ Fm       ]
-── chord details: always here, fixed height, directly under the track ──────────────────────────
-▶ Cm  i  C Eb G   In key · Every note is in C minor…   ↺ Back to Fm     [Type a chord…] [⋯]
-Ideas for this spot │ Variations of C │ Notes                           Before Eb, at the start.
 ── ▸ Voicing   All 4 chords   Inversion [↓ Lower][Higher ↑]  Octave [↓][↑]  [Smooth voicing] ──
 ── ▸ Instruments   [Pop ▾]    (open: Chords │ Bass │ Drums strips, swing) ───────────────────
+── chord details: always here, fixed height, under Instruments ──────────────────────────────
+▶ Cm  i  C Eb G   In key · Every note is in C minor…   ↺ Back to Fm     [Type a chord…] [⋯]
+Ideas for this spot │ Variations of C │ Notes                           Before Eb, at the start.
 ```
 
-Nothing above the chord details changes height, so opening Voicing or Instruments never moves the panel used
-most. On screen it's "Instruments"; the code can keep calling it `groove`. Owner's decisions: the song button
+The chord details stay under Instruments (owner, 2026-11-17: the "directly under the track" idea was dropped).
+On screen it's "Instruments"; the code can keep calling it `groove`. Owner's decisions: the song button
 shows its values (not an icon); MIDI keeps its own button; chord details never close (no X); all randomizing sits
 in one group of three. Agent's calls the owner accepted: the right-click menu holds *actions* on chords, not the
 ideas (menus close after one pick, and trying ideas one after another is the core loop); clicking an idea uses it
@@ -52,7 +52,7 @@ unnamed section and nothing arranged is exactly today's app; existing users see 
            [ Intro ][ Verse        ][ Pre ][ Chorus     ][ Verse        ][ Chorus     ]   ← song timeline
 1            2            3            4                                  (chord track: the Chorus)
 [ Cm       ][ Eb       ][ Bb       ][ Fm       ]
-── chord details ── / ── ▸ Voicing ── / ── ▸ Instruments (the Chorus's) ──
+── ▸ Voicing ── / ── ▸ Instruments (the Chorus's) ── / ── chord details ──
 ```
 
 Owner's decisions:
@@ -62,7 +62,7 @@ Owner's decisions:
   section from this" forks an independent copy ("Chorus 2").
 - **The song area is on top**, between the toolbar and the chord track, collapsed by default (song first, then
   chords, then one chord).
-- **Three tickets**, not one shot. T23 (sections) is done; T24 and T25 remain.
+- **Three tickets**, not one shot. T23 (sections) and T24 (song timeline, playback) are done; T25 remains.
 
 Agent's calls the owner accepted (in the proposal):
 - **Model** (`src/song.ts`, new, pure): `Section = { id, name: string | null, clips, bars, groove }`,
@@ -85,64 +85,9 @@ Agent's calls the owner accepted (in the proposal):
   The editor never jumps while the song plays: the chord track shows its playhead only while the edited section
   is the one sounding.
 
-### T24 — Song timeline and song playback
-
-- **Status:** ready
-- **Session:** Opus · high effort · plan mode on (audio scheduling)
-- **Goal:** Arrange sections into a whole song and hear it, each section with its own instruments.
-- **Done when:**
-  - [ ] The Song bar becomes a collapsible `Panel` (`songOpen` per session, closed by default) whose body is the
-        song timeline: blocks back to back, widths proportional to bars, a bar ruler with its own playhead and
-        seek, each block showing the section's name, bars and chord names; blocks of the edited section outlined
-        (linked repeats visible). Empty: "Drag sections here, or [Add every section in order]".
-  - [ ] Pure, tested arrangement edits in `song.ts`: `insertBlocks`, `moveBlocks`, `duplicateBlocks` (linked,
-        right after), `removeBlocks`, block start/length and song length.
-  - [ ] Drag a chip into the timeline (insertion line, "Add Chorus after Verse"); drag blocks to reorder ("Move
-        Chorus before Verse"); multi-select (Shift range, ⌘/Ctrl toggle), ⌘D, Delete (removes from the song, not
-        the section), ←/→, Esc; right-click / ⋯ (`ChordMenu`): Edit this section, Duplicate, Make a new section
-        from this, Remove from song. Clicking a block selects it and makes its section the edited one.
-  - [ ] `scheduleSong` in `audio.ts`: each block rendered with `renderTrack(section.clips, …,
-        arrangementOf(section.groove))` and offset by its start; a transport callback at each block start switches
-        the groove (synths swap only when the sound differs; volumes and brightness ramp); metronome over the whole
-        song; `soundAt` applies the groove of the block under the playhead first; edits re-schedule live.
-  - [ ] `playScope` and the transport rules (see "One transport" above); ▶ Song + song length in the Song bar.
-  - [ ] e2e: drag a chip in, reorder, ⌘D, Delete; Song play/pause doesn't move the editor.
-  - [ ] `AGENTS.md`: Song timeline, Transport, Keyboard table and the help tooltip (`HelpTip.tsx`).
-- **Context:** `audio.ts` (`schedule`, `applyGroove`/`setGroove`, `soundAt`, `rendered`), `patterns.ts`
-  (`renderTrack`), `selection.ts`, `ChordMenu.tsx`, `Panel.tsx`, `useChordDrag.ts` (pattern only: its drop rules
-  are tick-based; a small block-drag hook is simpler), `dropLabel.ts`, `shortcuts.ts`. Owner listens: section
-  changes switch sounds cleanly, no stuck notes, seeking into the middle of a song.
-- **Handoff from T23:** the model is in place in `src/song.ts`: `Block = { id, section }` and `Song.arrangement`
-  exist (validated by `isSong`, always `[]` so far; `removeSection` already drops a section's blocks); nothing
-  writes blocks yet. `SectionBar.tsx` is a plain `div.sections-bar` with a muted "Song" label: make it a `Panel`
-  (title "Song", the chips + "+ Section" in `actions`, `songOpen` in `SESSION_KEYS`) and put the timeline in its
-  body. `App.tsx` `Workspace`: `song` is the history, `sectionId` / `switchSection` the edited section, `track` a
-  small adapter over the lenses; undo/redo go through `showStep` + `changedSection` (an arrangement-only change
-  changes no section's music, so it never switches: probably right for block edits). `songClips` lays sections in
-  *section* order for key detection; consider arrangement order once there are blocks. Switching section while
-  playing already keeps playing (the schedule/groove effects re-run). `sessionMusic` still plays one section
-  (T25). The packed history (`packSongHistory`) stores sections by reference; blocks are small and stay inline.
-
-### T27 — Chord details directly under the track
-
-- **Status:** ready
-- **Session:** Sonnet · low effort · plan mode off
-- **Goal:** The layout the redesign agreed on (2026-11-16): chord details sit directly under the track, above
-  Voicing and Instruments, so opening those panels never moves the panel used most. In the app they've been under
-  Instruments since at least T19 (`App.tsx` renders Timeline, Voicing, Instruments, then `section.details-panel`);
-  `AGENTS.md` (Behavior → "Chord inspector" and Visual design) already describes the target.
-- **Done when:**
-  - [ ] `section.details-panel` renders right after `.timeline-row` inside `.panels` (desktop and phones; check the
-        phone `order` rules at the end of `index.css` don't fight it).
-  - [ ] Opening/closing Voicing and Instruments doesn't move the details panel (e2e: its top before/after, like
-        the key-change notice case).
-  - [ ] `AGENTS.md` Visual design list order matches (Voicing and Instruments after the chord details).
-- **Context:** `App.tsx` (the `.panels` JSX), `index.css` (`.details-panel`, the phone block), `e2e/smoke.e2e.ts`.
-  Ask the owner first if they've grown used to it below Instruments.
-
 ### T25 — Song MIDI, sessions window, phones, polish
 
-- **Status:** blocked — needs T24
+- **Status:** ready
 - **Session:** Sonnet · medium effort · plan mode off
 - **Goal:** The song leaves the app (MIDI) and reads well everywhere (sessions window, phones).
 - **Done when:**
@@ -154,9 +99,18 @@ Agent's calls the owner accepted (in the proposal):
   - [ ] `AGENTS.md`: Export, Sessions, Phones; design decisions (linked repeats, shared key/tempo/meter, why the
         song timeline isn't the chord timeline) checked against what shipped.
 - **Context:** `midi.ts` (`trackMidi`), `MidiMenu.tsx`, `session.ts` (`sessionMusic`), `SessionBrowser.tsx`,
-  `audio.ts` (`previewSession`: per-block grooves need one rig per distinct sound, or reuse `scheduleSong`'s
-  approach), the phone block at the end of `index.css`, `e2e/smoke.e2e.ts`. Owner checks: the song MIDI imports
-  into Ableton as one arrangement.
+  `audio.ts` (`previewSession`), the phone block at the end of `index.css`, `e2e/smoke.e2e.ts`. Owner checks: the
+  song MIDI imports into Ableton as one arrangement.
+- **Handoff from T24:** what plays is a list of **segments** (`src/music/segments.ts`): `songSegments(song)` (one per
+  block) / `sectionSegments(song, id)` in `song.ts`, and `renderSegments(segments, sig)` gives every note at its song
+  time, tagged with its segment (parts that are off already dropped). Song MIDI = `renderSegments` instead of
+  `renderTrack` in `midi.ts`, markers at `blockSpans(song)` starts (`sectionName`). `previewSession` still builds one
+  rig from one groove: for songs, give it segments and one synth per distinct sound (as the main graph does:
+  `voiceFor`/trim `Volume` per sound in `audio.ts`) plus level ramps at segment starts (`setPartLevels(g, groove,
+  time)`; it's not exported yet). `sessionMusic` (`session.ts`) picks the section to hear. Phones: the Song bar is
+  already two rows (title + ▶ Song, then chips) and `.song-scroll` scrolls sideways; check the e2e widths with an
+  arranged song open (the layout test seeds no blocks). `chordTimes` for lighting the sounding chord/section in a
+  session row needs a song version (segment starts in seconds).
 
 ### T26 — Export audio (WAV)
 
@@ -169,7 +123,7 @@ Agent's calls the owner accepted (in the proposal):
   - [ ] `renderAudio(music)` in `audio.ts`: `Tone.Offline` builds its own graph (`makeGraph`, `makePoly`,
         `makeKit`, `setLevels`, as `previewSession` does) and schedules every note from `renderTrack` at absolute
         times, plus a ~2 s tail so the last chord rings out. Songs: one rig per distinct sound, switched at block
-        starts (the same rule as `scheduleSong`). No metronome. The limiter at −1 dBFS stays as the safety net.
+        starts (T24: one synth per distinct sound and level ramps at segment starts, from `renderSegments`). No metronome. The limiter at −1 dBFS stays as the safety net.
   - [ ] Pure WAV encoder (`wav.ts` + test: header fields, 24-bit PCM, stereo, 44.1 kHz) from an `AudioBuffer`'s
         channels; no dependency. MP3 isn't worth a library for now.
   - [ ] An "⤓ Export" menu: the MIDI menu becomes Export, with Audio (WAV) next to MIDI, the same choices (whole
@@ -204,6 +158,7 @@ Agent's calls the owner accepted (in the proposal):
 
 ## Done
 
+- T24 — Song timeline and song playback — 2026-11-17 — Song panel (`SongPanel.tsx`, `songOpen`): chips + ▶ Song + length in its bar, the song timeline in its body (blocks back to back, linked repeats outlined, drag chips in / blocks around with labels, ⌘D, Delete, ←/→, ⌥←/→, right-click menu; `useBlockDrag`, arrangement edits in `song.ts`); one transport with `playScope` (section or song), the chord track hides its playhead while another section sounds; audio plays segments (`segments.ts`) with one synth per sound and level ramps at block starts. Deviations: one `schedule` instead of `scheduleSong`; a block's "Make a new section from this" makes that block unique; seeking the other scope's ruler while playing doesn't switch playback. Also: T27 dropped (owner: chord details stay under Instruments), help text's stale idea-▶ line fixed. Owner to listen: section sound switches, no stuck notes, seeking mid-song, editing while the song plays.
 - T23 — Sections — 2026-11-17 — a session is a song (`src/song.ts`): sections with their own chords, length and instruments, sharing key/tempo/meter; old sessions open as one "Progression" section (`migrateSong`, fixed id `main`); one undo history that opens the section a step changes (`changedSection`); history saved packed, each section version once (owner's call; `history.ts` `encode`/`decode`); `SectionBar.tsx` chips (+ Section with labels and colors, rename, "Make a new section from this", delete); key detection/move and meter changes cover every section; progressions take the song's mood only when no other section has chords. Also: the toolbar now wraps up to 1000px (it overflowed at 900; e2e checks 900). Owner to listen: switching sections while playing.
 - T22 — Chord details rework — 2026-11-16 — panel is always present (fixed height, no X, `panelOpen` retired; same frame shows an empty state); header gained "↺ Back to Cm" and ⋯ (opens `ChordMenu`; Clear lives there); tabs are Ideas · Variations of C · Notes; clicking an idea/variation uses it and plays it in place (card ▶ removed, why-text clamped to 2 lines); Notes tab has Bass note, Shape (inversion + octave), Why. Also fixed: the chord menu stayed open when you clicked a chord (clips stop pointerdown; the menu's outside-click listener is now capture-phase; e2e added). Owner to look at the panel on a phone and listen to click-to-hear.
 - T21 — Chord menu — 2026-11-16 — `ChordMenu.tsx`: right-click (or long-press) a chord, or the ⋯ on a selected one, opens actions on the selection (Ideas, Variations, inversion, octave, Duplicate, Clear, Delete) with shortcuts; right-click selects an unselected chord first; Mac Ctrl+click still toggles selection. Rows built in `chordMenuGroups` (App.tsx), so T22 can reuse it. Owner to try a real right-click and the ⋯ on a phone.

@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type 
 import { analyzeChord } from '../music/analysis'
 import { chordName, voicedNoteNames } from '../music/chord'
 import { freeKey, IS_MAC } from '../platform'
-import { playheadTicks } from '../music/audio'
 import { rootDegree, type ModeName } from '../music/theory'
 import { clipEnd, snap, type Clip, type ClipChange } from '../music/timeline'
 
@@ -23,6 +22,11 @@ type Props = {
   isPlaying: boolean
   /** Playhead position in ticks when not playing (while playing it follows the audio). */
   playhead: number
+  /**
+   * While playing: where in this track the music is (ticks), or null when this track isn't
+   * the one sounding (the song is playing another section): its playhead hides.
+   */
+  playheadAt: () => number | null
   onSeek: (ticks: number) => void
   /** A chord is being dragged (enables slide animations). */
   dragging: boolean
@@ -112,16 +116,24 @@ export function Timeline(props: Props) {
   }
 
   // Playhead + active clip, driven by the audio transport.
+  const playheadAt = useRef(props.playheadAt)
+  useEffect(() => {
+    playheadAt.current = props.playheadAt
+  })
   useEffect(() => {
     if (!isPlaying) return
     let raf = 0
     const frame = () => {
-      const t = playheadTicks() % totalTicks
+      const t = playheadAt.current()
       // Every playhead (ruler marker, track line, notes lane line) reads this variable, set on
       // the shared scope around the panels (the notes lane lives in another panel).
       const scope = rootRef.current?.closest<HTMLElement>('[data-playhead-scope]') ?? rootRef.current
-      scope?.style.setProperty('--playhead', pct(t, totalTicks))
-      setActiveId(clips.find((c) => c.start <= t && t < clipEnd(c))?.id ?? null)
+      if (t === null) scope?.setAttribute('data-playhead-off', '')
+      else {
+        scope?.removeAttribute('data-playhead-off')
+        scope?.style.setProperty('--playhead', pct(t % totalTicks, totalTicks))
+      }
+      setActiveId(t === null ? null : (clips.find((c) => c.start <= t && t < clipEnd(c))?.id ?? null))
       raf = requestAnimationFrame(frame)
     }
     raf = requestAnimationFrame(frame)
@@ -133,6 +145,7 @@ export function Timeline(props: Props) {
   useEffect(() => {
     if (isPlaying) return
     const scope = rootRef.current?.closest<HTMLElement>('[data-playhead-scope]') ?? rootRef.current
+    scope?.removeAttribute('data-playhead-off')
     scope?.style.setProperty('--playhead', pct(props.playhead, totalTicks))
   }, [isPlaying, props.playhead, totalTicks])
 

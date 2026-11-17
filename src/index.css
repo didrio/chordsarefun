@@ -317,25 +317,180 @@ h1 {
 }
 
 /*
- * The song's sections, between the toolbar and the track: one chip per section (its kind's
- * color, the edited one lit), then "+ Section". Chips scroll sideways rather than wrap, so the
- * bar is always one slim row. The lit chip changes color only (never weight), so nothing shifts.
+ * The song's sections, in the Song panel's bar: one chip per section (its kind's color, the
+ * edited one lit), then "+ Section". Chips scroll sideways rather than wrap, so the bar is always
+ * one slim row. The lit chip changes color only (never weight), so nothing shifts.
  */
 .sections-bar {
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  margin-top: 0.6rem;
-  padding: 0.35rem 0.5rem 0.35rem 1rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  min-width: 0;
 }
 
-.sections-label {
+/* The Song panel: a short title, the chips taking the room, ▶ Song and the length on the right. */
+.song-arranger .panel-bar {
   flex: none;
+}
+
+.song-arranger .panel-actions {
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 0.8rem;
+  padding-block: 0.3rem;
+}
+
+.song-transport {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.song-play {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.song-play svg {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+.song-length {
+  min-width: 2.6rem;
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+/* The song timeline: sections in the order they play, as wide as they are long; scrolls sideways when long. */
+.song-scroll {
+  overflow-x: auto;
+}
+
+.song-inner {
+  position: relative;
+  min-width: calc(var(--song-bars) * 1.75rem);
+}
+
+.song-ruler .bar-number {
+  padding-left: 6px;
+}
+
+.song-ruler .playhead-marker,
+.song-lane .playhead {
+  left: var(--song-playhead);
+}
+
+.song-lane {
+  position: relative;
+  height: 4.4rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.song-block {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.1rem;
+  padding: 0.2rem 0.5rem;
+  overflow: hidden;
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--tint) 16%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--tint) 35%, var(--border));
+  border-radius: 6px;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  box-sizing: border-box;
+}
+
+/* Every block of the section being edited: linked repeats are visible at a glance. */
+.song-block.editing {
+  border: 1px dashed var(--tint);
+}
+
+.song-block.selected {
+  background: color-mix(in srgb, var(--tint) 34%, var(--surface));
+  border: 1px solid var(--tint);
+}
+
+.song-block.active {
+  box-shadow: inset 0 0 0 1px var(--text);
+}
+
+.song-block.lifted {
+  opacity: 0.4;
+}
+
+.song-block-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   font-size: var(--fs-sm);
   font-weight: 600;
+}
+
+.song-block-bars,
+.song-block-chords {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+
+.song-block .clip-more {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  padding: 0 0.3rem;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  line-height: 1;
+}
+
+.song-block .clip-more:hover {
+  color: var(--text);
+}
+
+/* Where a drop lands, between two blocks. */
+.song-insert {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 3px;
+  margin-left: -1px;
+  background: var(--accent);
+  border-radius: 2px;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.song-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+
+/* While the song plays another section, the chord track's playhead hides (the editor never jumps). */
+[data-playhead-off] .playhead,
+[data-playhead-off] .playhead-marker {
+  visibility: hidden;
 }
 
 .section-chips {
@@ -3258,6 +3413,26 @@ button.show-all {
     left: 0;
     right: 0;
     width: auto;
+  }
+
+  /* The Song bar is two rows: the title with ▶ Song and the length, then the section chips. */
+  .song-arranger .panel-head {
+    flex-wrap: wrap;
+    padding-right: 0;
+  }
+
+  .song-arranger .panel-actions {
+    display: contents;
+  }
+
+  .song-arranger .song-transport {
+    padding-right: 0.75rem;
+  }
+
+  .song-arranger .sections-bar {
+    order: 2;
+    flex: 1 1 100%;
+    padding: 0 0.75rem 0.45rem;
   }
 
   /* The help opens right under the logo row, across the screen. */

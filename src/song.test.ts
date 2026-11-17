@@ -7,7 +7,18 @@ import { chordToKey } from './music/theory'
 import type { Clip } from './music/timeline'
 import {
   addSection,
+  blockGap,
+  blockSpans,
+  formatDuration,
   changedSection,
+  duplicateBlocks,
+  forkBlock,
+  insertBlocks,
+  moveBlocks,
+  removeBlocks,
+  songSegments,
+  songTicks,
+  stepGap,
   copySection,
   DEFAULT_SONG,
   isSong,
@@ -293,4 +304,116 @@ describe('song-wide changes', () => {
     const alone = removeSection(song, MAIN_SECTION)
     expect(songWithProgression(alone, 'chorus', minor, { chords: true, instruments: false }).mode).toBe('aeolian')
   })
+})
+
+describe('the arrangement', () => {
+  /** Main (4 bars, C F) and Chorus (4 bars, Am) arranged as: main, chorus, main, chorus (blocks 1–4). */
+  const arranged = () => insertBlocks(twoSections(), 0, [MAIN_SECTION, 'chorus', MAIN_SECTION, 'chorus'], ['1', '2', '3', '4'])
+  const order = (s: Song) => s.arrangement.map((b) => b.id).join('')
+
+  it('blocks play back to back, each as long as its section', () => {
+    const song = changeChorusBars(arranged(), 2)
+    expect(blockSpans(song).map((b) => [b.id, b.start / BAR, b.length / BAR])).toEqual([
+      ['1', 0, 4],
+      ['2', 4, 2],
+      ['3', 6, 4],
+      ['4', 10, 2],
+    ])
+    expect(songTicks(song)).toBe(12 * BAR)
+    expect(songTicks(twoSections())).toBe(0)
+  })
+
+  it('inserts sections at a gap; unknown sections are skipped', () => {
+    const song = insertBlocks(arranged(), 1, ['chorus', 'nope'], ['x', 'y'])
+    expect(order(song)).toBe('1x234')
+    expect(order(insertBlocks(arranged(), 99, ['chorus'], ['x']))).toBe('1234x')
+    const empty = twoSections()
+    expect(insertBlocks(empty, 0, ['nope'], ['x'])).toBe(empty)
+  })
+
+  it('moves blocks as one run, gap counted before they are lifted out', () => {
+    expect(order(moveBlocks(arranged(), ['1'], 3))).toBe('2314')
+    expect(order(moveBlocks(arranged(), ['4'], 0))).toBe('4123')
+    // Scattered blocks are gathered, in song order.
+    expect(order(moveBlocks(arranged(), ['3', '1'], 4))).toBe('2413')
+    expect(order(moveBlocks(arranged(), ['1', '3'], 2))).toBe('2134')
+  })
+
+  it('a move that changes nothing is the same song (no undo step)', () => {
+    const song = arranged()
+    expect(moveBlocks(song, ['2'], 1)).toBe(song)
+    expect(moveBlocks(song, ['2'], 2)).toBe(song)
+    expect(moveBlocks(song, ['nope'], 0)).toBe(song)
+  })
+
+  it('⌥←/→ moves a selection one place, not past the edges', () => {
+    const song = arranged()
+    expect(order(moveBlocks(song, ['2'], stepGap(song, ['2'], 1)!))).toBe('1324')
+    expect(order(moveBlocks(song, ['2', '3'], stepGap(song, ['2', '3'], -1)!))).toBe('2314')
+    expect(stepGap(song, ['1'], -1)).toBeNull()
+    expect(stepGap(song, ['4'], 1)).toBeNull()
+  })
+
+  it('duplicates are linked copies right after the last selected block', () => {
+    const song = duplicateBlocks(arranged(), ['3', '1'], ['a', 'b'])
+    expect(order(song)).toBe('123ab4')
+    expect(song.arrangement.slice(3, 5).map((b) => b.section)).toEqual([MAIN_SECTION, MAIN_SECTION])
+    expect(song.sections.length).toBe(2)
+  })
+
+  it('removing blocks keeps their sections', () => {
+    const song = removeBlocks(arranged(), ['2', '4'])
+    expect(order(song)).toBe('13')
+    expect(song.sections.map((s) => s.id)).toEqual([MAIN_SECTION, 'chorus'])
+    const same = arranged()
+    expect(removeBlocks(same, ['nope'])).toBe(same)
+  })
+
+  it('"Make a new section from this" on a block: that block plays an independent copy, the others stay linked', () => {
+    const song = forkBlock(arranged(), '2', 'chorus2')
+    expect(song.sections.map(sectionName)).toEqual([UNNAMED, 'Chorus', 'Chorus 2'])
+    expect(song.arrangement.map((b) => b.section)).toEqual([MAIN_SECTION, 'chorus2', MAIN_SECTION, 'chorus'])
+    expect(isSong(song)).toBe(true)
+  })
+
+  it('plays one segment per block with its section’s chords and instruments', () => {
+    const segs = songSegments(arranged())
+    expect(segs.map((s) => [s.start / BAR, s.length / BAR, s.clips.length, s.groove === funk])).toEqual([
+      [0, 4, 2, false],
+      [4, 4, 1, true],
+      [8, 4, 2, false],
+      [12, 4, 1, true],
+    ])
+  })
+
+  it('key detection hears the song in order, then sections that aren’t in it', () => {
+    const song = insertBlocks(twoSections(), 0, ['chorus', 'chorus'], ['x', 'y'])
+    expect(songClips(song).map((c) => [chordName(c.chord!), c.start / BAR])).toEqual([
+      ['Am', 0],
+      ['Am', 4],
+      ['C', 8],
+      ['F', 9],
+    ])
+  })
+
+  it('the gap under the pointer: before the block whose first half it is in', () => {
+    const spans = blockSpans(arranged())
+    expect([0, 1.9, 2.1, 6, 15.9, 40].map((bar) => blockGap(spans, bar * BAR))).toEqual([0, 0, 1, 2, 4, 4])
+    expect(blockGap([], 0)).toBe(0)
+  })
+
+  it('song length in minutes and seconds', () => {
+    expect(formatDuration(64 * BAR, 120)).toBe('2:08')
+    expect(formatDuration(BAR, 120)).toBe('0:02')
+  })
+
+  it('a deleted section leaves the song too', () => {
+    expect(order(removeSection(arranged(), 'chorus'))).toBe('13')
+  })
+})
+
+const UNNAMED = sectionName({ id: '', name: null, clips: [], bars: 4, groove: DEFAULT_GROOVE })
+const changeChorusBars = (song: Song, bars: number): Song => ({
+  ...song,
+  sections: song.sections.map((s) => (s.id === 'chorus' ? { ...s, bars } : s)),
 })

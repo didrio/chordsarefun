@@ -5,7 +5,7 @@ const KEYS: { title: string; rows: [string, string][] }[] = [
   {
     title: 'Play',
     rows: [
-      ['Space', 'Play / pause'],
+      ['Space', 'Play / pause (the section, or the song if ▶ Song played last)'],
       ['Shift + Space', 'Stop and go back to the start'],
       ['L', 'Loop on / off'],
       ['M', 'Metronome on / off'],
@@ -33,6 +33,17 @@ const KEYS: { title: string; rows: [string, string][] }[] = [
       ['Shift + ↑ ↓', 'Octave up / down (selected chords, or all)'],
       ['⌘ / Ctrl + Z', 'Undo'],
       ['⇧⌘Z / Ctrl + Y', 'Redo'],
+    ],
+  },
+  {
+    title: 'Song (with parts of the song selected)',
+    rows: [
+      ['Click', 'Select a part and edit its section'],
+      ['⌘ / Ctrl + D', 'Play it again right after (the same music)'],
+      ['Delete / Backspace', 'Take it out of the song (the section stays)'],
+      ['← →', 'Previous / next part'],
+      [`${NUDGE_KEY} + ← →`, 'Move it one place earlier / later'],
+      ['Right-click · ⋯', 'Edit this section, duplicate, make a new section from it, remove'],
     ],
   },
   {
@@ -70,8 +81,8 @@ export function HelpTip() {
           </li>
           <li>
             <b>Click a chord</b> to see what could go there instead (<b>Ideas</b>), other kinds of the same chord
-            (<b>Flavors</b>), or its notes, inversion and bass note (<b>Notes</b>). Or type any chord you like. The
-            small ▶ on an idea plays it between its neighbors without changing anything; click the idea to use it.
+            (<b>Variations</b>), or its notes, inversion and bass note (<b>Notes</b>). Or type any chord you like.
+            Clicking an idea uses it and plays it between its neighbors; undo puts the old one back.
           </li>
           <li>
             <b>Arrange.</b> Drag chords to move them (the preview tells you what will happen), drag an edge to resize,
@@ -80,6 +91,11 @@ export function HelpTip() {
           <li>
             <b>Choose Instruments</b> for the chords, bass and drums (the Instruments bar under the track), then press Play. Tempo, time signature, length,
             grid and the metronome are in the same song button as the key.
+          </li>
+          <li>
+            <b>Make a song.</b> <b>+ Section</b> adds a verse, a chorus…, each with its own chords, length and
+            instruments (the key and tempo are shared). Open <b>Song</b> and drag sections onto it in the order they
+            play; repeats are the same music. <b>▶ Song</b> plays it all.
           </li>
           <li>
             <b>Keep it.</b> Everything saves as you go. The session name at the top opens all your sessions (folders,

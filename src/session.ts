@@ -34,6 +34,7 @@ export const SESSION_KEYS = [
   'flavor',
   'moreOpen',
   'instrumentsOpen',
+  'songOpen', // the Song panel (T24)
   'selection',
   'inspectorTab',
   'inspected',

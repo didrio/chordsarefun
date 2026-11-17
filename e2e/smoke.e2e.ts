@@ -247,6 +247,80 @@ describe('sections', () => {
   })
 })
 
+describe('song timeline', () => {
+  const blocks = (p: Page) => p.locator('.song-block .song-block-name').allTextContents()
+  const current = (p: Page) => p.locator('.section-chip.current .section-chip-name').textContent()
+  const chip = (p: Page, name: string) => p.locator('.section-chip-name').filter({ hasText: new RegExp(`^${name}$`) })
+  const center = async (l: ReturnType<Page['locator']>, fx = 0.5): Promise<[number, number]> => {
+    const b = await l.boundingBox()
+    if (!b) throw new Error('Not on screen')
+    return [b.x + b.width * fx, b.y + b.height / 2]
+  }
+  /** A song with two sections: the old one ("Progression", C F G Am) and an empty Chorus, editing the Chorus. */
+  const twoSections = async () => {
+    const p = await start(full())
+    await p.locator('.add-section .dropdown-trigger').click()
+    await p.getByRole('menuitem', { name: /^Chorus / }).click()
+    await p.locator('.song-arranger .panel-bar').click()
+    return p
+  }
+
+  it('drag chips in, reorder by dragging, ⌘D, Delete and ⌘Z', async () => {
+    const p = await twoSections()
+    expect(await blocks(p)).toEqual([])
+    // A chip dragged onto the empty song.
+    await drag(p, await center(chip(p, 'Progression')), await center(p.locator('.song-lane')))
+    expect(await blocks(p)).toEqual(['Progression'])
+    // Another after it: the right half of a block is "after".
+    await drag(p, await center(chip(p, 'Chorus')), await center(p.locator('.song-block').first(), 0.9))
+    expect(await blocks(p)).toEqual(['Progression', 'Chorus'])
+    // Drag the Chorus block before the Progression.
+    await drag(p, await center(p.locator('.song-block').nth(1)), await center(p.locator('.song-block').first(), 0.1))
+    expect(await blocks(p)).toEqual(['Chorus', 'Progression'])
+
+    // Clicking a block selects it and edits its section.
+    await p.locator('.song-block').nth(1).click()
+    expect(await current(p)).toBe('Progression')
+    expect(await names(p)).toEqual(['C', 'F', 'G', 'Am'])
+    // ⌘D: a linked repeat right after it, selected.
+    await p.keyboard.press(`${CMD}+d`)
+    expect(await blocks(p)).toEqual(['Chorus', 'Progression', 'Progression'])
+    expect(await p.locator('.song-block.selected').count()).toBe(1)
+    // Both Progression blocks are outlined as the section being edited.
+    expect(await p.locator('.song-block.editing').count()).toBe(2)
+    // Delete takes it out of the song; the section stays.
+    await p.keyboard.press('Delete')
+    expect(await blocks(p)).toEqual(['Chorus', 'Progression'])
+    expect(await p.locator('.section-chip-name').allTextContents()).toEqual(['Progression', 'Chorus'])
+    expect(await names(p)).toEqual(['C', 'F', 'G', 'Am'])
+    await p.keyboard.press(`${CMD}+z`)
+    expect(await blocks(p)).toEqual(['Chorus', 'Progression', 'Progression'])
+  })
+
+  it('▶ Song plays the song without moving the editor; Space pauses and resumes it', async () => {
+    const p = await twoSections()
+    await drag(p, await center(chip(p, 'Chorus')), await center(p.locator('.song-lane')))
+    // Edit the Progression, which isn't in the song.
+    await chip(p, 'Progression').click()
+    await p.getByRole('button', { name: 'Play song' }).click()
+    await p.getByRole('button', { name: 'Pause song' }).waitFor()
+    // The chord track's playhead hides: what plays isn't the section on screen.
+    await p.waitForSelector('[data-playhead-scope][data-playhead-off]')
+    expect(await current(p)).toBe('Progression')
+    expect(await names(p)).toEqual(['C', 'F', 'G', 'Am'])
+    expect(await p.locator('button.play').getAttribute('aria-label')).toBe('Play')
+    await p.keyboard.press('Space')
+    await p.getByRole('button', { name: 'Play song' }).waitFor()
+    await p.keyboard.press('Space')
+    await p.getByRole('button', { name: 'Pause song' }).waitFor()
+    // The transport's Play switches to the section.
+    await p.locator('button.play').click()
+    await p.getByRole('button', { name: 'Play song' }).waitFor()
+    expect(await p.locator('button.play').getAttribute('aria-label')).toBe('Pause')
+    await p.keyboard.press('Shift+Space')
+  })
+})
+
 describe('chord menu', () => {
   it('closes when you click a chord, and stays closed', async () => {
     const p = await start(full())

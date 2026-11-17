@@ -2,8 +2,9 @@ import type { StoredHistory } from './history'
 import type { Chord } from './music/chord'
 import { isGrooveSettings, sameGroove, type GrooveSettings } from './music/grooves'
 import { progressionTrack, type Progression, type ProgressionParts } from './music/progressions'
+import type { Segment } from './music/segments'
 import { MODES, type ModeName } from './music/theory'
-import { chordClips, rescaleClips, sameClips, sigBarTicks, type Clip, type TimeSignature } from './music/timeline'
+import { chordClips, rescaleClips, sameClips, sigBarTicks, TICKS_PER_BEAT, type Clip, type TimeSignature } from './music/timeline'
 import { uniqueName } from './names'
 import { DEFAULT_MUSIC, DEFAULT_TRACK, isBpm, isClip, isTimeSignature, isTrack, migrateTrack, type Track, type TrackMusic } from './track'
 
@@ -306,13 +307,17 @@ export function mapSongChords(song: Song, fn: (chord: Chord) => Chord): Song {
 export const songHasChords = (song: Song) => song.sections.some((s) => chordClips(s.clips).length > 0)
 
 /**
- * Every section's clips laid end to end in section order, for questions about the whole song
- * (which key do the chords point to?). For analysis only: ids may repeat across sections.
+ * Every section's clips laid end to end, for questions about the whole song (which key do the
+ * chords point to?): in song order when sections are arranged (repeats count again, as heard),
+ * then sections that aren't in the song; in section order when nothing is arranged. For
+ * analysis only: ids may repeat.
  */
-export function songClips(song: Pick<Song, 'sections' | 'sig'>): Clip[] {
+export function songClips(song: Pick<Song, 'sections' | 'sig'> & { arrangement?: Block[] }): Clip[] {
   const bar = sigBarTicks(song.sig)
+  const arranged = (song.arrangement ?? []).map((b) => song.sections.find((s) => s.id === b.section)).filter((s) => s !== undefined)
+  const order = [...arranged, ...song.sections.filter((s) => !arranged.includes(s))]
   let offset = 0
-  return song.sections.flatMap((s) => {
+  return order.flatMap((s) => {
     const at = offset
     offset += s.bars * bar
     return s.clips.map((c) => ({ ...c, start: c.start + at }))
@@ -330,4 +335,116 @@ export function songWithProgression(song: Song, id: string, prog: Progression, p
   const t = sectionTrack(song, id)
   const next = progressionTrack(t, prog, parts)
   return withSectionTrack(song, id, othersHaveChords ? { ...next, mode: t.mode } : next)
+}
+
+// --- The arrangement: where sections play in the song (T24) -------------------------------
+
+/** A block with its place in the song: back to back, as long as its section. Ticks. */
+export type BlockSpan = Block & { start: number; length: number }
+
+/** Every block of the song with where it starts and how long it is (its section's length). */
+export function blockSpans(song: Pick<Song, 'sections' | 'sig' | 'arrangement'>): BlockSpan[] {
+  const bar = sigBarTicks(song.sig)
+  let start = 0
+  return song.arrangement.map((b) => {
+    const length = sectionOf(song as Song, b.section).bars * bar
+    const span = { ...b, start, length }
+    start += length
+    return span
+  })
+}
+
+/** The song's length in ticks: all its blocks. */
+export const songTicks = (song: Pick<Song, 'sections' | 'sig' | 'arrangement'>) =>
+  song.arrangement.reduce((sum, b) => sum + sectionOf(song as Song, b.section).bars * sigBarTicks(song.sig), 0)
+
+/** What the song plays: one segment per block, with its section's chords and instruments. */
+export const songSegments = (song: Song): Segment[] =>
+  blockSpans(song).map((b) => {
+    const s = sectionOf(song, b.section)
+    return { start: b.start, length: b.length, clips: s.clips, groove: s.groove }
+  })
+
+const withArrangement = (song: Song, arrangement: Block[]): Song =>
+  arrangement.length === song.arrangement.length && arrangement.every((b, i) => b === song.arrangement[i]) ? song : { ...song, arrangement }
+
+const clampGap = (song: Song, gap: number) => Math.min(Math.max(Math.round(gap), 0), song.arrangement.length)
+
+/**
+ * Put sections into the song at a gap (0 = the start, n = the end; "before block `gap`"), one
+ * new block each (`newIds`, same order). Unknown sections are skipped.
+ */
+export function insertBlocks(song: Song, gap: number, sectionIds: string[], newIds: string[]): Song {
+  const known = new Set(song.sections.map((s) => s.id))
+  const blocks = sectionIds.map((section, i) => ({ id: newIds[i], section })).filter((b) => b.id && known.has(b.section))
+  if (blocks.length === 0) return song
+  const at = clampGap(song, gap)
+  return { ...song, arrangement: [...song.arrangement.slice(0, at), ...blocks, ...song.arrangement.slice(at)] }
+}
+
+/**
+ * Move blocks to a gap (counted in the arrangement as it is, before they're lifted out). They
+ * travel as one run in song order, so scattered blocks are gathered, like chords. A move that
+ * changes nothing returns the same song (no undo step).
+ */
+export function moveBlocks(song: Song, ids: string[], gap: number): Song {
+  const at = clampGap(song, gap)
+  const moving = song.arrangement.filter((b) => ids.includes(b.id))
+  if (moving.length === 0) return song
+  const rest = song.arrangement.filter((b) => !ids.includes(b.id))
+  const before = song.arrangement.slice(0, at).filter((b) => !ids.includes(b.id)).length
+  return withArrangement(song, [...rest.slice(0, before), ...moving, ...rest.slice(before)])
+}
+
+/** The gap a selection lands in when it moves one place left or right (⌥←/→), or null at the edge. */
+export function stepGap(song: Song, ids: string[], dir: -1 | 1): number | null {
+  const idx = song.arrangement.flatMap((b, i) => (ids.includes(b.id) ? [i] : []))
+  if (idx.length === 0) return null
+  const gap = dir < 0 ? idx[0] - 1 : idx[idx.length - 1] + 2
+  return gap < 0 || gap > song.arrangement.length ? null : gap
+}
+
+/** Linked copies of blocks (the same sections) right after the last of them, in song order. */
+export function duplicateBlocks(song: Song, ids: string[], newIds: string[]): Song {
+  const idx = song.arrangement.flatMap((b, i) => (ids.includes(b.id) ? [i] : []))
+  if (idx.length === 0) return song
+  const copies = idx.map((i) => song.arrangement[i].section)
+  return insertBlocks(song, idx[idx.length - 1] + 1, copies, newIds)
+}
+
+/** Take blocks out of the song. Their sections stay (in the section chips). */
+export function removeBlocks(song: Song, ids: string[]): Song {
+  return withArrangement(
+    song,
+    song.arrangement.filter((b) => !ids.includes(b.id)),
+  )
+}
+
+/**
+ * "Make a new section from this" on one block: an independent copy of its section (copySection),
+ * and this block plays the copy. Other blocks of the section stay linked to the original.
+ */
+export function forkBlock(song: Song, blockId: string, newSectionId: string): Song {
+  const block = song.arrangement.find((b) => b.id === blockId)
+  if (!block) return song
+  const copied = copySection(song, block.section, newSectionId)
+  return { ...copied, arrangement: copied.arrangement.map((b) => (b === block ? { ...b, section: newSectionId } : b)) }
+}
+
+/** The gap nearest a point on the song (ticks): before the block whose first half it's in, else after the last. */
+export function blockGap(spans: { start: number; length: number }[], ticks: number): number {
+  const i = spans.findIndex((b) => ticks < b.start + b.length / 2)
+  return i < 0 ? spans.length : i
+}
+
+/** A length in ticks as minutes and seconds at a tempo ("2:08"). */
+export function formatDuration(ticks: number, bpm: number): string {
+  const seconds = Math.round((ticks / TICKS_PER_BEAT) * (60 / bpm))
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+}
+
+/** What playing one section plays: a single segment, its chords and instruments over its length. */
+export function sectionSegments(song: Song, id: string): Segment[] {
+  const s = sectionOf(song, id)
+  return [{ start: 0, length: s.bars * sigBarTicks(song.sig), clips: s.clips, groove: s.groove }]
 }

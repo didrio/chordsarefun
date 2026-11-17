@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { uniqueName } from '../names'
 import { OTHER_SECTION, SECTION_LABELS, sectionHue, sectionName, type Section } from '../song'
 import { ChordMenu, type ChordMenuGroup } from './ChordMenu'
 import { PlusIcon } from './Icons'
+import { tint } from './tint'
 import { NameInput } from './SessionBrowser'
 import { arrowNav, useDropdown } from './useDropdown'
 
@@ -17,18 +18,20 @@ type Props = {
   /** "Make a new section from this": an independent copy. */
   onFork: (id: string) => void
   onDelete: (id: string) => void
+  /** Pointer down on a chip: it may become a drag onto the song timeline. */
+  onChipPointerDown?: (id: string, e: PointerEvent) => void
+  /** True when a click is the end of a drag (ignored). */
+  ignoreClick?: () => boolean
 }
 
-/** A section kind's color as the chip's tint (gray for unnamed and other sections). */
-const tint = (hue: number | null) => ({ '--tint': hue === null ? 'var(--muted)' : `hsl(${hue} 55% 60%)` }) as CSSProperties
 
 /**
  * The song's sections, one chip each: click one to edit it (its chords show on the track),
  * ▾ or right-click for Rename, Make a new section from this, Delete. "+ Section" adds one.
- * A session from before songs shows a single "Progression" chip. T24 puts these chips in the
- * bar of the song timeline's panel.
+ * Drag a chip onto the song timeline to put it in the song. A session from before songs shows
+ * a single "Progression" chip. They sit in the Song panel's bar (SongPanel).
  */
-export function SectionBar({ sections, current, onSwitch, onAdd, onRename, onFork, onDelete }: Props) {
+export function SectionBar({ sections, current, onSwitch, onAdd, onRename, onFork, onDelete, onChipPointerDown, ignoreClick }: Props) {
   const [renaming, setRenaming] = useState<string | null>(null)
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const menuSection = menu ? sections.find((s) => s.id === menu.id) : undefined
@@ -71,12 +74,6 @@ export function SectionBar({ sections, current, onSwitch, onAdd, onRename, onFor
 
   return (
     <div className="sections-bar" role="group" aria-label="Song sections">
-      <span
-        className="sections-label"
-        title="The parts of your song (verse, chorus…). Each has its own chords, length and instruments; the key, tempo and time signature are shared."
-      >
-        Song
-      </span>
       <div className="section-chips" ref={chipsRef}>
         {sections.map((s) => {
           const name = sectionName(s)
@@ -98,8 +95,9 @@ export function SectionBar({ sections, current, onSwitch, onAdd, onRename, onFor
                 <button
                   className="section-chip-name"
                   aria-pressed={isCurrent}
-                  title={isCurrent ? `Editing ${name}` : `Edit ${name}`}
-                  onClick={() => onSwitch(s.id)}
+                  title={`${isCurrent ? `Editing ${name}` : `Edit ${name}`} (drag it onto the song to add it)`}
+                  onPointerDown={(e) => onChipPointerDown?.(s.id, e)}
+                  onClick={() => !ignoreClick?.() && onSwitch(s.id)}
                   onContextMenu={(e) => {
                     e.preventDefault()
                     setMenu({ id: s.id, x: e.clientX, y: e.clientY })

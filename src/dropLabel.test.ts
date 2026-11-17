@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { describeDrop } from './dropLabel'
+import { describeBlockDrop, describeDrop } from './dropLabel'
 import { parseChord } from './music/parse'
 import { planDrop, TICKS_PER_BAR, TICKS_PER_BEAT, type Clip, type HeldChord } from './music/timeline'
 
@@ -49,5 +49,42 @@ describe('describeDrop: copies and empty clips', () => {
     const held: HeldChord = { id: 'e', chord: null, existing: true, grabOffset: 0 }
     const track = [empty, ...clips.slice(1)]
     expect(describeDrop(held, planDrop(track, held, 2.5 * BAR, 4 * BAR, TICKS_PER_BEAT), true, track)).toBe('Swap blank spot ⇄ Am')
+  })
+})
+
+describe('describeBlockDrop', () => {
+  const blocks = [
+    { id: '1', section: 'v' },
+    { id: '2', section: 'c' },
+    { id: '3', section: 'v' },
+  ]
+  const nameOf = (s: string) => ({ v: 'Verse', c: 'Chorus', i: 'Intro' })[s]!
+
+  it('adding a section says where it lands', () => {
+    expect(describeBlockDrop({ kind: 'add', section: 'i' }, 0, blocks, nameOf)).toBe('Add Intro before Verse')
+    expect(describeBlockDrop({ kind: 'add', section: 'c' }, 1, blocks, nameOf)).toBe('Add Chorus after Verse')
+    expect(describeBlockDrop({ kind: 'add', section: 'c' }, 3, blocks, nameOf)).toBe('Add Chorus after Verse')
+    expect(describeBlockDrop({ kind: 'add', section: 'c' }, 0, [], nameOf)).toBe('Add Chorus')
+  })
+
+  it('moving blocks is described among the blocks that stay put', () => {
+    expect(describeBlockDrop({ kind: 'move', ids: ['2'] }, 0, blocks, nameOf)).toBe('Move Chorus before Verse')
+    expect(describeBlockDrop({ kind: 'move', ids: ['1'] }, 3, blocks, nameOf)).toBe('Move Verse after Verse')
+    expect(describeBlockDrop({ kind: 'move', ids: ['1', '3'] }, 3, blocks, nameOf)).toBe('Move 2 parts after Chorus')
+  })
+
+  it('a move that changes nothing says so', () => {
+    expect(describeBlockDrop({ kind: 'move', ids: ['2'] }, 1, blocks, nameOf)).toBe('Already here')
+    expect(describeBlockDrop({ kind: 'move', ids: ['2'] }, 2, blocks, nameOf)).toBe('Already here')
+  })
+
+  it('copies (Option/Ctrl) land beside the originals', () => {
+    expect(describeBlockDrop({ kind: 'move', ids: ['2'] }, 2, blocks, nameOf, { copy: true })).toBe('Copy Chorus after Chorus')
+  })
+
+  it('off the song', () => {
+    expect(describeBlockDrop({ kind: 'move', ids: ['2'] }, null, blocks, nameOf)).toBe('Release to cancel')
+    expect(describeBlockDrop({ kind: 'add', section: 'c' }, null, blocks, nameOf, { open: false })).toBe('Open Song to arrange')
+    expect(describeBlockDrop({ kind: 'add', section: 'c' }, null, blocks, nameOf)).toBe('Drop on the song to add Chorus')
   })
 })

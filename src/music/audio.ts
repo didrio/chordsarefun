@@ -1,17 +1,21 @@
 import * as Tone from 'tone'
 import type { Chord } from './chord'
 import { arrangementOf, DEFAULT_GROOVE, type GrooveSettings } from './grooves'
-import { bassNoteFor, chordPartVoicing, renderTrack, type DrumVoice, type NoteEvent, type Rendered } from './patterns'
+import { bassNoteFor, chordPartVoicing, renderTrack, type DrumVoice, type NoteEvent } from './patterns'
+import { audible, renderSegments, segmentAt, segmentsEnd, type Segment, type SegmentNotes } from './segments'
 import { bassSound, chordSound, cutoffHz, DRUM_TRIM_DB, partDb, type Instrument } from './sound'
-import { chordTimes, metronomeClicks, playbackEnd, TICKS_PER_BEAT, type ClickAccent, type Clip, type TimeSignature } from './timeline'
+import { chordTimes, metronomeClicks, TICKS_PER_BEAT, type ClickAccent, type Clip, type TimeSignature } from './timeline'
 import { chordVelocity } from './voicing'
 
 /**
  * Playback with Tone.js: the only module touching Web Audio. Three parts, each into its
  * own volume, then a limiter (a safety net for dense chords):
- *   chords: PolySynth (instrument) -> low-pass filter (brightness) -> volume
- *   bass:   PolySynth of MonoSynths (instrument) -> volume
+ *   chords: PolySynth per sound -> its trim -> low-pass filter (brightness) -> volume
+ *   bass:   PolySynth of MonoSynths per sound -> its trim -> volume
  *   drums:  synthesized kit -> volume
+ * A song's sections can use different sounds, so there's one synth per sound in use (a
+ * "voice"), and each note goes to the synth of its own section: nothing is swapped or thrown
+ * away mid-song, so tails ring out and nothing gets stuck.
  */
 
 type Poly = Tone.PolySynth<Tone.Synth>
@@ -29,8 +33,12 @@ type Graph = {
   out: Tone.Gain
 }
 let graph: Graph | null = null
-let chordSynth: { id: string; synth: Poly } | null = null
-let bassSynth: { id: string; synth: Poly } | null = null
+
+type Part = 'chords' | 'bass'
+/** A synth for one sound, through its own level trim (Instrument.trimDb). */
+type Voice = { synth: Poly; trim: Tone.Volume }
+/** The main graph's synths, by part and sound id. */
+const voices: Record<Part, Map<string, Voice>> = { chords: new Map(), bass: new Map() }
 
 const VOICES = { synth: Tone.Synth, fm: Tone.FMSynth, mono: Tone.MonoSynth }
 
@@ -129,9 +137,79 @@ function makeGraph(brightness: number): Graph {
 function getGraph() {
   if (!graph) {
     graph = makeGraph(groove.chords.brightness)
-    applyGroove()
+    setPartLevels(graph, groove)
   }
   return graph
+}
+
+const soundOf = (part: Part, settings: GrooveSettings) => (part === 'chords' ? chordSound(settings.chords.sound) : bassSound(settings.bass.sound))
+
+/** The main graph's synth for a part's sound in these settings, made the first time it's needed. */
+function voiceFor(part: Part, settings: GrooveSettings): Voice {
+  const g = getGraph()
+  const inst = soundOf(part, settings)
+  let v = voices[part].get(inst.id)
+  if (!v) {
+    const trim = new Tone.Volume(inst.trimDb).connect(part === 'chords' ? g.chordFilter : g.bassVolume)
+    v = { synth: makePoly(inst, trim), trim }
+    voices[part].set(inst.id, v)
+  }
+  return v
+}
+
+/** The synth for a part in these settings, if it exists (it may have been thrown away by silenceAll). */
+const synthOf = (part: Part, settings: GrooveSettings) => voices[part].get(soundOf(part, settings).id)?.synth
+
+/** The sounds still needed: the scheduled segments' and the edited section's (chord previews). */
+const wantedSounds = (part: Part) => new Set([...segments, { groove }].map((s) => soundOf(part, s.groove).id))
+
+/** How long an unused sound is kept, so a sound changed mid-note still rings out. */
+const VOICE_KEEP_MS = 3000
+
+/** Throw away synths of sounds nothing uses any more (after a moment, if still unused). */
+function tidyVoices() {
+  for (const part of ['chords', 'bass'] as const) {
+    const wanted = wantedSounds(part)
+    for (const [id, v] of voices[part]) {
+      if (wanted.has(id)) continue
+      window.setTimeout(() => {
+        if (wantedSounds(part).has(id) || voices[part].get(id) !== v) return
+        voices[part].delete(id)
+        v.synth.dispose()
+        v.trim.dispose()
+      }, VOICE_KEEP_MS)
+    }
+  }
+}
+
+/** How long a level or brightness change at a section boundary takes (no clicks). */
+const LEVEL_RAMP = 0.02
+
+/**
+ * The main graph's part volumes and brightness for these settings (instrument trims are on
+ * each voice). Without `time`: now, with parts that are off muted (as for previews). With
+ * `time` (a block starting in the song): ramped at that moment, and only for parts that play
+ * in that block; the others are left alone so the notes before still ring out.
+ */
+function setPartLevels(g: Graph, settings: GrooveSettings, time?: number) {
+  const parts = [
+    [g.chordVolume, settings.chords, 0],
+    [g.bassVolume, settings.bass, 0],
+    [g.drumVolume, settings.drums, DRUM_TRIM_DB],
+  ] as const
+  for (const [node, part, trim] of parts) {
+    const db = partDb(part.volume, trim)
+    if (time === undefined) {
+      setLevel(node, part.on, part.volume, trim)
+    } else if (audible(part) && Number.isFinite(db)) {
+      // Muted means nothing was sounding on it, so unmuting a moment early is silent.
+      if (node.mute) node.mute = false
+      node.volume.rampTo(db, LEVEL_RAMP, time)
+    }
+  }
+  const hz = cutoffHz(settings.chords.brightness)
+  if (time === undefined) g.chordFilter.frequency.rampTo(hz, 0.05)
+  else g.chordFilter.frequency.rampTo(hz, LEVEL_RAMP, time)
 }
 
 /** Each part's level and on/off from groove settings (instrument trims included). */
@@ -147,26 +225,18 @@ const setLevel = (node: Tone.Volume, on: boolean, volume: number, trimDb = 0) =>
   if (Number.isFinite(db)) node.volume.value = db
 }
 
-function applyGroove() {
-  const g = getGraph()
-  const chordInst = chordSound(groove.chords.sound)
-  if (chordSynth?.id !== chordInst.id) {
-    chordSynth?.synth.dispose()
-    chordSynth = { id: chordInst.id, synth: makePoly(chordInst, g.chordFilter) }
-  }
-  const bassInst = bassSound(groove.bass.sound)
-  if (bassSynth?.id !== bassInst.id) {
-    bassSynth?.synth.dispose()
-    bassSynth = { id: bassInst.id, synth: makePoly(bassInst, g.bassVolume) }
-  }
-  setLevels(g, groove, chordInst, bassInst)
-  g.chordFilter.frequency.rampTo(cutoffHz(groove.chords.brightness), 0.05)
-}
-
-/** Parts' on/off, volumes, instruments and brightness. Applies immediately, even mid-playback. */
+/**
+ * The edited section's instruments: what chord previews play with, and the levels while
+ * nothing plays. While playing, the levels follow the section that's sounding (schedule()
+ * re-runs on every change and applies them).
+ */
 export function setGroove(next: GrooveSettings) {
   groove = next
-  if (graph) applyGroove()
+  if (!graph) return
+  voiceFor('chords', groove)
+  voiceFor('bass', groove)
+  if (transport().state !== 'started') setPartLevels(graph, groove)
+  tidyVoices()
 }
 
 // Metronome: a short click, louder and higher on the 1 of each bar (and a little on
@@ -225,10 +295,9 @@ async function soundChord(chord: Chord, seconds: number) {
   const gen = generation
   await ensureAudio()
   if (gen !== generation) return // everything was silenced meanwhile (another session opened)
-  getGraph()
   const notes = chordPartVoicing(chord, groove.bass.on)
-  chordSynth?.synth.triggerAttackRelease(notes.map(freq), seconds, undefined, chordVelocity(notes.length))
-  if (groove.bass.on) bassSynth?.synth.triggerAttackRelease(freq(bassNoteFor(chord)), seconds, undefined, 0.9)
+  voiceFor('chords', groove).synth.triggerAttackRelease(notes.map(freq), seconds, undefined, chordVelocity(notes.length))
+  if (groove.bass.on) voiceFor('bass', groove).synth.triggerAttackRelease(freq(bassNoteFor(chord)), seconds, undefined, 0.9)
 }
 
 let previewTimers: number[] = []
@@ -366,38 +435,47 @@ export function setBpm(bpm: number) {
 }
 
 export type Schedule = {
-  clips: Clip[]
+  /** What plays: the edited section (one segment) or the song (one per block). */
+  segments: Segment[]
   totalTicks: number
   /** For the metronome and patterns. */
   sig: TimeSignature
   loop: boolean
-  groove: GrooveSettings
-  /** Called when one-shot playback reaches the end of the last clip. */
+  /** Called when one-shot playback reaches the end of the last chord. */
   onEnd: () => void
 }
 
-/** Notes from the latest schedule(), used to sound what's ringing when starting mid-note. */
-let rendered: Rendered = { chords: [], bass: [], drums: [] }
+/** The latest schedule()'s segments and notes: for the levels and the notes ringing at a point (soundAt). */
+let segments: Segment[] = []
+let notes: SegmentNotes = { chords: [], bass: [], drums: [] }
 
 /**
- * (Re)schedule the track. Call whenever the track or groove changes, playing or not;
- * replaces previous events. Parts that are off aren't scheduled.
+ * (Re)schedule what plays: a section, or the whole song, each block with its own patterns
+ * and sounds (renderSegments). Call whenever any of it changes, playing or not; replaces the
+ * previous events. At each block start the part volumes and brightness move to that block's.
  */
-export function schedule({ clips, totalTicks, sig, loop, groove: settings, onEnd }: Schedule) {
+export function schedule({ segments: segs, totalTicks, sig, loop, onEnd }: Schedule) {
   const t = transport()
-  const g = getGraph()
+  getGraph()
   t.cancel(0)
-  rendered = renderTrack(clips, totalTicks, sig, arrangementOf(settings))
+  segments = segs
+  notes = renderSegments(segs, sig)
   const at = (tick: number) => `${toneTicks(tick)}i`
+  // Make the synths now, so the first notes don't wait for one to be built.
+  for (const seg of segs) {
+    if (audible(seg.groove.chords)) voiceFor('chords', seg.groove)
+    if (audible(seg.groove.bass)) voiceFor('bass', seg.groove)
+  }
+  tidyVoices()
 
-  if (settings.chords.on) {
-    for (const e of rendered.chords) t.schedule((time) => playNote(chordSynth?.synth, e, time), at(e.tick))
-  }
-  if (settings.bass.on) {
-    for (const e of rendered.bass) t.schedule((time) => playNote(bassSynth?.synth, e, time), at(e.tick))
-  }
-  if (settings.drums.on) {
-    for (const e of rendered.drums) t.schedule((time) => g.kit.trigger(e.voice, time, e.velocity), at(e.tick))
+  // Looked up when they play: silenceAll may have thrown the synths away meanwhile.
+  for (const e of notes.chords) t.schedule((time) => playNote(synthOf('chords', segs[e.segment].groove), e, time), at(e.tick))
+  for (const e of notes.bass) t.schedule((time) => playNote(synthOf('bass', segs[e.segment].groove), e, time), at(e.tick))
+  for (const e of notes.drums) t.schedule((time) => graph?.kit.trigger(e.voice, time, e.velocity), at(e.tick))
+  for (const seg of segs) {
+    t.schedule((time) => {
+      if (graph) setPartLevels(graph, seg.groove, time)
+    }, at(seg.start))
   }
 
   const c = getClick()
@@ -412,8 +490,11 @@ export function schedule({ clips, totalTicks, sig, loop, groove: settings, onEnd
   t.loopStart = 0
   t.loopEnd = at(totalTicks)
 
+  // Edits while playing: the section under the playhead sets the levels right away.
+  if (t.state === 'started') applyLevelsAt(playheadTicks())
+
   if (!loop) {
-    const end = toneTicks(playbackEnd(clips, totalTicks))
+    const end = toneTicks(segs.length ? segmentsEnd(segs) : totalTicks)
     if (t.state === 'started' && t.ticks >= end) {
       onEnd()
       return
@@ -424,18 +505,29 @@ export function schedule({ clips, totalTicks, sig, loop, groove: settings, onEnd
   }
 }
 
-/** Starting mid-note (play or seek): sound the chord and bass notes that would be ringing. */
+/** The levels of the segment playing at `ticks`, now. */
+function applyLevelsAt(ticks: number) {
+  const i = segmentAt(segments, ticks)
+  if (graph && i >= 0) setPartLevels(graph, segments[i].groove)
+}
+
+/** Starting mid-note (play or seek): that section's levels, then the chord and bass notes that would be ringing. */
 function soundAt(ticks: number) {
+  applyLevelsAt(ticks)
   const ringing = (e: NoteEvent) => e.tick < ticks && ticks < e.tick + e.duration
   const now = Tone.now() + 0.02
   const remaining = (e: NoteEvent) => tickSeconds(e.tick + e.duration - ticks)
-  if (groove.chords.on) for (const e of rendered.chords.filter(ringing)) playNote(chordSynth?.synth, e, now, remaining(e))
-  if (groove.bass.on) for (const e of rendered.bass.filter(ringing)) playNote(bassSynth?.synth, e, now, remaining(e))
+  for (const e of notes.chords.filter(ringing)) playNote(synthOf('chords', segments[e.segment].groove), e, now, remaining(e))
+  for (const e of notes.bass.filter(ringing)) playNote(synthOf('bass', segments[e.segment].groove), e, now, remaining(e))
 }
 
 const releaseAll = () => {
-  chordSynth?.synth.releaseAll()
-  bassSynth?.synth.releaseAll()
+  for (const part of ['chords', 'bass'] as const) for (const v of voices[part].values()) v.synth.releaseAll()
+}
+
+/** Stopped or paused: back to the edited section's levels, which previews play with. */
+const restoreLevels = () => {
+  if (graph) setPartLevels(graph, groove)
 }
 
 /** Start (or resume) playback from `fromTicks`. */
@@ -453,6 +545,7 @@ export function pausePlayback(): number {
   const at = playheadTicks()
   t.pause()
   releaseAll()
+  restoreLevels()
   return at
 }
 
@@ -461,6 +554,7 @@ export function stopPlayback() {
   t.stop()
   t.position = 0
   releaseAll()
+  restoreLevels()
 }
 
 /**
@@ -477,15 +571,19 @@ export function silenceAll() {
   t.stop()
   t.position = 0
   t.cancel(0)
-  const old = { graph, chord: chordSynth, bass: bassSynth }
+  const old = { graph, voices: [...voices.chords.values(), ...voices.bass.values()] }
   graph = null
-  chordSynth = null
-  bassSynth = null
+  voices.chords.clear()
+  voices.bass.clear()
+  segments = []
+  notes = { chords: [], bass: [], drums: [] }
   if (!old.graph) return
   old.graph.out.gain.rampTo(0, 0.03)
   window.setTimeout(() => {
-    old.chord?.synth.dispose()
-    old.bass?.synth.dispose()
+    for (const v of old.voices) {
+      v.synth.dispose()
+      v.trim.dispose()
+    }
     old.graph!.nodes.forEach((n) => n.dispose())
   }, 100)
 }
