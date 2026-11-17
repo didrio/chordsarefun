@@ -1,10 +1,14 @@
 import { Midi } from '@tonejs/midi'
+import { downloadFile } from '../download'
 import type { GrooveSettings } from './grooves'
 import type { DrumVoice } from './patterns'
 import { renderSegments, type Segment } from './segments'
 import { TICKS_PER_BEAT, type Clip, type TimeSignature } from './timeline'
 
 export type MidiPart = 'chords' | 'bass' | 'drums'
+
+/** The parts' names on screen and in exported file names. */
+export const PART_LABELS: Record<MidiPart, string> = { chords: 'Chords', bass: 'Bass', drums: 'Drums' }
 
 /** General MIDI drum notes, so drums land on the right pads of a drum rack. */
 const GM_DRUMS: Record<DrumVoice, number> = { kick: 36, rim: 37, snare: 38, hat: 42, openhat: 46, ride: 51 }
@@ -64,13 +68,6 @@ export function trackMidi({ clips, totalTicks, bpm, sig, groove, parts }: { clip
   return songMidi({ segments: [{ start: 0, length: totalTicks, clips, groove }], bpm, sig, parts })
 }
 
-export function downloadMidi(options: SongMidiOptions, filename = 'progression.mid') {
-  const bytes = songMidi(options)
-  const blob = new Blob([bytes as BlobPart], { type: 'audio/midi' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
+export function downloadMidi(options: SongMidiOptions, filename: string) {
+  downloadFile(songMidi(options) as BlobPart, 'audio/midi', filename)
 }

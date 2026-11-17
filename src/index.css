@@ -1935,20 +1935,20 @@ input[type='text'][aria-invalid='true'] {
   width: 11rem;
 }
 
-/* Download MIDI opens upward (it's at the bottom of the page). */
-.midi-panel {
+/* The Export menu hangs from the right end of the song bar. */
+.export-panel {
   right: 0;
-  width: 18rem;
+  width: 19rem;
 }
 
-/* Whole song | This section, at the top of the MIDI menu once parts are arranged. */
-.midi-scope {
+/* Audio (WAV) | MIDI, then Whole song | This section once parts are arranged, at the top of the Export menu. */
+.export-toggle {
   display: flex;
   gap: 0.3rem;
   padding: 0.25rem 0.3rem 0.4rem;
 }
 
-.midi-scope .toggle {
+.export-toggle .toggle {
   flex: 1;
 }
 
@@ -2021,21 +2021,33 @@ input[type='text'][aria-invalid='true'] {
   border-radius: 50%;
 }
 
-/* After a home change: chords stayed put; offer to move them. */
-.home-notice {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem 1rem;
-  /* Floats over the page (pinned bottom-center) so showing or dismissing it never moves
-     the track. Above the page, below dropdowns (20), the help tip (30) stays on top. */
+/*
+ * Notices float over the page, stacked at the bottom center (an export's progress above the key
+ * notice), so showing or dismissing one never moves the track. Above the page, below dropdowns
+ * (20); the help tip (30) stays on top. The stack itself lets clicks through.
+ */
+.floating-notices {
   position: fixed;
   bottom: 1rem;
   left: 50%;
   transform: translateX(-50%);
   z-index: 15;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
   width: min(56rem, calc(100vw - 2rem));
+  pointer-events: none;
+}
+
+/* After a home change: chords stayed put; offer to move them. An audio export's progress looks the same. */
+.home-notice,
+.export-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  pointer-events: auto;
   box-sizing: border-box;
   box-shadow: 0 6px 24px rgb(0 0 0 / 0.45);
   padding: 0.55rem 0.8rem;
@@ -2044,6 +2056,28 @@ input[type='text'][aria-invalid='true'] {
   background-image: linear-gradient(color-mix(in srgb, var(--accent) 12%, transparent), color-mix(in srgb, var(--accent) 12%, transparent));
   border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
   border-radius: 8px;
+}
+
+/* The percentage keeps its width as it counts, so nothing beside it shifts. */
+.export-status-text {
+  font-variant-numeric: tabular-nums;
+}
+
+.export-progress {
+  flex: 1;
+  min-width: 4rem;
+  height: 0.35rem;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+  border-radius: 999px;
+}
+
+.export-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+  transition: width 0.15s linear;
 }
 
 button.icon {
@@ -3465,12 +3499,12 @@ button.show-all {
 
   /*
    * The song bar in two rows that never re-wrap: the logo (its title steps aside) and the session
-   * (takes the room left); then the song settings button (takes the room left) and Download MIDI.
+   * (takes the room left); then the song settings button (takes the room left) and Export.
    * The settings group dissolves so its items can sit in those rows, and an empty flex item between
    * the rows forces the break whatever the names are.
    */
   .song-bar {
-    --midi-width: 6.5rem;
+    --export-width: 6.5rem;
     --bar-gap: 0.4rem;
     gap: 0 var(--bar-gap);
     margin-bottom: 0.1rem;
@@ -3544,14 +3578,14 @@ button.show-all {
     text-overflow: ellipsis;
   }
 
-  .song-bar .midi-menu {
+  .song-bar .export-menu {
     order: 4;
     flex: none;
   }
 
-  .midi-menu .dropdown-trigger {
+  .export-menu .dropdown-trigger {
     justify-content: space-between;
-    width: var(--midi-width);
+    width: var(--export-width);
     overflow: hidden;
   }
 

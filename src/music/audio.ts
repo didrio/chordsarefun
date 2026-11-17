@@ -2,6 +2,7 @@ import * as Tone from 'tone'
 import type { Chord } from './chord'
 import { DEFAULT_GROOVE, type GrooveSettings } from './grooves'
 import { bassNoteFor, chordPartVoicing, type DrumVoice, type NoteEvent } from './patterns'
+import { bouncePlan, type BounceOptions } from './bounce'
 import { audible, renderSegments, segmentAt, segmentsEnd, type Segment, type SegmentNotes } from './segments'
 import { bassSound, chordSound, cutoffHz, DRUM_TRIM_DB, partDb, type Instrument } from './sound'
 import { chordTimes, metronomeClicks, TICKS_PER_BEAT, type ClickAccent, type Clip, type TimeSignature } from './timeline'
@@ -269,9 +270,33 @@ const toneTicks = (ticks: number) => Math.round((ticks * transport().PPQ) / TICK
 const tickSeconds = (ticks: number) => Tone.Ticks(toneTicks(ticks)).toSeconds()
 const freq = (midi: number) => Tone.Frequency(midi, 'midi').toFrequency()
 
-/** Play one note event; chord notes are scaled so every chord is equally loud whatever its size. */
-function playNote(synth: Poly | undefined, e: NoteEvent, time: number, seconds = tickSeconds(e.duration)) {
+/** Play one note; chord notes are scaled so every chord is equally loud whatever its size. */
+function playNote(synth: Poly | undefined, e: Pick<NoteEvent, 'midi' | 'velocity' | 'group'>, time: number, seconds: number) {
   synth?.triggerAttackRelease(freq(e.midi), seconds, time, e.velocity * chordVelocity(e.group))
+}
+
+/**
+ * The synths of a graph of its own (a session preview, an audio export): one per part and
+ * sound, each through its own trim, made the first time it's asked for. Make them all before
+ * playing: a synth made later is built in whatever audio context is current then.
+ */
+function ownSynths(g: Graph) {
+  const synths: Poly[] = []
+  const poly = new Map<string, Poly>()
+  const polyFor = (part: Part, gr: GrooveSettings) => {
+    const inst = soundOf(part, gr)
+    const key = `${part}:${inst.id}`
+    let p = poly.get(key)
+    if (!p) {
+      const trim = new Tone.Volume(inst.trimDb).connect(part === 'chords' ? g.chordFilter : g.bassVolume)
+      g.nodes.push(trim)
+      p = makePoly(inst, trim)
+      synths.push(p)
+      poly.set(key, p)
+    }
+    return p
+  }
+  return { synths, polyFor }
 }
 
 /** Browsers require audio to be started from a user gesture. */
@@ -392,22 +417,7 @@ export async function previewSession(
   const song = music.segments !== undefined
   const sec = (ticks: number) => (ticks / TICKS_PER_BEAT) * (60 / bpm)
   const g = makeGraph(segs[0].groove.chords.brightness)
-  const synths: Poly[] = []
-  const poly = new Map<string, Poly>()
-  /** The synth for a part's sound in a section's settings, through its own trim, made the first time. */
-  const polyFor = (part: Part, gr: GrooveSettings) => {
-    const inst = soundOf(part, gr)
-    const key = `${part}:${inst.id}`
-    let p = poly.get(key)
-    if (!p) {
-      const trim = new Tone.Volume(inst.trimDb).connect(part === 'chords' ? g.chordFilter : g.bassVolume)
-      g.nodes.push(trim)
-      p = makePoly(inst, trim)
-      synths.push(p)
-      poly.set(key, p)
-    }
-    return p
-  }
+  const { synths, polyFor } = ownSynths(g)
   for (const seg of segs) {
     polyFor('chords', seg.groove)
     polyFor('bass', seg.groove)
@@ -449,6 +459,94 @@ export async function previewSession(
   schedulePass(0)
 }
 
+/** Audio exports are CD quality: 44.1 kHz, stereo. */
+export const RENDER_RATE = 44100
+/** Seconds of audio rendered between progress reports (and chances to cancel). */
+const RENDER_SLICE = 1
+/** How far Tone's clock runs ahead of the render, so every note is set up before the render reaches it. */
+const RENDER_LEAD = 0.1
+
+/** A finished export: the audio, and where the song's last bar ends (seconds; the rest is the ring-out). */
+export type Rendered = { buffer: AudioBuffer; end: number }
+
+/**
+ * Render what plays to audio, faster than real time, without touching what's playing: the
+ * same notes (bouncePlan), sounds, levels and level moves at each block's start as playback,
+ * on a graph of its own in an offline audio context, plus a tail so the last chord rings out.
+ * No metronome; the limiter stays.
+ *
+ * Why not Tone.Offline: it plays every note of the song into the synths before rendering a
+ * single sample, so each synth carries the whole song's automation and rendering slows down
+ * with the square of the length (a 3-minute song: ~75 s instead of ~11 s). Here the render is
+ * paused every RENDER_SLICE seconds (OfflineAudioContext.suspend) and Tone's clock is moved
+ * just past that point, so notes are set up a moment before they sound, as in live playback.
+ * The pauses also report progress, and a cancelled render is simply never resumed.
+ * This drives Tone's OfflineContext clock (`_currentTime` + "tick") the way its own render
+ * loop does; e2e renders a WAV, so a Tone upgrade that changes it shows up there.
+ */
+export function renderAudio(options: BounceOptions, { onProgress, signal }: { onProgress?: (fraction: number) => void; signal?: AbortSignal } = {}): Promise<Rendered> {
+  const plan = bouncePlan(options)
+  const segs = options.segments
+  const native = new OfflineAudioContext(2, Math.ceil(plan.seconds * RENDER_RATE), RENDER_RATE)
+  const ctx = new Tone.OfflineContext(native)
+  const original = Tone.getContext()
+  // Everything is built in the offline context, synchronously (no await), so nothing else
+  // ever sees it as the current context.
+  Tone.setContext(ctx)
+  try {
+    const g = makeGraph(segs[0]?.groove.chords.brightness ?? DEFAULT_GROOVE.chords.brightness)
+    const { polyFor } = ownSynths(g)
+    for (const seg of segs) {
+      polyFor('chords', seg.groove)
+      polyFor('bass', seg.groove)
+    }
+    if (segs[0]) setPartLevels(g, segs[0].groove)
+    // Notes and level moves wait on Tone's clock (PolySynth does that itself for its notes).
+    for (const { segment, time } of plan.levels.slice(1)) ctx.setTimeout(() => setPartLevels(g, segs[segment].groove, time), time)
+    for (const n of plan.chords) playNote(polyFor('chords', segs[n.segment].groove), n, n.time, n.seconds)
+    for (const n of plan.bass) playNote(polyFor('bass', segs[n.segment].groove), n, n.time, n.seconds)
+    for (const h of plan.drums) ctx.setTimeout(() => g.kit.trigger(h.voice, h.time, h.velocity), h.time)
+  } finally {
+    Tone.setContext(original)
+  }
+
+  const clock = ctx as unknown as { _currentTime: number }
+  const step = 128 / RENDER_RATE
+  /** Run Tone's clock to `time`, one render quantum at a time (as OfflineContext's own render loop does). */
+  const advanceTo = (time: number) => {
+    while (clock._currentTime <= time) {
+      ctx.emit('tick')
+      clock._currentTime += step
+    }
+  }
+
+  return new Promise<Rendered>((resolve, reject) => {
+    let cancelled = false
+    const cancel = () => {
+      cancelled = true
+      reject(new DOMException('The render was cancelled.', 'AbortError'))
+    }
+    if (signal?.aborted) return cancel()
+    signal?.addEventListener('abort', cancel, { once: true })
+    onProgress?.(0)
+    advanceTo(RENDER_SLICE + RENDER_LEAD)
+    for (let at = RENDER_SLICE; at < plan.seconds - RENDER_LEAD; at += RENDER_SLICE) {
+      native.suspend(at).then(() => {
+        if (cancelled) return // never resumed: the render stops here and is thrown away
+        onProgress?.(at / plan.seconds)
+        advanceTo(at + RENDER_SLICE + RENDER_LEAD)
+        native.resume()
+      }, reject)
+    }
+    native.startRendering().then((buffer) => {
+      signal?.removeEventListener('abort', cancel)
+      if (cancelled) return
+      onProgress?.(1)
+      resolve({ buffer, end: plan.end })
+    }, reject)
+  })
+}
+
 export function setBpm(bpm: number) {
   transport().bpm.value = bpm
 }
@@ -488,8 +586,8 @@ export function schedule({ segments: segs, totalTicks, sig, loop, onEnd }: Sched
   tidyVoices()
 
   // Looked up when they play: silenceAll may have thrown the synths away meanwhile.
-  for (const e of notes.chords) t.schedule((time) => playNote(synthOf('chords', segs[e.segment].groove), e, time), at(e.tick))
-  for (const e of notes.bass) t.schedule((time) => playNote(synthOf('bass', segs[e.segment].groove), e, time), at(e.tick))
+  for (const e of notes.chords) t.schedule((time) => playNote(synthOf('chords', segs[e.segment].groove), e, time, tickSeconds(e.duration)), at(e.tick))
+  for (const e of notes.bass) t.schedule((time) => playNote(synthOf('bass', segs[e.segment].groove), e, time, tickSeconds(e.duration)), at(e.tick))
   for (const e of notes.drums) t.schedule((time) => graph?.kit.trigger(e.voice, time, e.velocity), at(e.tick))
   for (const seg of segs) {
     t.schedule((time) => {

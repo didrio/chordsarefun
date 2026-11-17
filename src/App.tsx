@@ -8,7 +8,8 @@ import { DiceIcon } from './components/DiceIcon'
 import { InstrumentsPanel } from './components/InstrumentsPanel'
 import { ArrowIcon } from './components/ArrowIcon'
 import { HelpTip } from './components/HelpTip'
-import { MidiMenu } from './components/MidiMenu'
+import { ExportMenu, type ExportChoice } from './components/ExportMenu'
+import { ExportStatus, type ExportJob } from './components/ExportStatus'
 import { SongMenu } from './components/SongMenu'
 import { Panel } from './components/Panel'
 import { LoopIcon, PauseIcon, PlayIcon, PlusIcon, RedoIcon, StopIcon, UndoIcon } from './components/Icons'
@@ -58,6 +59,7 @@ import {
 } from './song'
 import {
   ensureAudio,
+  renderAudio,
   pausePlayback,
   playheadTicks,
   previewChord,
@@ -73,7 +75,10 @@ import {
   stopPreview,
 } from './music/audio'
 import { canInvert, chordName, invert, shiftOctave, type Chord } from './music/chord'
-import { downloadMidi } from './music/midi'
+import { downloadMidi, PART_LABELS } from './music/midi'
+import { renderedWav } from './music/wav'
+import { downloadFile } from './download'
+import { exportFileName } from './names'
 import { keyCandidates, suggestHome, type Home } from './music/home'
 import { inContext } from './music/suggest'
 import { PROGRESSIONS, type Progression, type ProgressionParts } from './music/progressions'
@@ -171,7 +176,7 @@ const isSelection = (v: unknown) => {
 
 /** Elements whose clicks don't clear the clip selection. */
 const KEEPS_SELECTION =
-  '.clip, .song-block, button, input, select, label, summary, .ruler, .panel, .notes-lane, .dropdown, .home-notice, .modal-backdrop, .chord-menu'
+  '.clip, .song-block, button, input, select, label, summary, .ruler, .panel, .notes-lane, .dropdown, .floating-notices, .modal-backdrop, .chord-menu'
 
 /** Chord size for ideas. The Triads/7ths/9ths toggle is gone with the palette, so ideas use triads. */
 const flavor: PaletteFlavor = 'triads'
@@ -298,6 +303,12 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
   const songLength = useMemo(() => songTicks({ sections, sig, arrangement }), [sections, sig, arrangement])
   const songSegs = useMemo(() => songSegments(song.value), [song.value])
   const songPos = songPlayhead < songLength ? songPlayhead : 0
+
+  // Exporting: an audio render runs in the background (one at a time) with its progress shown.
+  const [exportJob, setExportJob] = useState<ExportJob | null>(null)
+  const renderAbort = useRef<AbortController | null>(null)
+  // Opening another session cancels a render still running.
+  useEffect(() => () => renderAbort.current?.abort(), [])
   // A song with no blocks left (removed, undone) can't be what plays: the section takes over.
   const scope: 'section' | 'song' = playScope === 'song' && songLength > 0 ? 'song' : 'section'
   const songScope = scope === 'song'
@@ -989,6 +1000,56 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
     if (isPlaying) seekPlayback(songScope ? songScaled : scaled)
   }
 
+
+  /**
+   * Export the song or the edited section as MIDI (at once) or audio (rendered, with progress
+   * and Cancel), named after the session ("My song - Chorus - Bass.wav").
+   */
+  async function exportMusic({ format, scope, parts, stem }: ExportChoice) {
+    const whole = scope === 'song'
+    const segments = whole ? songSegs : sectionSegs
+    const name = exportFileName({
+      session: sessions.currentName,
+      section: whole || sections.length < 2 ? undefined : sectionName(section),
+      part: stem ? PART_LABELS[parts[0]] : undefined,
+      ext: format === 'wav' ? 'wav' : 'mid',
+    })
+    if (format === 'midi') {
+      const markers = whole ? spans.map((b) => ({ tick: b.start, text: sectionName(sections.find((s) => s.id === b.section)!) })) : []
+      downloadMidi({ segments, markers, bpm, sig, parts }, name)
+      return
+    }
+    if (renderAbort.current) return // one render at a time
+    const abort = new AbortController()
+    renderAbort.current = abort
+    setExportJob({ name, progress: 0 })
+    try {
+      const rendered = await renderAudio(
+        { segments, sig, bpm, parts },
+        {
+          signal: abort.signal,
+          // Only a new whole percent re-renders.
+          onProgress: (f) => setExportJob((job) => (job && !job.failed && Math.floor(f * 100) !== Math.floor(job.progress * 100) ? { ...job, progress: f } : job)),
+        },
+      )
+      downloadFile(renderedWav(rendered) as BlobPart, 'audio/wav', name)
+      setExportJob(null)
+    } catch (e) {
+      if (abort.signal.aborted) return
+      console.error(e)
+      setExportJob({ name, progress: 0, failed: true })
+    } finally {
+      if (renderAbort.current === abort) renderAbort.current = null
+    }
+  }
+
+  /** Cancel the running render, or dismiss a failed one. */
+  const cancelExport = () => {
+    renderAbort.current?.abort()
+    renderAbort.current = null
+    setExportJob(null)
+  }
+
   return (
     <main>
       {/* Row 1, the song: which session, its key, tempo and timing, and the way out (MIDI). */}
@@ -1023,24 +1084,12 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
             metronomeVolume={metronomeVolume}
             onMetronomeVolume={setMetronomeVolume}
           />
-          <MidiMenu
+          <ExportMenu
             groove={groove}
             songGrooves={songSegs.map((seg) => seg.groove)}
             disabled={chordClips(clips).length === 0 && !songSegs.some((seg) => chordClips(seg.clips).length > 0)}
-            onDownload={(scope, parts, filename) =>
-              downloadMidi(
-                scope === 'song'
-                  ? {
-                      segments: songSegs,
-                      markers: spans.map((b) => ({ tick: b.start, text: sectionName(sections.find((s) => s.id === b.section)!) })),
-                      bpm,
-                      sig,
-                      parts,
-                    }
-                  : { segments: sectionSegs, bpm, sig, parts },
-                filename,
-              )
-            }
+            rendering={exportJob !== null && !exportJob.failed}
+            onExport={exportMusic}
           />
         </div>
       </header>
@@ -1151,15 +1200,19 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
         onAddAll={addEverySection}
       />
 
-      {activeOffer && (
-        <HomeNotice
-          from={activeOffer.from}
-          to={activeOffer.to}
-          outside={chordClips(allClips).filter((c) => !isDiatonic(c.chord, tonic, mode)).length}
-          onMove={moveChordsHome}
-          onDismiss={() => setHomeOffer(null)}
-        />
-      )}
+      {/* Floating notices, stacked at the bottom of the window: they never move the page. */}
+      <div className="floating-notices">
+        {exportJob && <ExportStatus job={exportJob} onCancel={cancelExport} />}
+        {activeOffer && (
+          <HomeNotice
+            from={activeOffer.from}
+            to={activeOffer.to}
+            outside={chordClips(allClips).filter((c) => !isDiatonic(c.chord, tonic, mode)).length}
+            onMove={moveChordsHome}
+            onDismiss={() => setHomeOffer(null)}
+          />
+        )}
+      </div>
 
       <div className="panels" data-playhead-scope>
         <div className="timeline-row">
@@ -1343,21 +1396,24 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
             />
           ) : (
             // Nothing to show yet: say what the next move is, in the same frame (same height).
+            // One span inside the flex box, so the bold words and the text after them keep their space.
             <p className="details-hint">
-              {clips.length === 0 ? (
-                <>
-                  <b>Chord details</b> show up here once there&apos;s a chord on the track.
-                </>
-              ) : multiSelected ? (
-                <>
-                  <b>{selectedClips.length} chords selected.</b> Drag them to move them together (hold {COPY_KEY} to
-                  copy), {DUPLICATE_KEY} duplicates them, ↑&nbsp;↓ changes their inversion, Delete removes them.
-                </>
-              ) : (
-                <>
-                  <b>{TAP} a chord</b> to hear it and see ideas for that spot.
-                </>
-              )}
+              <span>
+                {clips.length === 0 ? (
+                  <>
+                    <b>Chord details</b> show up here once there&apos;s a chord on the track.
+                  </>
+                ) : multiSelected ? (
+                  <>
+                    <b>{selectedClips.length} chords selected.</b> Drag them to move them together (hold {COPY_KEY} to
+                    copy), {DUPLICATE_KEY} duplicates them, ↑&nbsp;↓ changes their inversion, Delete removes them.
+                  </>
+                ) : (
+                  <>
+                    <b>{TAP} a chord</b> to hear it and see ideas for that spot.
+                  </>
+                )}
+              </span>
             </p>
           )}
         </section>

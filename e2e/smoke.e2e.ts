@@ -334,7 +334,7 @@ describe('chord menu', () => {
 })
 
 describe('an arranged song at every width', () => {
-  it('scrolls its chips and timeline sideways inside, never the page; the MIDI menu stays on screen', async () => {
+  it('scrolls its chips and timeline sideways inside, never the page; the Export menu stays on screen', async () => {
     const p = await start(full())
     for (const label of [/^Verse /, /^Pre-chorus /, /^Chorus /, /^Bridge /]) {
       await p.locator('.add-section .dropdown-trigger').click()
@@ -347,12 +347,12 @@ describe('an arranged song at every width', () => {
     for (const width of [320, 360, 375, 430, 600, 640, 768, 900, 1024, 1280]) {
       await p.setViewportSize({ width, height: 900 })
       expect(await overflow(), `${width}px: no sideways page scroll`).toBeLessThanOrEqual(0)
-      await p.locator('.midi-menu .dropdown-trigger').click()
+      await p.locator('.export-menu .dropdown-trigger').click()
       await p.getByRole('button', { name: 'Whole song' }).waitFor()
-      const menu = await p.locator('.midi-panel').boundingBox()
-      if (!menu) throw new Error('No MIDI menu')
-      expect(menu.x, `${width}px: MIDI menu starts on screen`).toBeGreaterThanOrEqual(0)
-      expect(menu.x + menu.width, `${width}px: MIDI menu ends on screen`).toBeLessThanOrEqual(width)
+      const menu = await p.locator('.export-panel').boundingBox()
+      if (!menu) throw new Error('No Export menu')
+      expect(menu.x, `${width}px: Export menu starts on screen`).toBeGreaterThanOrEqual(0)
+      expect(menu.x + menu.width, `${width}px: Export menu ends on screen`).toBeLessThanOrEqual(width)
       expect(await overflow(), `${width}px: nothing runs off with the menu open`).toBeLessThanOrEqual(0)
       await p.keyboard.press('Escape')
     }
@@ -383,15 +383,15 @@ describe('layout at every width', () => {
 })
 
 describe('phone header', () => {
-  it('is two rows that never re-wrap: logo + session, then the song button + MIDI', async () => {
+  it('is two rows that never re-wrap: logo + session, then the song button + Export', async () => {
     const p = await start(full())
     for (const width of [320, 360, 375, 430, 600]) {
       await p.setViewportSize({ width, height: 800 })
       const top = async (selector: string) => Math.round((await p.locator(selector).boundingBox())!.y)
       const [logo, session] = [await top('.logo-icon'), await top('.session-trigger')]
-      const [song, midi] = [await top('.song-menu .dropdown-trigger'), await top('.midi-menu .dropdown-trigger')]
+      const [song, exp] = [await top('.song-menu .dropdown-trigger'), await top('.export-menu .dropdown-trigger')]
       expect(Math.abs(logo - session), `${width}px: logo and session share a row`).toBeLessThan(12)
-      expect(Math.abs(song - midi), `${width}px: song button and MIDI share a row`).toBeLessThan(4)
+      expect(Math.abs(song - exp), `${width}px: song button and Export share a row`).toBeLessThan(4)
       expect(song, `${width}px: the song row is under the session row`).toBeGreaterThan(session + 20)
       // The popover opens as a sheet that stays on screen.
       await p.locator('.song-menu .dropdown-trigger').click()
@@ -465,6 +465,55 @@ describe('progression browser', () => {
     const p = await start(seedTrack([]))
     await p.getByRole('button', { name: 'Start from a progression' }).click()
     await p.locator('.prog-browser').waitFor()
+  })
+})
+
+describe('export', () => {
+  /** The WAV header's fields and the length of its audio in seconds. */
+  const readWav = (bytes: Buffer) => ({
+    riff: bytes.toString('ascii', 0, 4) + bytes.toString('ascii', 8, 12),
+    channels: bytes.readUInt16LE(22),
+    rate: bytes.readUInt32LE(24),
+    bits: bytes.readUInt16LE(34),
+    seconds: bytes.readUInt32LE(40) / (bytes.readUInt16LE(32) * bytes.readUInt32LE(24)),
+  })
+
+  it('renders the mix to a WAV named after the session, and MIDI of one part', async () => {
+    const p = await start(full())
+    await p.locator('.export-menu .dropdown-trigger').click()
+    await p.getByRole('button', { name: 'Audio (WAV)' }).click()
+    const [download] = await Promise.all([p.waitForEvent('download'), p.getByRole('menuitem', { name: /All parts that are on/ }).click()])
+    expect(download.suggestedFilename()).toBe('Untitled session.wav')
+    const { readFile } = await import('node:fs/promises')
+    const wav = readWav(await readFile(await download.path()))
+    expect(wav).toMatchObject({ riff: 'RIFFWAVE', channels: 2, rate: 44100, bits: 24 })
+    // 4 bars of 4/4 at 120 BPM = 8 s, plus at most 2 s of ring-out.
+    expect(wav.seconds).toBeGreaterThanOrEqual(8)
+    expect(wav.seconds).toBeLessThanOrEqual(10)
+    expect(await p.locator('.export-status').count()).toBe(0)
+
+    await p.locator('.export-menu .dropdown-trigger').click()
+    await p.getByRole('button', { name: 'MIDI', exact: true }).click()
+    const [midi] = await Promise.all([p.waitForEvent('download'), p.getByRole('menuitem', { name: /^Bass only/ }).click()])
+    expect(midi.suggestedFilename()).toBe('Untitled session - Bass.mid')
+  })
+
+  it('shows progress while rendering, and Cancel stops it with nothing downloaded', async () => {
+    // 8 bars at 30 BPM: about a minute of audio, long enough to cancel.
+    const slow = full()
+    const p = await start({ ...slow, present: { ...slow.present, bars: 8, bpm: 30 } })
+    let downloads = 0
+    p.on('download', () => downloads++)
+    await p.locator('.export-menu .dropdown-trigger').click()
+    await p.getByRole('button', { name: 'Audio (WAV)' }).click()
+    await p.getByRole('menuitem', { name: /All parts that are on/ }).click()
+    const status = p.locator('.export-status')
+    await status.waitFor()
+    expect(await status.textContent()).toMatch(/Rendering Untitled session\.wav… \d+%/)
+    await status.getByRole('button', { name: 'Cancel' }).click()
+    expect(await status.count()).toBe(0)
+    await p.waitForTimeout(1500)
+    expect(downloads).toBe(0)
   })
 })
 

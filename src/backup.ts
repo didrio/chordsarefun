@@ -1,3 +1,4 @@
+import { downloadFile } from './download'
 import { migrateMeta, SESSION_KEYS, sessionPrefix, songHasWork, uniqueName, type Folder, type SessionMeta } from './session'
 
 /**
@@ -55,13 +56,7 @@ export const backupFilename = (now = new Date()) => {
 
 /** Download a backup of everything as one file. */
 export function downloadBackup() {
-  const blob = new Blob([JSON.stringify(makeBackup(collectStorage()))], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = backupFilename()
-  a.click()
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
+  downloadFile(JSON.stringify(makeBackup(collectStorage())), 'application/json', backupFilename())
 }
 
 /**

@@ -425,7 +425,7 @@ one undo step.
   undo.
 - The key is the song's: detection, the suggestion dot and the move below cover **every section's chords**
   (`songClips` lays the sections end to end for detection).
-- Right after, a notice (`HomeNotice`, a floating bar pinned bottom-center of the window, `position: fixed`, so showing or dismissing it never moves the page; z-index 15; clicking it keeps the selection) offers to move the chords, worded for what it does
+- Right after, a notice (`HomeNotice`, a floating bar pinned bottom-center of the window in `.floating-notices`, `position: fixed`, so showing or dismissing it never moves the page; z-index 15; clicking it keeps the selection; an export's progress stacks above it) offers to move the chords, worded for what it does
   (`homeMove`): "Transpose chords to D major" (same mood), "Reshape chords for Dorian"
   (same key), "Move chords to D Dorian" (both). It uses `chordToKey`: chords all in the
   old key keep their scale degree (V stays V, Em in C major → E♭ in C minor; sizes,
@@ -705,16 +705,44 @@ sessions still cleans it up. Old chords have no
 `bass`, so they read as their root (inverted chords once named "F/C" are now plain F,
 as intended). Playhead and play state are not saved.
 
-### Export
+### Export (`ExportMenu.tsx`, `midi.ts`, `bounce.ts`, `wav.ts`, `renderAudio` in `audio.ts`; T25–T26)
 
-Download MIDI (`midi.ts`, `MidiMenu.tsx`, T25) renders segments (`renderSegments`, the same as playback), so the
-MIDI is exactly what you hear (patterns, swing, voicings, each block's own instruments), with tempo and time
-signature. It's a menu: all parts that are on (one file, a track each, which Ableton splits into tracks; drums
-on channel 10 with General MIDI notes) or one part alone. **Once the song has blocks** the menu opens with
-**Whole song | This section** (`songMidi`): the blocks' notes at their song times as one arrangement, a MIDI
-**marker** at each block start named after its section (a DAW shows them as locators), files `song*.mid`; "All
-parts that are on" means on in any block, and a part that's off in a block is silent there. This section =
-`sectionSegments` of the edited one, `progression*.mid`. `trackMidi` (one progression) is `songMidi` of one segment.
+- **⤓ Export** (the song bar's right end) is one menu for **Audio (WAV) | MIDI** (a toggle at the top, remembered
+  globally as `exportFormat`, default Audio). **Once the song has blocks** a second toggle picks **Whole song |
+  This section**. Then the same rows for both formats: **All parts that are on** (WAV: mixed into one file; MIDI:
+  one file, a track each, which Ableton splits into tracks) and **Chords / Bass / Drums only** (WAV: a stem, at
+  its level in the mix; MIDI: that part's track). A part that's off (or at volume 0) everywhere in the scope is
+  disabled, its tooltip saying so. "On" means on in any block; a part that's off in a block is silent there.
+- **Exactly what you hear**: both render segments (`renderSegments`, as playback): patterns, swing, voicings,
+  each block's own instruments. Whole song = `songSegments`; This section = `sectionSegments` of the edited one.
+- **File names** come from the session (`exportFileName` in `names.ts`): `My song.wav`, `My song - Chorus.wav`
+  (one section, once there are 2+ sections), `My song - Bass.mid` (one part); characters a file name can't hold
+  are dropped. Both formats share the rule.
+- **MIDI** (`songMidi`): tempo and time signature; drums on channel 10 with General MIDI notes; for the whole song
+  the blocks' notes at their song times as one arrangement, plus a MIDI **marker** at each block start named after
+  its section (a DAW shows them as locators). `trackMidi` (one progression) is `songMidi` of one segment.
+- **Audio** is a "bounce" rendered in the browser, faster than real time, without touching what's playing (the
+  song keeps playing). `bouncePlan` (pure, tested) turns segments into notes, drum hits and level moves in
+  seconds, plus `BOUNCE_TAIL` (2 s) so the last chord rings out; `renderAudio` plays it on a graph of its own
+  (`makeGraph`, a synth per sound via `ownSynths`, shared with `previewSession`, the kit, `setPartLevels` at each
+  block start) in an offline audio context at 44.1 kHz stereo; the limiter stays; no metronome. `renderedWav` cuts
+  the silent end (never before the last bar, so the file starts on bar 1 and covers every bar) and `encodeWav`
+  writes 24-bit PCM. No MP3 (not worth a library).
+- **Progress and Cancel**: while it renders, a floating bar (`ExportStatus.tsx`, in `.floating-notices` with the
+  key notice, so nothing moves) reads "Rendering My song.wav… 40%" with a progress bar and **Cancel**. One render
+  at a time (the audio rows are disabled meanwhile); opening another session cancels it. A failure shows "Couldn't
+  render" with Got it. About 16–25× real time: a 3-minute song takes ~7–11 s.
+- **How the render works** (why not `Tone.Offline`): Tone.Offline plays every note of the song into the synths
+  before rendering a sample, so each synth carries the whole song's automation and rendering slows with the square
+  of the length (3 minutes: ~75 s). `renderAudio` builds the graph in a `Tone.OfflineContext` wrapped around a
+  native `OfflineAudioContext` (set as Tone's context only while building, synchronously), then renders with
+  `suspend()` every second of audio: at each pause it reports progress and runs Tone's clock (`_currentTime` +
+  "tick", as Tone's own render loop does) 0.1 s past the next pause, so notes are set up just before they sound.
+  Measured identical to Tone.Offline's output. A cancelled render is never resumed. This leans on a Tone internal;
+  the `e2e` export case renders a real WAV, so a Tone upgrade that breaks it shows there.
+- **Known**: the mix peaks over full scale on drum hits with dense presets (Pop: ~+4 dBFS before clipping). The
+  `Tone.Limiter` keeps Tone's 30 dB soft knee, so it barely limits. Playback clips the same way at the browser's
+  output; the WAV is clipped to match. T28 fixes the master.
 
 ## Visual design
 
@@ -723,7 +751,7 @@ parts that are on" means on in any block, and a part that's off in a block is si
     help tooltip headed "chords are fun", the sessions trigger (opens the sessions window; reads like the document's
     name); right: the **song button** "C minor · 127 BPM · 4/4 ▾" (`SongMenu.tsx`: its popover holds
     the Key on the left and tempo, time signature, length, grid and the metronome on the right; it
-    scrolls inside itself on short windows) and a compact "⤓ MIDI". On narrow windows the right
+    scrolls inside itself on short windows) and a compact "⤓ Export" (audio or MIDI). On narrow windows the right
     group wraps under.
   - **Main toolbar** (dashed line above, solid below), like Ableton's transport bar: Play
     (accent tint), Stop, Loop · Undo, Redo (ghost) · **+ Add chord** (tinted) on the left;
@@ -786,7 +814,7 @@ parts that are on" means on in any block, and a part that's off in a block is si
   Instruments strips stack (one column, the preset picker stays in the bar), the chord details header puts
   "Type a chord" on its own row, and the tabs scroll sideways instead of wrapping (the
   spot's context is hidden). No horizontal page scroll down to 320px, also with an arranged song open (the Song bar's
-  chips and the song timeline scroll sideways inside themselves; the MIDI menu stays on screen; `e2e` checks it). Touch drags are untested
+  chips and the song timeline scroll sideways inside themselves; the Export menu stays on screen; `e2e` checks it). Touch drags are untested
   on a real device.
 - **Narrow windows and tablets (≤ 1000px)**: the main toolbar wraps, Browse progressions and
   Random sharing a full-width row under the transport (its two halves need ~985px side by
@@ -886,6 +914,11 @@ These were discussed and chosen deliberately; don't "fix" them without asking.
   (`useBlockDrag`) and shares only selection, the menu, panel and ruler styling.
 - **Song MIDI is one arrangement with markers, not one file per section** (T25): Ableton imports it as the whole
   song on its timeline, with a locator at every part; "This section" stays for taking just one part.
+- **One Export menu, audio and MIDI with the same choices** (T26): the format is a toggle, not a second menu,
+  so "whole song / this section" and "mix / one part" mean the same in both. Files are named after the session.
+- **Audio is rendered in the browser, as 24-bit WAV only** (T26): no server and no library; every DAW imports
+  it. The render drives Tone's offline clock in slices instead of `Tone.Offline` (see Export) for speed,
+  progress and Cancel.
 - **`Track` stays as "one section seen with the song's settings"** (lenses) rather than every function learning
   about songs: the chord editing rules didn't change at all.
 - **One undo history for the song**, and undo opens the section it changes, rather than a history per section
@@ -944,10 +977,13 @@ them up.
     a track, `progressionMusic` (a progression ready to hear), `progressionTrack` (taking its chords,
     instruments or both) and `searchProgressions` (the browser's list).
   - `segments.ts`: what plays as segments (a section, or one per song block): `renderSegments`, `segmentAt`,
-    `segmentsEnd`, pure (song MIDI uses it; T26's WAV will too).
+    `segmentsEnd`, pure (playback, MIDI and audio export share it).
+  - `bounce.ts`: what an audio export plays, in seconds (`bouncePlan`: notes, drum hits, level moves, the tail), pure.
+  - `wav.ts`: WAV files (`encodeWav`: 24-bit PCM; `trimTail`; `renderedWav`), pure.
   - `audio.ts`: Tone.js playback of the three parts (a synth per sound in use, drum kit, per-part
     volume, limiter), one `schedule` for a section or the song, seeking, metronome. The only module touching Web Audio.
     Previews (`previewChord`, `previewProgression`, `previewSession`: loops, or `passes` times) and `silenceAll`.
+    `renderAudio`: the audio export, offline (see Export).
   - `patterns.ts`: chord/bass/drum patterns and `renderTrack` (all notes played), pure.
   - `grooves.ts`: groove settings, presets, matching, validation.
   - `sound.ts`: instrument presets (Tone options as data), brightness → cutoff, levels.
@@ -959,7 +995,8 @@ them up.
   `removeBlocks`, `forkBlock`, `blockGap`, `stepGap`) and `formatDuration`.
 - `src/track.ts`: the `Track` type (one section seen with the song's settings: chords, key, meter, groove, BPM;
   tempo bounds), defaults, validation, migration of stored tracks, `withMusic`.
-- `src/names.ts`: `uniqueName` ("Verse 2", "Untitled session 3").
+- `src/names.ts`: `uniqueName` ("Verse 2", "Untitled session 3"), `exportFileName` ("My song - Bass.wav").
+- `src/download.ts`: `downloadFile` (save bytes as a file: backups, MIDI, WAV).
 - `src/history.ts`: undo/redo (pure transitions + `useHistory`, optionally persisted, with `encode`/`decode`).
 - `src/persist.ts`: localStorage helpers + `usePersistentState`, `copyKeys`/`removeKeys`.
 - `src/session.ts`: sessions (keys, list, folders, favorites, sort/filter, migration `prepareSessions`,
@@ -987,7 +1024,7 @@ them up.
   - `SongPanel.tsx` (the Song panel and song timeline) + `useBlockDrag.ts` (see The song timeline).
   - `ChordInspector.tsx`, `NotesLane.tsx`, `ProgressionBrowser.tsx` (the progression window),
     `HomeNotice.tsx`, `SessionBrowser.tsx` (the sessions trigger + window),
-    `InstrumentsPanel.tsx`, `MidiMenu.tsx` (+ `useDropdown.ts`): see Behavior.
+    `InstrumentsPanel.tsx`, `ExportMenu.tsx` + `ExportStatus.tsx` (+ `useDropdown.ts`): see Behavior.
     The lane renders inside `Timeline` and follows the playhead via the `--playhead`
     CSS variable set on `.timeline`.
 - `e2e/`: browser smoke tests (`harness.ts` starts Vite + Chrome and seeds tracks; `smoke.e2e.ts`).

@@ -4,7 +4,7 @@ Living, ordered backlog. One ticket per session: `/clear` → `/start Tn` → wo
 session updates this file and picks the next ticket, so each new session starts with a small, clear context.
 Rules: `.claude/skills/wrap/SKILL.md`. Capture ideas any time with `/ticket`.
 
-**Next:** T26 — Export audio (WAV) (Opus · high · plan on). If the `e2e` CI job is red, fix that first.
+**Next:** T28 — The mix clips on drum hits (Opus · high · plan on). If the `e2e` CI job is red, fix that first.
 
 ## In progress
 
@@ -85,27 +85,28 @@ Agent's calls the owner accepted (in the proposal):
   The editor never jumps while the song plays: the chord track shows its playhead only while the edited section
   is the one sounding.
 
-### T26 — Export audio (WAV)
+### T28 — The mix clips on drum hits (a real limiter)
 
-- **Status:** ready (T25 is done; song MIDI shows the whole-song / this-section menu to follow)
-- **Session:** Opus · high effort · plan mode on (audio engine)
-- **Goal:** Download what you hear as a WAV file, so a song sketch can go straight into a DAW or be shared, with
-  no server: rendered in the browser.
+- **Status:** ready (owner's call on the approach; it changes how playback sounds)
+- **Session:** Opus · high effort · plan mode on (audio engine, measured levels)
+- **Goal:** Playback and the WAV export never go over full scale, without changing the measured balance between
+  parts or the overall loudness noticeably.
 - **Done when:**
-  - [ ] `renderAudio(music)` in `audio.ts`: `Tone.Offline` builds its own graph (`makeGraph`, `makePoly`,
-        `makeKit`, `setLevels`, as `previewSession` does) and schedules every note from `renderTrack` at absolute
-        times, plus a ~2 s tail so the last chord rings out. Songs: one rig per distinct sound, switched at block
-        starts (T24: one synth per distinct sound and level ramps at segment starts, from `renderSegments`). No metronome. The limiter at −1 dBFS stays as the safety net.
-  - [ ] Pure WAV encoder (`wav.ts` + test: header fields, 24-bit PCM, stereo, 44.1 kHz) from an `AudioBuffer`'s
-        channels; no dependency. MP3 isn't worth a library for now.
-  - [ ] An "⤓ Export" menu: the MIDI menu becomes Export, with Audio (WAV) next to MIDI, the same choices (whole
-        song / this section; all parts or one part alone as stems). Rendering shows progress ("Rendering… 40%")
-        and can be cancelled; the file is `<session name>.wav`.
-  - [ ] Unit test the scheduling part (events and times) without Web Audio; `AGENTS.md` Export section updated.
-- **Context:** `audio.ts` (`makeGraph`, `previewSession` is the model to follow), `patterns.ts` (`renderTrack`),
-  `midi.ts`/`MidiMenu.tsx` (menu and part choices). Size: a 3-minute stereo 24-bit WAV is ~48 MB in memory,
-  which is fine; very long songs may take a few seconds to render. Owner listens: the WAV matches playback
-  (levels, swing, sound switches between sections) and imports cleanly into Ableton.
+  - [ ] An offline render of dense presets (Pop and a few others) peaks at or under −1 dBFS: no clipped samples.
+  - [ ] Loudness (the LUFS-style measure in `AGENTS.md`, Instruments → Levels) moves by under ~0.5 dB, or the
+        presets' `mix` is re-measured to keep the targets.
+  - [ ] `AGENTS.md` updated (the Export section's "Known" note, Levels).
+- **Context:** found in T26. `makeGraph` in `audio.ts` uses `new Tone.Limiter(-1)`, which is a `Tone.Compressor`
+  (ratio 20, attack 3 ms) that keeps Tone's default **30 dB soft knee**, so above −1 dBFS it barely limits. Measured
+  with Pop (default groove) over 3 minutes: peak 1.64 (~+4.3 dBFS), ~9,000 samples over 1.0, all on drum hits
+  (stems alone: chords 0.73, bass 0.30, drums 0.92). Browsers clip their output at ±1, so playback distorts there
+  too; `encodeWav` clips the same way. Tried a hard knee (`Tone.Compressor({ threshold: -1, ratio: 20, knee: 0,
+  attack: 0.003, release: 0.01 })`): peak 1.28, about +0.3 dB louder overall (the Web Audio compressor's automatic
+  makeup gain); reverted. Options: a real brickwall (a `WaveShaper` soft clip after the compressor, or lower
+  threshold + output trim to cancel the makeup gain), or lowering every preset's `mix` a few dB, or both. Measure
+  with `renderAudio` (it renders the real graph offline in headless Chrome; the T26 spike drove it with
+  playwright-core against the dev server, importing Tone from the same versioned URL as `audio.ts`). Owner
+  listens: no crunch on kicks, nothing quieter or duller.
 
 ## Backlog
 
@@ -130,6 +131,7 @@ Agent's calls the owner accepted (in the proposal):
 
 ## Done
 
+- T26 — Export audio (WAV) — 2026-11-17 — ⤓ Export menu (Audio (WAV) | MIDI, whole song / this section, mix or stems; parts that are off disabled; files named after the session, `exportFileName`); `renderAudio` renders offline in 1 s slices driving Tone's clock (`bouncePlan` pure, 3 min in ~7–11 s; Tone.Offline was quadratic, ~75 s), with a floating progress bar and Cancel; `wav.ts` 24-bit encoder, tail trimmed never before the last bar; e2e downloads a WAV and cancels one. Deviations: not Tone.Offline (speed, progress, cancel); MIDI files renamed after the session too. Also fixed the details hint's missing space. Found: the mix clips on drum hits (T28). Owner to listen: WAV matches playback (levels, swing, section sound switches), stems sum to the mix, Ableton import.
 - T25 — Song MIDI, sessions window, phones — 2026-11-17 — `songMidi` (renderSegments, a marker per block) with a Whole song | This section menu; sessions-window ▶ plays the whole song (`previewSession` takes segments: synth per sound, level ramps) and the row lists its parts; e2e checks an arranged song at ten widths. Owner to check: song MIDI in Ableton (one arrangement, locators); hearing a song session (sound switches between sections). Not looked at in the browser pane (e2e only).
 - T24 — Song timeline and song playback — 2026-11-17 — Song panel (`SongPanel.tsx`, `songOpen`): chips + ▶ Song + length in its bar, the song timeline in its body (blocks back to back, linked repeats outlined, drag chips in / blocks around with labels, ⌘D, Delete, ←/→, ⌥←/→, right-click menu; `useBlockDrag`, arrangement edits in `song.ts`); one transport with `playScope` (section or song), the chord track hides its playhead while another section sounds; audio plays segments (`segments.ts`) with one synth per sound and level ramps at block starts. Deviations: one `schedule` instead of `scheduleSong`; a block's "Make a new section from this" makes that block unique; seeking the other scope's ruler while playing doesn't switch playback. Also: T27 dropped (owner: chord details stay under Instruments), help text's stale idea-▶ line fixed. Owner to listen: section sound switches, no stuck notes, seeking mid-song, editing while the song plays.
 - T23 — Sections — 2026-11-17 — a session is a song (`src/song.ts`): sections with their own chords, length and instruments, sharing key/tempo/meter; old sessions open as one "Progression" section (`migrateSong`, fixed id `main`); one undo history that opens the section a step changes (`changedSection`); history saved packed, each section version once (owner's call; `history.ts` `encode`/`decode`); `SectionBar.tsx` chips (+ Section with labels and colors, rename, "Make a new section from this", delete); key detection/move and meter changes cover every section; progressions take the song's mood only when no other section has chords. Also: the toolbar now wraps up to 1000px (it overflowed at 900; e2e checks 900). Owner to listen: switching sections while playing.

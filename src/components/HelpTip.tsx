@@ -99,7 +99,7 @@ export function HelpTip() {
           </li>
           <li>
             <b>Keep it.</b> Everything saves as you go. The session name at the top opens all your sessions (folders,
-            favorites, a backup file), and Download MIDI takes the chords into your DAW.
+            favorites, a backup file), and <b>Export</b> takes it into your DAW as audio (WAV) or MIDI.
           </li>
         </ol>
         </div>
