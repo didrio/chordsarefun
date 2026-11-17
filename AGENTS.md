@@ -582,15 +582,25 @@ one undo step.
     ride −12, open hat −12.
   - Preset `mix`: each part at volume 1 is measured with the preset's sound/pattern/
     brightness/swing, then set so chords ≈ −18.5, drums ≈ −19.5, bass ≈ −20.5 (chords
-    lead; ~−15 combined, limiter at −1 dBFS as a safety net). Parts that need more than
-    1.0 are capped (all within 1 dB).
+    lead; ~−15 combined). Parts that need more than 1.0 are capped (all within 1 dB). These are each part
+    **alone**; together, dense presets peak 3–6 dB over full scale (kick, bass and a plucky chord on one beat),
+    which the master limiter takes off (below).
+  - **The master limiter** (`limiter.ts`, T28): a lookahead brickwall, like a DAW's master limiter, in an
+    AudioWorklet after the three parts: the audio is delayed 5 ms, so it sees each peak coming and turns the gain
+    down smoothly before it arrives (no clipping, no crunch), then back up with a 50 ms release; **nothing ever goes
+    over −1 dBFS** (a guarantee by construction, tested), and audio under it passes untouched. Measured over every
+    preset (16 bars of C G Am F at 120 BPM): before, everything with drums peaked +1 to +6 dBFS (the browser and the
+    WAV clipped it); now all peak at exactly −1.00 dBFS with no sample over. The cost is loudness on the busiest
+    presets, roughly what the clipping used to hide: median −0.55 dB, Pop −0.7, worst Clav funk −2.2 and Country
+    train −2.0; drum presets now sit around −14 LUFS integrated (streaming loudness). Presets without drums are
+    unchanged. A shorter release barely helps (10 ms: still −1.5 on Clav funk) and grits up bass.
   - Slow-attack sounds (strings, pad) on short-note patterns barely sound (measured
     ~−30): don't pair them in presets.
   - **When adding a sound, drum voice or preset, measure it the same way** (rebuild the
     script if needed; it isn't in the repo) rather than eyeballing levels.
 - **Every chord plays at the same loudness** regardless of note count: per-note
-  velocity = accent × 1/√(notes struck together) (`chordVelocity`), with a limiter as
-  a safety net. MIDI velocities use the accent only.
+  velocity = accent × 1/√(notes struck together) (`chordVelocity`), with the master limiter
+  as the safety net. MIDI velocities use the accent only.
 ### Undo/redo (`src/history.ts`)
 
 Buttons plus ⌘Z / ⇧⌘Z (Ctrl+Z / Ctrl+Y). The undoable document is the **Song** (`src/song.ts`): key, scale,
@@ -725,9 +735,11 @@ as intended). Playhead and play state are not saved.
   song keeps playing). `bouncePlan` (pure, tested) turns segments into notes, drum hits and level moves in
   seconds, plus `BOUNCE_TAIL` (2 s) so the last chord rings out; `renderAudio` plays it on a graph of its own
   (`makeGraph`, a synth per sound via `ownSynths`, shared with `previewSession`, the kit, `setPartLevels` at each
-  block start) in an offline audio context at 44.1 kHz stereo; the limiter stays; no metronome. `renderedWav` cuts
-  the silent end (never before the last bar, so the file starts on bar 1 and covers every bar) and `encodeWav`
-  writes 24-bit PCM. No MP3 (not worth a library).
+  block start) in an offline audio context at 44.1 kHz stereo; the limiter stays (its worklet module is loaded on
+  the offline context before building); no metronome. `renderedWav` skips the limiter's 5 ms delay at the start
+  (`Rendered.offset`), cuts the silent end (never before the last bar, so the file starts on bar 1 and covers every
+  bar) and `encodeWav` writes 24-bit PCM. No MP3 (not worth a library). The `e2e` export case checks the WAV peaks
+  at or under −1 dBFS and starts with the first chord.
 - **Progress and Cancel**: while it renders, a floating bar (`ExportStatus.tsx`, in `.floating-notices` with the
   key notice, so nothing moves) reads "Rendering My song.wav… 40%" with a progress bar and **Cancel**. One render
   at a time (the audio rows are disabled meanwhile); opening another session cancels it. A failure shows "Couldn't
@@ -740,9 +752,8 @@ as intended). Playhead and play state are not saved.
   "tick", as Tone's own render loop does) 0.1 s past the next pause, so notes are set up just before they sound.
   Measured identical to Tone.Offline's output. A cancelled render is never resumed. This leans on a Tone internal;
   the `e2e` export case renders a real WAV, so a Tone upgrade that breaks it shows there.
-- **Known**: the mix peaks over full scale on drum hits with dense presets (Pop: ~+4 dBFS before clipping). The
-  `Tone.Limiter` keeps Tone's 30 dB soft knee, so it barely limits. Playback clips the same way at the browser's
-  output; the WAV is clipped to match. T28 fixes the master.
+- **Never over −1 dBFS** (T28): playback, previews and the WAV all go through the master limiter (see Instruments
+  → Levels), so dense presets no longer clip on drum hits.
 
 ## Visual design
 
@@ -931,6 +942,11 @@ These were discussed and chosen deliberately; don't "fix" them without asking.
   (Ableton's "make unique"); the other repeats stay linked to the original.
 - **Right-click on a block doesn't switch section; a click does**, so the menu's "Edit this section" means something
   and right-clicking around the song doesn't move the editor.
+- **A lookahead limiter in an AudioWorklet, not Web Audio's compressor, a clipper or quieter presets** (owner's
+  call, T28): `DynamicsCompressorNode` (behind `Tone.Limiter`) has a soft knee, a ratio of at most 20 and automatic
+  makeup gain, so it's never a brickwall (a hard-knee one still peaked +2 dBFS); a clipper crunches kicks; turning
+  every preset down ~5 dB makes everything quieter. The limiter costs some loudness on the busiest presets (see
+  Levels) and 5 ms of playback latency (not compensated; the WAV is).
 - **The saved history stores each section once** (owner's call in T23): plain copies would let one big song fill the
   browser's storage, and full storage silently stops saving.
 
@@ -980,8 +996,14 @@ them up.
     `segmentsEnd`, pure (playback, MIDI and audio export share it).
   - `bounce.ts`: what an audio export plays, in seconds (`bouncePlan`: notes, drum hits, level moves, the tail), pure.
   - `wav.ts`: WAV files (`encodeWav`: 24-bit PCM; `trimTail`; `renderedWav`), pure.
+  - `limiter.ts`: the master limiter's DSP (`createLimiter`: lookahead brickwall, −1 dBFS ceiling), pure and
+    tested, and `limiterWorkletSource` (the AudioWorklet module as text, built from `createLimiter`'s own source:
+    Tone's context wraps worklet modules in a function, so they can't `import`; Tone ships its worklets the same
+    way). `createLimiter` must stay self-contained (only its arguments and globals).
   - `audio.ts`: Tone.js playback of the three parts (a synth per sound in use, drum kit, per-part
-    volume, limiter), one `schedule` for a section or the song, seeking, metronome. The only module touching Web Audio.
+    volume, the master limiter: `makeLimiter`, loaded once per audio context by `loadLimiter`, passing audio straight
+    through until its module is ready), one `schedule` for a section or the song, seeking, metronome. The only module
+    touching Web Audio.
     Previews (`previewChord`, `previewProgression`, `previewSession`: loops, or `passes` times) and `silenceAll`.
     `renderAudio`: the audio export, offline (see Export).
   - `patterns.ts`: chord/bass/drum patterns and `renderTrack` (all notes played), pure.

@@ -71,8 +71,12 @@ export function trimTail(channels: Float32Array[], minFrames: number, threshold 
   return channels.map((channel) => channel.subarray(0, length))
 }
 
-/** A finished render as a WAV file: its channels, the silent end cut (never before `end`, the last bar, in seconds). */
-export function renderedWav({ buffer, end }: { buffer: Pick<AudioBuffer, 'numberOfChannels' | 'sampleRate' | 'getChannelData'>; end: number }): Uint8Array {
-  const channels = Array.from({ length: buffer.numberOfChannels }, (_, i) => buffer.getChannelData(i))
+/**
+ * A finished render as a WAV file: its channels from frame `offset` on (the limiter's lookahead
+ * delay, so the file starts exactly on bar 1), the silent end cut (never before `end`, the last
+ * bar, in seconds after the offset).
+ */
+export function renderedWav({ buffer, end, offset = 0 }: { buffer: Pick<AudioBuffer, 'numberOfChannels' | 'sampleRate' | 'getChannelData'>; end: number; offset?: number }): Uint8Array {
+  const channels = Array.from({ length: buffer.numberOfChannels }, (_, i) => buffer.getChannelData(i).subarray(offset))
   return encodeWav(trimTail(channels, Math.round(end * buffer.sampleRate)), buffer.sampleRate)
 }

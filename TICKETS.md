@@ -4,7 +4,8 @@ Living, ordered backlog. One ticket per session: `/clear` → `/start Tn` → wo
 session updates this file and picks the next ticket, so each new session starts with a small, clear context.
 Rules: `.claude/skills/wrap/SKILL.md`. Capture ideas any time with `/ticket`.
 
-**Next:** T28 — The mix clips on drum hits (Opus · high · plan on). If the `e2e` CI job is red, fix that first.
+**Next:** T29 — Scroll the picked genre/folder chip into view on phones (Sonnet · low · plan off). First listen to T28's
+limiter (see its Done line); if busy presets sound too quiet, `/ticket` a rebalance and do that instead.
 
 ## In progress
 
@@ -85,28 +86,24 @@ Agent's calls the owner accepted (in the proposal):
   The editor never jumps while the song plays: the chord track shows its playhead only while the edited section
   is the one sounding.
 
-### T28 — The mix clips on drum hits (a real limiter)
+### T29 — Picked genre/folder chip scrolls into view on phones
 
-- **Status:** ready (owner's call on the approach; it changes how playback sounds)
-- **Session:** Opus · high effort · plan mode on (audio engine, measured levels)
-- **Goal:** Playback and the WAV export never go over full scale, without changing the measured balance between
-  parts or the overall loudness noticeably.
+- **Status:** ready
+- **Session:** Sonnet · low effort · plan mode off (small UI fix, well specified)
+- **Goal:** On phones the progression browser's genres and the sessions window's views are a sideways-scrolling
+  row of chips; the chip that's picked (by tapping one half off screen, or the view a window opens on) should
+  be fully visible.
 - **Done when:**
-  - [ ] An offline render of dense presets (Pop and a few others) peaks at or under −1 dBFS: no clipped samples.
-  - [ ] Loudness (the LUFS-style measure in `AGENTS.md`, Instruments → Levels) moves by under ~0.5 dB, or the
-        presets' `mix` is re-measured to keep the targets.
-  - [ ] `AGENTS.md` updated (the Export section's "Known" note, Levels).
-- **Context:** found in T26. `makeGraph` in `audio.ts` uses `new Tone.Limiter(-1)`, which is a `Tone.Compressor`
-  (ratio 20, attack 3 ms) that keeps Tone's default **30 dB soft knee**, so above −1 dBFS it barely limits. Measured
-  with Pop (default groove) over 3 minutes: peak 1.64 (~+4.3 dBFS), ~9,000 samples over 1.0, all on drum hits
-  (stems alone: chords 0.73, bass 0.30, drums 0.92). Browsers clip their output at ±1, so playback distorts there
-  too; `encodeWav` clips the same way. Tried a hard knee (`Tone.Compressor({ threshold: -1, ratio: 20, knee: 0,
-  attack: 0.003, release: 0.01 })`): peak 1.28, about +0.3 dB louder overall (the Web Audio compressor's automatic
-  makeup gain); reverted. Options: a real brickwall (a `WaveShaper` soft clip after the compressor, or lower
-  threshold + output trim to cancel the makeup gain), or lowering every preset's `mix` a few dB, or both. Measure
-  with `renderAudio` (it renders the real graph offline in headless Chrome; the T26 spike drove it with
-  playwright-core against the dev server, importing Tone from the same versioned URL as `audio.ts`). Owner
-  listens: no crunch on kicks, nothing quieter or duller.
+  - [ ] Picking a genre chip that's partly off screen scrolls the row so it's fully in view (smoothly, only the
+        chip row scrolls, never the page); same for the sessions window's view/folder chips.
+  - [ ] Opening either window on a view that's off screen shows it.
+  - [ ] An `e2e` case at 375px: tap the last genre chip, check its box is inside the row's box.
+- **Context:** chips are `button.session-view` with `aria-current` in `ProgressionBrowser.tsx` (~line 216, state
+  `genre`) and in `SessionBrowser.tsx` (`nav.session-sidebar`, ~line 592); the phone layout is the `@media
+  (max-width: 600px)` block at the end of `index.css`. `SessionBrowser` already does
+  `scrollIntoView({ block: 'nearest' })` for a flashed row (~line 204): use `{ block: 'nearest', inline:
+  'nearest' }` in an effect keyed on the current view, so desktop (a vertical list) is unaffected. Check the
+  `e2e` width cases still pass (no sideways page scroll).
 
 ## Backlog
 
@@ -124,13 +121,12 @@ Agent's calls the owner accepted (in the proposal):
 - Per-clip pattern overrides, drum fills, more drum kits, humanize (timing/velocity).
 - Should a new empty spot open on Ideas even when the sticky tab is Notes? (Owner's call; today the tab is
   sticky everywhere. Agent's view: keep one rule; an empty spot's Notes tab still works, by clicking keys.)
-- Progression browser on phones: picking a genre chip that's scrolled off to the right doesn't scroll it into view
-  (the sessions window's folder chips behave the same). Small `scrollIntoView` on the active chip.
-- The production bundle is ~680 kB (Tone.js); Vite warns about chunks over 500 kB. Lazy-loading Tone on the
+- The production bundle is ~745 kB (Tone.js); Vite warns about chunks over 500 kB. Lazy-loading Tone on the
   first user gesture would halve the first load, if load time ever matters.
 
 ## Done
 
+- T28 — A real master limiter — 2026-11-17 — lookahead brickwall in an AudioWorklet (`limiter.ts`: pure `createLimiter`, 5 ms lookahead, 50 ms release, −1 dBFS ceiling by construction; the worklet is built from its source text, `limiterWorkletSource`, since Tone's context can't load modules that import); playback, previews and WAV all go through it, the WAV skips its 5 ms delay (`Rendered.offset`); e2e checks the WAV peak. Measured on all 64 presets: peaks were +0.4…+6 dBFS, now exactly −1.00 with no sample over; loudness median −0.55 dB, Pop −0.7, worst Clav funk −2.2 / Country train −2.0 (busy presets sit ~−14 LUFS; presets left as they were, owner to judge). Deviation: no separate worklet file. Owner to listen: Pop, Clav funk, Country train for crunch or pumping on kicks, and whether anything sounds quieter or duller; a WAV vs playback.
 - T26 — Export audio (WAV) — 2026-11-17 — ⤓ Export menu (Audio (WAV) | MIDI, whole song / this section, mix or stems; parts that are off disabled; files named after the session, `exportFileName`); `renderAudio` renders offline in 1 s slices driving Tone's clock (`bouncePlan` pure, 3 min in ~7–11 s; Tone.Offline was quadratic, ~75 s), with a floating progress bar and Cancel; `wav.ts` 24-bit encoder, tail trimmed never before the last bar; e2e downloads a WAV and cancels one. Deviations: not Tone.Offline (speed, progress, cancel); MIDI files renamed after the session too. Also fixed the details hint's missing space. Found: the mix clips on drum hits (T28). Owner to listen: WAV matches playback (levels, swing, section sound switches), stems sum to the mix, Ableton import.
 - T25 — Song MIDI, sessions window, phones — 2026-11-17 — `songMidi` (renderSegments, a marker per block) with a Whole song | This section menu; sessions-window ▶ plays the whole song (`previewSession` takes segments: synth per sound, level ramps) and the row lists its parts; e2e checks an arranged song at ten widths. Owner to check: song MIDI in Ableton (one arrangement, locators); hearing a song session (sound switches between sections). Not looked at in the browser pane (e2e only).
 - T24 — Song timeline and song playback — 2026-11-17 — Song panel (`SongPanel.tsx`, `songOpen`): chips + ▶ Song + length in its bar, the song timeline in its body (blocks back to back, linked repeats outlined, drag chips in / blocks around with labels, ⌘D, Delete, ←/→, ⌥←/→, right-click menu; `useBlockDrag`, arrangement edits in `song.ts`); one transport with `playScope` (section or song), the chord track hides its playhead while another section sounds; audio plays segments (`segments.ts`) with one synth per sound and level ramps at block starts. Deviations: one `schedule` instead of `scheduleSong`; a block's "Make a new section from this" makes that block unique; seeking the other scope's ruler while playing doesn't switch playback. Also: T27 dropped (owner: chord details stay under Instruments), help text's stale idea-▶ line fixed. Owner to listen: section sound switches, no stuck notes, seeking mid-song, editing while the song plays.

@@ -3,6 +3,7 @@ import type { Chord } from './chord'
 import { DEFAULT_GROOVE, type GrooveSettings } from './grooves'
 import { bassNoteFor, chordPartVoicing, type DrumVoice, type NoteEvent } from './patterns'
 import { bouncePlan, type BounceOptions } from './bounce'
+import { limiterLatency, limiterWorkletSource } from './limiter'
 import { audible, renderSegments, segmentAt, segmentsEnd, type Segment, type SegmentNotes } from './segments'
 import { bassSound, chordSound, cutoffHz, DRUM_TRIM_DB, partDb, type Instrument } from './sound'
 import { chordTimes, metronomeClicks, TICKS_PER_BEAT, type ClickAccent, type Clip, type TimeSignature } from './timeline'
@@ -10,7 +11,7 @@ import { chordVelocity } from './voicing'
 
 /**
  * Playback with Tone.js: the only module touching Web Audio. Three parts, each into its
- * own volume, then a limiter (a safety net for dense chords):
+ * own volume, then the master limiter (a lookahead brickwall at −1 dBFS, limiter.ts):
  *   chords: PolySynth per sound -> its trim -> low-pass filter (brightness) -> volume
  *   bass:   PolySynth of MonoSynths per sound -> its trim -> volume
  *   drums:  synthesized kit -> volume
@@ -115,13 +116,84 @@ export function makeKit(out: Tone.InputNode): Kit {
   }
 }
 
-/** The three parts' chains into a limiter and a master gain (synths are added separately). */
+/** The limiter's worklet module, as a Blob URL (made once). */
+let limiterUrl: string | null = null
+/** Whether the limiter's worklet module loaded, per audio context (the main one, each export's offline one). */
+const limiterLoads = new WeakMap<object, Promise<boolean>>()
+/** Contexts the module is loaded on: their graphs get the limiter right away. */
+const limiterReady = new WeakSet<object>()
+
+/**
+ * Load the limiter's AudioWorklet module on a context, once. Not Tone's addAudioWorkletModule:
+ * it keeps only one module per context. If it can't load (no AudioWorklet), audio plays unlimited.
+ */
+function loadLimiter(ctx: Tone.BaseContext): Promise<boolean> {
+  const raw = ctx.rawContext
+  let load = limiterLoads.get(raw)
+  if (!load) {
+    limiterUrl ??= URL.createObjectURL(new Blob([limiterWorkletSource()], { type: 'text/javascript' }))
+    load = Promise.resolve(raw.audioWorklet?.addModule(limiterUrl)).then(
+      () => {
+        if (!raw.audioWorklet) return false
+        limiterReady.add(raw)
+        return true
+      },
+      (error: unknown) => {
+        console.warn('The limiter could not load; audio plays without it.', error)
+        return false
+      },
+    )
+    limiterLoads.set(raw, load)
+  }
+  return load
+}
+
+/**
+ * The master limiter (limiter.ts) in front of `out`: connect into `input`. Until its module has
+ * loaded on this context (a moment after the first graph is made, long before anyone can press
+ * Play) audio passes straight through, then the limiter is put in.
+ */
+function makeLimiter(out: Tone.Gain) {
+  const ctx = Tone.getContext()
+  const input = new Tone.Gain(1)
+  let node: AudioWorkletNode | null = null
+  let disposed = false
+  const insert = () => {
+    if (disposed) return
+    node = ctx.createAudioWorkletNode('limiter', {
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
+      outputChannelCount: [2],
+      channelCount: 2,
+      channelCountMode: 'explicit',
+    })
+    input.disconnect()
+    Tone.connect(input, node)
+    Tone.connect(node, out)
+  }
+  if (limiterReady.has(ctx.rawContext)) insert()
+  else {
+    input.connect(out)
+    void loadLimiter(ctx).then((loaded) => loaded && insert())
+  }
+  return {
+    input,
+    dispose() {
+      disposed = true
+      input.dispose()
+      node?.disconnect()
+      node?.port.postMessage('stop')
+    },
+  }
+}
+
+/** The three parts' chains into the limiter and a master gain (synths are added separately). */
 function makeGraph(brightness: number): Graph {
   const out = new Tone.Gain(1).toDestination()
-  const limiter = new Tone.Limiter(-1).connect(out)
-  const chordVolume = new Tone.Volume().connect(limiter)
-  const bassVolume = new Tone.Volume().connect(limiter)
-  const drumVolume = new Tone.Volume().connect(limiter)
+  const limiter = makeLimiter(out)
+  const chordVolume = new Tone.Volume().connect(limiter.input)
+  const bassVolume = new Tone.Volume().connect(limiter.input)
+  const drumVolume = new Tone.Volume().connect(limiter.input)
   const chordFilter = new Tone.Filter({ type: 'lowpass', frequency: cutoffHz(brightness), rolloff: -24 }).connect(chordVolume)
   const kit = makeKit(drumVolume)
   return {
@@ -466,14 +538,18 @@ const RENDER_SLICE = 1
 /** How far Tone's clock runs ahead of the render, so every note is set up before the render reaches it. */
 const RENDER_LEAD = 0.1
 
-/** A finished export: the audio, and where the song's last bar ends (seconds; the rest is the ring-out). */
-export type Rendered = { buffer: AudioBuffer; end: number }
+/**
+ * A finished export: the audio, where the song's last bar ends (seconds from the start of the
+ * music; the rest is the ring-out) and how many frames at the start to skip (the limiter's
+ * lookahead delays everything by that much).
+ */
+export type Rendered = { buffer: AudioBuffer; end: number; offset: number }
 
 /**
  * Render what plays to audio, faster than real time, without touching what's playing: the
  * same notes (bouncePlan), sounds, levels and level moves at each block's start as playback,
  * on a graph of its own in an offline audio context, plus a tail so the last chord rings out.
- * No metronome; the limiter stays.
+ * No metronome; the limiter stays (its lookahead delay is reported as `offset`, for the file to skip).
  *
  * Why not Tone.Offline: it plays every note of the song into the synths before rendering a
  * single sample, so each synth carries the whole song's automation and rendering slows down
@@ -484,11 +560,14 @@ export type Rendered = { buffer: AudioBuffer; end: number }
  * This drives Tone's OfflineContext clock (`_currentTime` + "tick") the way its own render
  * loop does; e2e renders a WAV, so a Tone upgrade that changes it shows up there.
  */
-export function renderAudio(options: BounceOptions, { onProgress, signal }: { onProgress?: (fraction: number) => void; signal?: AbortSignal } = {}): Promise<Rendered> {
+export async function renderAudio(options: BounceOptions, { onProgress, signal }: { onProgress?: (fraction: number) => void; signal?: AbortSignal } = {}): Promise<Rendered> {
   const plan = bouncePlan(options)
   const segs = options.segments
-  const native = new OfflineAudioContext(2, Math.ceil(plan.seconds * RENDER_RATE), RENDER_RATE)
+  const latency = limiterLatency(RENDER_RATE)
+  const native = new OfflineAudioContext(2, Math.ceil(plan.seconds * RENDER_RATE) + latency, RENDER_RATE)
   const ctx = new Tone.OfflineContext(native)
+  const limited = await loadLimiter(ctx)
+  if (signal?.aborted) throw new DOMException('The render was cancelled.', 'AbortError')
   const original = Tone.getContext()
   // Everything is built in the offline context, synchronously (no await), so nothing else
   // ever sees it as the current context.
@@ -542,7 +621,7 @@ export function renderAudio(options: BounceOptions, { onProgress, signal }: { on
       signal?.removeEventListener('abort', cancel)
       if (cancelled) return
       onProgress?.(1)
-      resolve({ buffer, end: plan.end })
+      resolve({ buffer, end: plan.end, offset: limited ? latency : 0 })
     }, reject)
   })
 }

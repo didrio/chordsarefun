@@ -77,4 +77,14 @@ describe('renderedWav', () => {
     expect(view(renderedWav({ buffer, end: 2 })).getUint32(40, true)).toBe(20 * 6)
     expect(view(renderedWav({ buffer, end: 2 })).getUint32(24, true)).toBe(rate)
   })
+
+  it('skips the limiter delay at the start, so the file starts on bar 1', () => {
+    const rate = 10
+    const left = new Float32Array(30).fill(0.5, 3, 4) // the first hit, 3 frames late
+    const buffer = { numberOfChannels: 1, sampleRate: rate, getChannelData: () => left }
+    const wav = renderedWav({ buffer, end: 1, offset: 3 })
+    const view = new DataView(wav.buffer)
+    expect(view.getUint32(40, true)).toBe(10 * 3) // one bar after the offset, 3 bytes a frame
+    expect(view.getUint8(44) | (view.getUint8(45) << 8) | (view.getUint8(46) << 16)).toBe(Math.round(0.5 * 0x7fffff)) // frame 0 is the hit
+  })
 })

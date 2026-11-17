@@ -477,6 +477,8 @@ describe('export', () => {
     bits: bytes.readUInt16LE(34),
     seconds: bytes.readUInt32LE(40) / (bytes.readUInt16LE(32) * bytes.readUInt32LE(24)),
   })
+  /** The 24-bit samples (−1…1), interleaved. */
+  const samples = (bytes: Buffer) => Array.from({ length: (bytes.length - 44) / 3 }, (_, i) => bytes.readIntLE(44 + i * 3, 3) / 0x800000)
 
   it('renders the mix to a WAV named after the session, and MIDI of one part', async () => {
     const p = await start(full())
@@ -485,11 +487,19 @@ describe('export', () => {
     const [download] = await Promise.all([p.waitForEvent('download'), p.getByRole('menuitem', { name: /All parts that are on/ }).click()])
     expect(download.suggestedFilename()).toBe('Untitled session.wav')
     const { readFile } = await import('node:fs/promises')
-    const wav = readWav(await readFile(await download.path()))
+    const bytes = await readFile(await download.path())
+    const wav = readWav(bytes)
     expect(wav).toMatchObject({ riff: 'RIFFWAVE', channels: 2, rate: 44100, bits: 24 })
     // 4 bars of 4/4 at 120 BPM = 8 s, plus at most 2 s of ring-out.
     expect(wav.seconds).toBeGreaterThanOrEqual(8)
     expect(wav.seconds).toBeLessThanOrEqual(10)
+    // The limiter (an AudioWorklet in the offline render) keeps every sample at or under −1 dBFS
+    // (Pop peaked at +3 dBFS without it), and its 5 ms delay is cut: the first chord starts the file.
+    const audio = samples(bytes)
+    const peak = audio.reduce((m, v) => Math.max(m, Math.abs(v)), 0)
+    expect(peak).toBeLessThanOrEqual(10 ** (-1 / 20) + 1e-6)
+    expect(peak).toBeGreaterThan(0.5)
+    expect(audio.findIndex((v) => Math.abs(v) > 0.001)).toBeLessThan(2 * 44) // within 1 ms (stereo frames)
     expect(await p.locator('.export-status').count()).toBe(0)
 
     await p.locator('.export-menu .dropdown-trigger').click()
