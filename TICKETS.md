@@ -4,8 +4,8 @@ Living, ordered backlog. One ticket per session: `/clear` → `/start Tn` → wo
 session updates this file and picks the next ticket, so each new session starts with a small, clear context.
 Rules: `.claude/skills/wrap/SKILL.md`. Capture ideas any time with `/ticket`.
 
-**Next:** T29 — Scroll the picked genre/folder chip into view on phones (Sonnet · low · plan off). First listen to T28's
-limiter (see its Done line); if busy presets sound too quiet, `/ticket` a rebalance and do that instead.
+**Next:** nothing queued. First listen to T28's limiter (see its Done line); if busy presets sound too quiet,
+`/ticket` a rebalance. Otherwise pick from the Backlog and `/ticket` it into Up next.
 
 ## In progress
 
@@ -86,25 +86,6 @@ Agent's calls the owner accepted (in the proposal):
   The editor never jumps while the song plays: the chord track shows its playhead only while the edited section
   is the one sounding.
 
-### T29 — Picked genre/folder chip scrolls into view on phones
-
-- **Status:** ready
-- **Session:** Sonnet · low effort · plan mode off (small UI fix, well specified)
-- **Goal:** On phones the progression browser's genres and the sessions window's views are a sideways-scrolling
-  row of chips; the chip that's picked (by tapping one half off screen, or the view a window opens on) should
-  be fully visible.
-- **Done when:**
-  - [ ] Picking a genre chip that's partly off screen scrolls the row so it's fully in view (smoothly, only the
-        chip row scrolls, never the page); same for the sessions window's view/folder chips.
-  - [ ] Opening either window on a view that's off screen shows it.
-  - [ ] An `e2e` case at 375px: tap the last genre chip, check its box is inside the row's box.
-- **Context:** chips are `button.session-view` with `aria-current` in `ProgressionBrowser.tsx` (~line 216, state
-  `genre`) and in `SessionBrowser.tsx` (`nav.session-sidebar`, ~line 592); the phone layout is the `@media
-  (max-width: 600px)` block at the end of `index.css`. `SessionBrowser` already does
-  `scrollIntoView({ block: 'nearest' })` for a flashed row (~line 204): use `{ block: 'nearest', inline:
-  'nearest' }` in an effect keyed on the current view, so desktop (a vertical list) is unaffected. Check the
-  `e2e` width cases still pass (no sideways page scroll).
-
 ## Backlog
 
 - Sessions window: drag rows onto folders (today: the row's ⋯ → Move to). Maybe an undo toast instead of the
@@ -126,6 +107,7 @@ Agent's calls the owner accepted (in the proposal):
 
 ## Done
 
+- T29 — Picked chip scrolls into view on phones — 2026-11-17 — genre chip (progression browser) and view chip (sessions window) scroll fully into view when picked or on open (`scrollIntoView` effects keyed on genre/view); e2e at 375px. Not looked at in the browser pane.
 - T28 — A real master limiter — 2026-11-17 — lookahead brickwall in an AudioWorklet (`limiter.ts`: pure `createLimiter`, 5 ms lookahead, 50 ms release, −1 dBFS ceiling by construction; the worklet is built from its source text, `limiterWorkletSource`, since Tone's context can't load modules that import); playback, previews and WAV all go through it, the WAV skips its 5 ms delay (`Rendered.offset`); e2e checks the WAV peak. Measured on all 64 presets: peaks were +0.4…+6 dBFS, now exactly −1.00 with no sample over; loudness median −0.55 dB, Pop −0.7, worst Clav funk −2.2 / Country train −2.0 (busy presets sit ~−14 LUFS; presets left as they were, owner to judge). Deviation: no separate worklet file. Owner to listen: Pop, Clav funk, Country train for crunch or pumping on kicks, and whether anything sounds quieter or duller; a WAV vs playback.
 - T26 — Export audio (WAV) — 2026-11-17 — ⤓ Export menu (Audio (WAV) | MIDI, whole song / this section, mix or stems; parts that are off disabled; files named after the session, `exportFileName`); `renderAudio` renders offline in 1 s slices driving Tone's clock (`bouncePlan` pure, 3 min in ~7–11 s; Tone.Offline was quadratic, ~75 s), with a floating progress bar and Cancel; `wav.ts` 24-bit encoder, tail trimmed never before the last bar; e2e downloads a WAV and cancels one. Deviations: not Tone.Offline (speed, progress, cancel); MIDI files renamed after the session too. Also fixed the details hint's missing space. Found: the mix clips on drum hits (T28). Owner to listen: WAV matches playback (levels, swing, section sound switches), stems sum to the mix, Ableton import.
 - T25 — Song MIDI, sessions window, phones — 2026-11-17 — `songMidi` (renderSegments, a marker per block) with a Whole song | This section menu; sessions-window ▶ plays the whole song (`previewSession` takes segments: synth per sound, level ramps) and the row lists its parts; e2e checks an arranged song at ten widths. Owner to check: song MIDI in Ableton (one arrangement, locators); hearing a song session (sound switches between sections). Not looked at in the browser pane (e2e only).

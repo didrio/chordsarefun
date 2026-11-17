@@ -54,6 +54,12 @@ export function ProgressionBrowser({ tonic, groove, bpm, onUse, onBeforePreview,
   })
   const dialogRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+  // On phones the genres are a sideways-scrolling row: keep the picked one fully in view.
+  useEffect(() => {
+    dialogRef.current
+      ?.querySelector('.session-sidebar [aria-current="true"]')
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
+  }, [genre])
 
   const rows = searchProgressions(PROGRESSIONS, genre, query, tonic)
   // A selection the search hides isn't acted on.

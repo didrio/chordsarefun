@@ -238,7 +238,7 @@ colors, fit dots and plain-language reasons, always relative to Home.
   the main toolbar, or the empty track's "Start from a progression"): a modal window like the sessions window
   (`Modal.tsx`). ~180 progressions (no two with the same chords in the same mood; a test enforces it), curated
   most common first within each genre (`progressions.ts`), genres ordered most common first. Left: **All** + the
-  9 genres with counts (chips on phones). Head: search (`searchProgressions`: every word must appear in the name,
+  9 genres with counts (chips on phones; the picked chip scrolls fully into view, also on open). Head: search (`searchProgressions`: every word must appear in the name,
   feel, chords in the current key, numerals or preset name; ♭/♯ read as b/#; within the chosen genre, with
   "Search all genres" when nothing matches) and **Hear with: Its instruments | Your instruments** (saved
   globally as `progressionHearWith`; "yours" = the open session's groove and BPM). Rows read plain words first:

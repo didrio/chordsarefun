@@ -198,6 +198,13 @@ function SessionBrowser({ sessions: s, onOpen, onNew, onDuplicate, onBackup, onB
     setHearing({ id, at: -1 })
   }
 
+  // On phones the views are a sideways-scrolling row: keep the current one fully in view.
+  useEffect(() => {
+    dialogRef.current
+      ?.querySelector('.session-sidebar [aria-current="true"]')
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
+  }, [shownView])
+
   // A new copy or import: show it and briefly highlight it.
   useEffect(() => {
     if (!flash) return

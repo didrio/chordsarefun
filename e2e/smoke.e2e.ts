@@ -382,6 +382,22 @@ describe('layout at every width', () => {
   }
 })
 
+describe('phone chip rows', () => {
+  it('scrolls the picked genre chip fully into view', async () => {
+    const p = await start(full())
+    await p.setViewportSize({ width: 375, height: 800 })
+    await p.locator('.progressions-trigger').click()
+    const nav = p.locator('.prog-browser .session-sidebar')
+    const last = nav.locator('.session-view').last()
+    await last.click()
+    await p.waitForTimeout(600) // smooth scroll
+    const [row, chip] = [await nav.boundingBox(), await last.boundingBox()]
+    if (!row || !chip) throw new Error('No chip row')
+    expect(chip.x).toBeGreaterThanOrEqual(row.x - 1)
+    expect(chip.x + chip.width).toBeLessThanOrEqual(row.x + row.width + 1)
+  })
+})
+
 describe('phone header', () => {
   it('is two rows that never re-wrap: logo + session, then the song button + Export', async () => {
     const p = await start(full())
