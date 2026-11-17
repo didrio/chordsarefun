@@ -4,7 +4,7 @@ Living, ordered backlog. One ticket per session: `/clear` → `/start Tn` → wo
 session updates this file and picks the next ticket, so each new session starts with a small, clear context.
 Rules: `.claude/skills/wrap/SKILL.md`. Capture ideas any time with `/ticket`.
 
-**Next:** nothing queued. The redesign is done; pick from the Backlog or `/ticket` new ideas. If the `e2e` CI job is red, fix that first.
+**Next:** T23 — Sections (Opus · extra high · plan on). It changes the saved data shape, so get the migration right first. If the `e2e` CI job is red, fix that first.
 
 ## In progress
 
@@ -38,6 +38,157 @@ ideas (menus close after one pick, and trying ideas one after another is the cor
 and plays it in place, so the card ▶ goes (reverses T2's decision). Every ticket keeps phones working (the `e2e`
 widths), updates `AGENTS.md` (including the design decisions it reverses) and adds tests next to changed rules.
 T16–T22 are done (the redesign is complete).
+
+### Songs (T23–T25): where it's heading
+
+Agreed with the owner on 2026-11-17. When writing a song you have a chorus and want to try verses and pre-choruses
+against it, hear them in order and export it all. A session becomes a **song**: one or more **sections** (a
+progression with a label: Intro, Verse, Pre-chorus, Chorus…), arranged on a **song timeline**. A session with one
+unnamed section and nothing arranged is exactly today's app; existing users see one slim collapsed bar.
+
+```
+── ▸ Song   [Verse] [Pre-chorus] [Chorus●]  [+ Section ▾]                       [▶ Song] 2:08 ──
+   (open)  1        5        9            17        21           29
+           [ Intro ][ Verse        ][ Pre ][ Chorus     ][ Verse        ][ Chorus     ]   ← song timeline
+1            2            3            4                                  (chord track: the Chorus)
+[ Cm       ][ Eb       ][ Bb       ][ Fm       ]
+── chord details ── / ── ▸ Voicing ── / ── ▸ Instruments (the Chorus's) ──
+```
+
+Owner's decisions:
+- **Shared song-wide**: key, tempo, time signature (the "C minor · 120 BPM · 4/4" button is the song's).
+  **Per section**: chords, length (bars), instruments.
+- **Repeats are linked**: two Chorus blocks are the same Chorus (edit once, every Chorus changes). "Make a new
+  section from this" forks an independent copy ("Chorus 2").
+- **The song area is on top**, between the toolbar and the chord track, collapsed by default (song first, then
+  chords, then one chord).
+- **Three tickets**, not one shot.
+
+Agent's calls the owner accepted (in the proposal):
+- **Model** (`src/song.ts`, new, pure): `Section = { id, name: string | null, clips, bars, groove }`,
+  `Block = { id, section }` (start/length derived, back to back), `Song = { tonic, mode, sig, bpm, sections,
+  arrangement: Block[] }`, the undoable document. **`Track` stays** as "one section seen with the song's shared
+  settings": lenses `sectionTrack(song, id): Track` and `withSectionTrack(song, id, track): Song` (shared fields
+  → song, the rest → section; same object back when nothing changed, like `withMusic`) keep `App.tsx`,
+  `progressionTrack`, `planDrop` etc. unchanged.
+- **One undo history for the whole song.** Undoing an edit in another section switches the editor to it
+  (`changedSection(a, b)`), so undo never changes something off screen.
+- **Storage**: same `track` key, migrated on read (`readHistory` → `migrateSong`: a stored Track becomes a Song
+  with one unnamed section, fixed id `main`, empty arrangement, across the whole history). The edited section
+  is session UI state (new `section` key in `SESSION_KEYS`), not history.
+- **The song timeline is not the chord `Timeline`**: chords live on a fixed length with gaps, resizing and a
+  grid; the song is a variable-length list with none of those. Reuse `selection.ts` (generalized from `Clip` to
+  `{ id, start }`), `ChordMenu`, `Panel`, the drag-label pattern, ruler/playhead CSS, the shortcut table.
+- **One transport, never two things playing**: `playScope: 'section' | 'song'`. Transport Play plays the edited
+  section (as today), **▶ Song** plays the arrangement; starting one stops the other. Space pauses whatever plays,
+  and when stopped resumes the scope used last; Stop returns to that scope's start; Loop applies to either.
+  The editor never jumps while the song plays: the chord track shows its playhead only while the edited section
+  is the one sounding.
+
+### T23 — Sections
+
+- **Status:** ready
+- **Session:** Opus · extra high effort · plan mode on (saved data shape + migration)
+- **Goal:** A session holds several labelled progressions (sections) you can switch between and edit, with key,
+  tempo and meter shared; old sessions open exactly as before.
+- **Done when:**
+  - [ ] `src/song.ts` + `song.test.ts`: types, `DEFAULT_SONG`, `isSong`, `migrateSong` (wraps a stored Track,
+        incl. old `symbol` clips and legacy groove/BPM via `migrateTrack`), the two lenses, add / rename / copy /
+        delete section (never the last one; deleting removes its blocks), labels (Intro, Verse, Pre-chorus,
+        Chorus, Bridge, Breakdown, Drop, Outro, Other…) with auto-numbering ("Verse 2") and a color per label
+        kind, `changedSection`.
+  - [ ] `Workspace` holds a `Song` history (`useHistory<Song>` on the `track` key with `migrateSong`) and edits the
+        current section through the lenses; `section` session key (in `SESSION_KEYS`). Switching section clears
+        the selection and inspected chord; a playing section keeps playing, now the new one.
+  - [ ] Song bar above the track (not collapsible yet; T24 adds the body): one chip per section, the edited one
+        lit; chip ▾ / right-click (rename, "Make a new section from this", Delete section); **+ Section ▾** picks a
+        label, makes an empty section with the current one's instruments and length, and switches to it. A lone
+        unnamed section's chip reads "Progression ▾".
+  - [ ] Shared vs per section: the song popover's Length is the edited section's ("Length of Chorus" with 2+
+        sections); a time signature change rescales every section; `HomeNotice`'s move and key detection /
+        suggestion cover every section's chords; progression browser and Random act on the edited section, and
+        "Use chords" changes the song's mood only when no other section has chords; a progression's tempo sets
+        the song's.
+  - [ ] Sessions: `hasWork` / `trackHasWork`, `sessionKey`, `sessionMusic` (plays the edited section for now),
+        and blank-session cleanup read songs.
+  - [ ] Tests: migration over a stored history (old sessions open unchanged), lenses, no-op edits add no undo
+        step. e2e: make Verse + Chorus, switch, edit each, undo across sections switches back.
+  - [ ] `AGENTS.md`: core model (song, sections), Undo, Sessions/Persistence, Visual design (Song bar), the
+        Songs design decisions above.
+- **Context:** `src/track.ts` (`Track`, `withMusic`, `migrateTrack`), `src/history.ts` (`readHistory` calls
+  `migrate` with one argument), `src/session.ts` (`SESSION_KEYS`, `trackHistory`, `trackHasWork`, `sessionMusic`,
+  `legacyMusic`), `App.tsx` (`Workspace`: `track = useHistory(...)`, `withClips`, `setMusic`, `changeHome`,
+  `moveChordsHome`, `changeBars`, `changeSig`, `takeProgression`, `homeSuggestion`/`detectedKeys`),
+  `progressions.ts` (`progressionTrack` sets `mode`), `SongMenu.tsx`/`OptionsMenu.tsx` (Length row).
+
+### T24 — Song timeline and song playback
+
+- **Status:** blocked — needs T23
+- **Session:** Opus · high effort · plan mode on (audio scheduling)
+- **Goal:** Arrange sections into a whole song and hear it, each section with its own instruments.
+- **Done when:**
+  - [ ] The Song bar becomes a collapsible `Panel` (`songOpen` per session, closed by default) whose body is the
+        song timeline: blocks back to back, widths proportional to bars, a bar ruler with its own playhead and
+        seek, each block showing the section's name, bars and chord names; blocks of the edited section outlined
+        (linked repeats visible). Empty: "Drag sections here, or [Add every section in order]".
+  - [ ] Pure, tested arrangement edits in `song.ts`: `insertBlocks`, `moveBlocks`, `duplicateBlocks` (linked,
+        right after), `removeBlocks`, block start/length and song length.
+  - [ ] Drag a chip into the timeline (insertion line, "Add Chorus after Verse"); drag blocks to reorder ("Move
+        Chorus before Verse"); multi-select (Shift range, ⌘/Ctrl toggle), ⌘D, Delete (removes from the song, not
+        the section), ←/→, Esc; right-click / ⋯ (`ChordMenu`): Edit this section, Duplicate, Make a new section
+        from this, Remove from song. Clicking a block selects it and makes its section the edited one.
+  - [ ] `scheduleSong` in `audio.ts`: each block rendered with `renderTrack(section.clips, …,
+        arrangementOf(section.groove))` and offset by its start; a transport callback at each block start switches
+        the groove (synths swap only when the sound differs; volumes and brightness ramp); metronome over the whole
+        song; `soundAt` applies the groove of the block under the playhead first; edits re-schedule live.
+  - [ ] `playScope` and the transport rules (see "One transport" above); ▶ Song + song length in the Song bar.
+  - [ ] e2e: drag a chip in, reorder, ⌘D, Delete; Song play/pause doesn't move the editor.
+  - [ ] `AGENTS.md`: Song timeline, Transport, Keyboard table and the help tooltip (`HelpTip.tsx`).
+- **Context:** `audio.ts` (`schedule`, `applyGroove`/`setGroove`, `soundAt`, `rendered`), `patterns.ts`
+  (`renderTrack`), `selection.ts`, `ChordMenu.tsx`, `Panel.tsx`, `useChordDrag.ts` (pattern only: its drop rules
+  are tick-based; a small block-drag hook is simpler), `dropLabel.ts`, `shortcuts.ts`. Owner listens: section
+  changes switch sounds cleanly, no stuck notes, seeking into the middle of a song.
+
+### T25 — Song MIDI, sessions window, phones, polish
+
+- **Status:** blocked — needs T24
+- **Session:** Sonnet · medium effort · plan mode off
+- **Goal:** The song leaves the app (MIDI) and reads well everywhere (sessions window, phones).
+- **Done when:**
+  - [ ] Song MIDI: blocks' renders concatenated, section names as MIDI markers; the MIDI menu offers Whole song /
+        This section once the song has blocks.
+  - [ ] Sessions window: ▶ plays the song when it has blocks (else the edited section); the row lists section
+        names ("Intro · Verse · Chorus") for songs, chords otherwise, the sounding one lit.
+  - [ ] Phones: chips scroll sideways, the timeline scrolls; no sideways page scroll at the e2e widths.
+  - [ ] `AGENTS.md`: Export, Sessions, Phones; design decisions (linked repeats, shared key/tempo/meter, why the
+        song timeline isn't the chord timeline) checked against what shipped.
+- **Context:** `midi.ts` (`trackMidi`), `MidiMenu.tsx`, `session.ts` (`sessionMusic`), `SessionBrowser.tsx`,
+  `audio.ts` (`previewSession`: per-block grooves need one rig per distinct sound, or reuse `scheduleSong`'s
+  approach), the phone block at the end of `index.css`, `e2e/smoke.e2e.ts`. Owner checks: the song MIDI imports
+  into Ableton as one arrangement.
+
+### T26 — Export audio (WAV)
+
+- **Status:** blocked — needs T25 (works for a single progression too, so it could ship earlier for sections only
+  if wanted; after T25 it exports whole songs)
+- **Session:** Opus · high effort · plan mode on (audio engine)
+- **Goal:** Download what you hear as a WAV file, so a song sketch can go straight into a DAW or be shared, with
+  no server: rendered in the browser.
+- **Done when:**
+  - [ ] `renderAudio(music)` in `audio.ts`: `Tone.Offline` builds its own graph (`makeGraph`, `makePoly`,
+        `makeKit`, `setLevels`, as `previewSession` does) and schedules every note from `renderTrack` at absolute
+        times, plus a ~2 s tail so the last chord rings out. Songs: one rig per distinct sound, switched at block
+        starts (the same rule as `scheduleSong`). No metronome. The limiter at −1 dBFS stays as the safety net.
+  - [ ] Pure WAV encoder (`wav.ts` + test: header fields, 24-bit PCM, stereo, 44.1 kHz) from an `AudioBuffer`'s
+        channels; no dependency. MP3 isn't worth a library for now.
+  - [ ] An "⤓ Export" menu: the MIDI menu becomes Export, with Audio (WAV) next to MIDI, the same choices (whole
+        song / this section; all parts or one part alone as stems). Rendering shows progress ("Rendering… 40%")
+        and can be cancelled; the file is `<session name>.wav`.
+  - [ ] Unit test the scheduling part (events and times) without Web Audio; `AGENTS.md` Export section updated.
+- **Context:** `audio.ts` (`makeGraph`, `previewSession` is the model to follow), `patterns.ts` (`renderTrack`),
+  `midi.ts`/`MidiMenu.tsx` (menu and part choices). Size: a 3-minute stereo 24-bit WAV is ~48 MB in memory,
+  which is fine; very long songs may take a few seconds to render. Owner listens: the WAV matches playback
+  (levels, swing, sound switches between sections) and imports cleanly into Ableton.
 
 ## Backlog
 
