@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEve
 import { planImport, readBackup } from '../backup'
 import { previewSession, stopPreview } from '../music/audio'
 import { scrollMotion } from '../platform'
+import { formatDuration } from '../song'
 import { PlayIcon, StopIcon } from './Icons'
 import { Modal } from './Modal'
 import {
@@ -186,13 +187,17 @@ function SessionBrowser({ sessions: s, onOpen, onNew, onDuplicate, onBackup, onB
     [],
   )
 
-  /** ▶: hear a session on a loop exactly as its Play plays it: its tempo, groove and sounds (■ stops it). */
+  /**
+   * ▶: hear a session exactly as its Play plays it: its tempo, groove and sounds (■ stops it). A song
+   * plays once from the top, start to finish; a single progression loops (handy to sing over).
+   */
   const hear = (id: string) => {
     if (hearing?.id === id) return stopPreview(true)
     const m = music.get(id)
     if (!m) return
     onBeforePreview()
     void previewSession(m, {
+      passes: m.segments ? 1 : Infinity,
       onChord: (at) => setHearing((h) => (h?.id === id ? { ...h, at } : h)),
       onEnd: () => setHearing((h) => (h?.id === id ? null : h)),
     })
@@ -338,10 +343,13 @@ function SessionBrowser({ sessions: s, onOpen, onNew, onDuplicate, onBackup, onB
     const heardMusic = music.get(m.id)
     const names = heardMusic?.names
     // Its chords, or for a song its parts (lit one by one while heard), then key · folder · edited, always on the right.
+    const isSong = !!heardMusic?.segments
+    const length = heardMusic && isSong ? formatDuration(heardMusic.totalTicks, heardMusic.bpm) : null
     const chords = names ? (
-      <span className={heardMusic?.segments ? 'session-chords parts' : 'session-chords'} aria-live="off">
+      <span className={isSong ? 'session-chords parts' : 'session-chords'} aria-live="off">
+        {length && <span className="session-kind">Song · {length}</span>}
         {names.map((n, i) => (
-          <span key={i} className={i === heard?.at ? 'now' : undefined}>
+          <span key={i} className={i === heard?.at ? 'name now' : 'name'}>
             {n}
           </span>
         ))}
@@ -404,9 +412,15 @@ function SessionBrowser({ sessions: s, onOpen, onNew, onDuplicate, onBackup, onB
           className={hearing?.id === m.id ? 'session-hear playing' : 'session-hear'}
           aria-label={hearing?.id === m.id ? `Stop hearing ${m.name}` : `Hear ${m.name}`}
           title={
-            hearing?.id === m.id ? 'Stop' : music.get(m.id) ? 'Hear it on a loop, with its own tempo and sounds' : 'No chords to hear yet'
+            hearing?.id === m.id
+              ? 'Stop'
+              : !heardMusic
+                ? 'No chords to hear yet'
+                : length
+                  ? `Hear the whole song (${length}), with its own tempo and sounds`
+                  : 'Hear its chords on a loop, with its own tempo and sounds'
           }
-          disabled={!music.get(m.id)}
+          disabled={!heardMusic}
           onClick={() => hear(m.id)}
         >
           {hearing?.id === m.id ? <StopIcon /> : <PlayIcon />}

@@ -19,6 +19,8 @@ const KEYS: { title: string; rows: [string, string][] }[] = [
       ['Shift + click', 'Select everything from the last chord to this one'],
       ['⌘ / Ctrl + click', 'Add or remove one chord from the selection'],
       ['⌘ / Ctrl + A', 'Select all chords'],
+      ['Tab · ← → · Enter', 'From the keyboard: Tab to the chords (or the song), ← → to move, Enter to select'],
+      ['Shift + F10', 'Actions on the focused chord or part (the menu)'],
       ['Right-click · ⋯', 'Actions on a chord: ideas, inversion, octave, duplicate, clear, delete'],
       ['Esc', 'Deselect'],
     ],

@@ -39,6 +39,22 @@
   outline-offset: 2px;
 }
 
+/* Chords and song blocks sit 2px apart inside a track that clips: the ring hugs them instead. */
+.clip:focus-visible,
+.song-block:focus-visible {
+  outline-offset: 0;
+}
+
+/* Read by screen readers, not shown (the live region that says what just happened). */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* People who ask their system for less motion get instant changes instead of transitions. */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -2618,8 +2634,16 @@ button.session-hear:disabled {
   flex: none;
 }
 
-/* A song lists its parts ("Intro · Verse · Chorus"). */
-.session-chords.parts > span:not(:last-child)::after {
+/* A song says so, with its length ("Song · 2:08"), then lists its parts ("Intro · Verse · Chorus"). */
+.session-kind {
+  flex: none;
+  padding: 0 0.35rem;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.session-chords.parts > .name:not(:last-child)::after {
   content: ' ·';
   color: var(--muted);
 }

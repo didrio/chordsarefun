@@ -631,11 +631,25 @@ browser.
 | ⌘D / Ctrl+D | Duplicate the selected chords right after them |
 | ⌥← / ⌥→ (Mac) · Ctrl+← / Ctrl+→ | Nudge the selected chords one grid step (into empty space only) |
 | ⌘A / Ctrl+A | Select all |
+| Tab · Enter | Reach the chord track (or the song lane): one Tab stop each · select the focused chord/part, as a click |
+| Shift+F10 (or the Menu key) | The chord menu for the focused chord or part |
 | ⌘Z · ⇧⌘Z / Ctrl+Y | Undo · redo |
 
 With **blocks of the song selected** instead of chords: ← / → previous/next block (selected and edited, like a
 click), ⌘D / Ctrl+D linked copies right after them, Delete/Backspace out of the song, ⌥← / ⌥→ (Ctrl on
 Windows/Linux) one place earlier/later, ⌘A every block, Esc deselect. ↑/↓ still act on the chords.
+
+**Keyboard and screen readers** (T31): the chord track and the song lane are each **one Tab stop** (a roving
+tabindex: `role="listbox"`, each chord/block a `role="option"` with `aria-selected`; the stop is the inspected
+chord, else the first selected, else the first; for the song, the first selected block, else the first of the
+edited section). With focus on a chord or block, ←/→ step from *it* and focus follows the selection
+(`focusedItem` / `focusItem` in `App`); Enter does what a click does (Shift/⌘ too). Names are read in plain words
+(`clipSpokenName`, `blockSpokenName` in `dropLabel.ts`): "Cm7, bar 1, in key", "Eb, bar 2, beat 3, borrowed from
+C minor", "Empty spot, bar 3", "Chorus, bars 5 to 8". The × and ⋯ inside them are `tabIndex=-1` (Delete and the
+menu do the same). A polite live region (`role="status"`, `.visually-hidden`, `announce` in `App`) says what just
+happened: drops (`doneLabel` of the drag label: "Moved C after Am", "Added Chorus after Verse"), duplicate, nudge,
+delete, clear, inversion/octave ("Cm: higher inversion"), undo/redo. The focus ring on chords and blocks has no
+offset (they sit 2px apart in a track that clips).
 
 The (i) tooltip next to the logo (`HelpTip.tsx`: how it works + every shortcut, shown on hover/focus) lists these; keep it in sync.
 
@@ -661,11 +675,12 @@ The (i) tooltip next to the logo (`HelpTip.tsx`: how it works + every shortcut, 
   opens, F2 renames, Esc closes (or closes a menu/confirm first); Tab stays inside; the app's shortcuts are
   off while it's open (focus that falls out of it is taken back). Folder ⋯: Rename, Delete (its sessions are
   kept, back to no folder).
-- **Hear a session** (the row's ▶, ■ while it plays): a song with blocks plays the **whole song** (`sessionMusic`
-  returns `segments`, and the row lists its parts, "Intro · Verse · Chorus", one per block, each lit as it starts);
-  otherwise it plays the section being edited (or the first with chords) and lists its chords. Either
-  **loops until stopped** (no
-  metronome; handy for singing over a session), exactly as its own Play would: its tempo, time signature, patterns, swing, chord/bass sounds, brightness, mix and parts
+- **Hear a session** (the row's ▶, ■ while it plays): a song with blocks plays the **whole song once**, start to
+  finish, then ■ turns back into ▶ (`sessionMusic` returns `segments`; `previewSession` with `passes: 1`). Its row
+  says so with a **"Song · 2:08" tag** (`formatDuration`) before its parts, "Intro · Verse · Chorus", one per
+  block, each lit as it starts; ▶'s tooltip reads "Hear the whole song (2:08)". Otherwise it plays the section
+  being edited (or the first with chords), lists its chords and **loops until stopped** ("Hear its chords on a
+  loop"; handy for singing over). Either way there's no metronome, and it plays exactly as its own Play would: its tempo, time signature, patterns, swing, chord/bass sounds, brightness, mix and parts
   on/off (`sessionMusic` reads them from the stored track, migrated like the workspace's; `previewSession` in `audio.ts` renders it with
   `renderSegments` on a **separate sound graph**, with a synth per sound in use and the part levels and brightness
   ramped at each block's start (`setPartLevels`), as the main graph does, so the open session's sounds
@@ -903,8 +918,8 @@ The public site is **https://chordsarefun.com** (a Workers custom domain). What'
   switch doesn't mute the app (like any music app; it pauses other audio).
 - **Accessibility basics**: one global `:focus-visible` ring (2px accent; menus draw their own highlight), and
   `prefers-reduced-motion` turns transitions off (`scrollMotion()` in `platform.ts` for `scrollIntoView`). Every
-  button has an accessible name (icon buttons use `aria-label`); keep it that way. Chords and song blocks aren't
-  reachable by keyboard yet (ticketed).
+  button has an accessible name (icon buttons use `aria-label`); keep it that way. Chords and song blocks are
+  reachable by keyboard (T31, see Keyboard).
 
 ## Design decisions (and why)
 
@@ -1111,7 +1126,8 @@ them up.
 - `src/platform.ts`: Mac vs Windows modifiers (`copyKey`, `freeKey`, `nudgeKey`), `scrollMotion` (reduced motion).
 - `src/selection.ts`: selection rules (`clickSelect`, `selectAll`, `pruneSelection`), for clips and song blocks.
 - `src/shortcuts.ts`: key → action (`shortcutFor`); App executes actions.
-- `src/dropLabel.ts`: drag preview labels (`describeDrop`, `heldName`; `describeBlockDrop` for the song).
+- `src/dropLabel.ts`: drag preview labels (`describeDrop`, `heldName`; `describeBlockDrop` for the song), and what a
+  screen reader hears (`clipSpokenName`, `blockSpokenName`, `spokenPosition`, `doneLabel`).
 - `src/components/`
   - `Timeline.tsx`: ruler + playhead, track, clips, resize handles, drag preview tags,
     and the empty track's start buttons (passed in as `emptyState`).

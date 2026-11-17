@@ -1,7 +1,19 @@
-import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode, type RefObject } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type MouseEvent,
+  type PointerEvent,
+  type ReactNode,
+  type RefObject,
+} from 'react'
+import { clipSpokenName } from '../dropLabel'
 import { analyzeChord } from '../music/analysis'
 import { chordName, voicedNoteNames } from '../music/chord'
 import { freeKey, IS_MAC } from '../platform'
+import type { ClickMods } from '../selection'
 import { rootDegree, type ModeName } from '../music/theory'
 import { clipEnd, snap, type Clip, type ClipChange } from '../music/timeline'
 
@@ -39,6 +51,8 @@ type Props = {
   /** Pointer is over the track but the chord can't go there. */
   invalid: boolean
   onSelect: (id: string | null) => void
+  /** Enter on a focused chord: what a click does (select, inspect, play), with Shift/⌘ as for clicks. */
+  onActivate: (clip: Clip, mods: ClickMods) => void
   onClipPointerDown: (clip: Clip, e: PointerEvent, grabOffset: number) => void
   /** A resize drag began (the whole drag is one undo step). */
   onResizeStart: () => void
@@ -77,14 +91,40 @@ const CHANGE_LABELS: Record<ClipChange, { icon: string; text: string }> = {
 const menuOnContext = (props: Props, clip: Clip) => (e: MouseEvent) => {
   e.preventDefault()
   if (IS_MAC && e.ctrlKey) return
+  // From the keyboard (the Menu key) there's no pointer: open it under the chord.
+  if (e.clientX === 0 && e.clientY === 0) return menuUnder(props, clip, e.currentTarget)
   props.onMenu(clip, e.clientX, e.clientY)
 }
+
+const menuUnder = (props: Props, clip: Clip, el: Element) => {
+  const r = el.getBoundingClientRect()
+  props.onMenu(clip, r.left, r.bottom + 4)
+}
+
+/**
+ * Keys on a focused chord (the track is one Tab stop; ←/→ move between chords in App's shortcuts):
+ * Enter does what a click does, Shift+F10 opens the chord menu (as the Menu key does).
+ */
+const clipKeys = (props: Props, clip: Clip) => (e: KeyboardEvent<HTMLElement>) => {
+  if (e.key === 'Enter') {
+    e.preventDefault()
+    props.onActivate(clip, { shift: e.shiftKey, toggle: e.metaKey || e.ctrlKey })
+  } else if (e.key === 'F10' && e.shiftKey) {
+    e.preventDefault()
+    menuUnder(props, clip, e.currentTarget)
+  }
+}
+
+/** The chord that takes the track's Tab stop (roving tabindex): the inspected one, else the first selected, else the first. */
+const tabStopOf = (clips: Clip[], selectedIds: string[], inspectedId: string | null) =>
+  (clips.find((c) => c.id === inspectedId) ?? clips.find((c) => selectedIds.includes(c.id)) ?? clips[0])?.id
 
 /** The ⋯ shown on a selected chord: opens the same menu under the button. */
 function MoreButton({ props, clip, name }: { props: Props; clip: Clip; name: string }) {
   return (
     <button
       className="clip-more"
+      tabIndex={-1}
       aria-label={`More actions for ${name}`}
       title="Actions (or right-click)"
       onPointerDown={(e) => e.stopPropagation()}
@@ -188,6 +228,7 @@ export function Timeline(props: Props) {
   // The chord after each clip, so "leading" chords can say whether they resolve.
   const sorted = [...clips].sort((a, b) => a.start - b.start)
   const nextChord = new Map(sorted.map((c, i) => [c.id, sorted[i + 1]?.chord]))
+  const tabStop = tabStopOf(sorted, selectedIds, props.inspectedId)
 
   return (
     <div ref={rootRef} className="timeline">
@@ -208,6 +249,11 @@ export function Timeline(props: Props) {
       <div
         ref={trackRef}
         className={trackClasses.filter(Boolean).join(' ')}
+        // One Tab stop for every chord (roving tabindex); see clipKeys.
+        role={clips.length > 0 ? 'listbox' : undefined}
+        aria-label={clips.length > 0 ? 'Chords' : undefined}
+        aria-multiselectable={clips.length > 0 ? true : undefined}
+        aria-orientation={clips.length > 0 ? 'horizontal' : undefined}
         onPointerDown={(e) => {
           props.onSelect(null)
           props.onSeek(seekTicks(e.clientX, freeKey(e)))
@@ -242,7 +288,7 @@ export function Timeline(props: Props) {
           const handle = (edge: 'start' | 'end') => (
             <div className={`handle ${edge}`} onPointerDown={startResize(clip.id, edge)} onPointerMove={moveResize} onPointerUp={endResize} />
           )
-          if (!clip.chord) return <EmptyClip key={clip.id} clip={clip} handle={handle} {...props} />
+          if (!clip.chord) return <EmptyClip key={clip.id} clip={clip} handle={handle} tabStop={clip.id === tabStop} {...props} />
           const chord = clip.chord
           const degree = rootDegree(chord, tonic, mode)
           const { fit, tension } = analyzeChord(chord, tonic, mode, nextChord.get(clip.id))
@@ -268,6 +314,12 @@ export function Timeline(props: Props) {
               key={clip.id}
               className={classes.filter(Boolean).join(' ')}
               data-diatonic={degree === null ? 'no' : 'yes'}
+              data-clip-id={clip.id}
+              role="option"
+              aria-selected={selected}
+              aria-label={clipSpokenName(clip, barTicks, props.beatTicks, { title: fit.title, clashing: tension.level === 2 })}
+              tabIndex={clip.id === tabStop ? 0 : -1}
+              onKeyDown={clipKeys(props, clip)}
               style={style}
               title={`${name}: ${notes}\n${fit.title}${tension.level ? ` · ${tension.label}` : ''}`}
               onPointerDown={(e) => {
@@ -294,6 +346,7 @@ export function Timeline(props: Props) {
               {selected && <MoreButton props={props} clip={clip} name={name} />}
               <button
                 className="remove"
+                tabIndex={-1}
                 aria-label={`Remove ${name}`}
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={() => props.onRemove(clip.id)}
@@ -312,7 +365,7 @@ export function Timeline(props: Props) {
 }
 
 /** An empty clip: a placeholder waiting for a chord (silent). Select it for ideas. */
-function EmptyClip({ clip, handle, ...props }: Props & { clip: Clip; handle: (edge: 'start' | 'end') => ReactNode }) {
+function EmptyClip({ clip, handle, tabStop, ...props }: Props & { clip: Clip; handle: (edge: 'start' | 'end') => ReactNode; tabStop: boolean }) {
   const { totalTicks, selectedIds, trackRef } = props
   const selected = selectedIds.includes(clip.id)
   const ticksAt = (clientX: number) => {
@@ -332,6 +385,12 @@ function EmptyClip({ clip, handle, ...props }: Props & { clip: Clip; handle: (ed
     <div
       className={classes.filter(Boolean).join(' ')}
       data-diatonic="no"
+      data-clip-id={clip.id}
+      role="option"
+      aria-selected={selected}
+      aria-label={clipSpokenName(clip, props.barTicks, props.beatTicks)}
+      tabIndex={tabStop ? 0 : -1}
+      onKeyDown={clipKeys(props, clip)}
       style={clipBox(clip, totalTicks)}
       title="Empty spot: select it for chord ideas, or drop a chord on it"
       onPointerDown={(e) => {
@@ -352,6 +411,7 @@ function EmptyClip({ clip, handle, ...props }: Props & { clip: Clip; handle: (ed
       {selected && <MoreButton props={props} clip={clip} name="empty spot" />}
       <button
         className="remove"
+        tabIndex={-1}
         aria-label="Remove empty spot"
         onPointerDown={(e) => e.stopPropagation()}
         onClick={() => props.onRemove(clip.id)}

@@ -84,6 +84,26 @@ describe('playhead', () => {
 })
 
 describe('keyboard editing', () => {
+  it('Tab reaches the chords as one stop; Enter selects, ←/→ move focus and selection; drops are announced', async () => {
+    const p = await start(full())
+    const focused = () => p.locator(':focus').getAttribute('aria-label')
+    // Back from the panel after the track: the track is one stop, on its first chord.
+    await p.getByRole('button', { name: /Voicing/ }).first().focus()
+    await p.keyboard.press('Shift+Tab')
+    expect(await focused()).toBe('C, bar 1, in key')
+    expect((await clips(p)).some((c) => c.selected)).toBe(false)
+    await p.keyboard.press('Enter')
+    expect((await clips(p))[0].selected).toBe(true)
+    await p.keyboard.press('ArrowRight')
+    expect(await focused()).toBe('F, bar 2, in key')
+    expect((await clips(p)).map((c) => c.selected)).toEqual([false, true, false, false])
+    // Only one chord is a Tab stop.
+    expect(await p.locator('.track [tabindex="0"]').count()).toBe(1)
+    // A drop says what it did, politely.
+    await drag(p, await pointIn(p, 0, 0.5), await pointIn(p, 2, 0.5))
+    expect(await p.locator('[role="status"]').textContent()).toBe('Swapped C ⇄ G')
+  })
+
   it('⌘D duplicates the selection and ⌘Z undoes it', async () => {
     const p = await start(full())
     await p.mouse.click(...(await pointIn(p, 0, 0.5)))
@@ -303,6 +323,20 @@ describe('song timeline', () => {
     expect(await names(p)).toEqual(['C', 'F', 'G', 'Am'])
     await p.keyboard.press(`${CMD}+z`)
     expect(await blocks(p)).toEqual(['Chorus', 'Progression', 'Progression'])
+
+    // From the keyboard: the song is one Tab stop before the track; ←/→ move and edit, like a click.
+    await p.keyboard.press('Escape')
+    await p.locator('.track [tabindex="0"]').focus()
+    await p.keyboard.press('Shift+Tab')
+    const focused = () => p.locator(':focus').getAttribute('aria-label')
+    expect(await focused()).toMatch(/^Progression, bars? /)
+    await p.keyboard.press('ArrowLeft')
+    expect(await focused()).toBe('Chorus, bars 1 to 4')
+    expect(await current(p)).toBe('Chorus')
+    await p.keyboard.press('ArrowRight')
+    await p.keyboard.press('Enter')
+    expect(await current(p)).toBe('Progression')
+    expect(await p.locator('.song-block.selected').count()).toBe(1)
   })
 
   it('▶ Song plays the song without moving the editor; Space pauses and resumes it', async () => {

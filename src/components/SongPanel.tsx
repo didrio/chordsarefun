@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ComponentProps, type CSSProperties, type PointerEvent } from 'react'
-import { describeBlockDrop } from '../dropLabel'
+import { blockSpokenName, describeBlockDrop } from '../dropLabel'
 import { chordName } from '../music/chord'
 import { chordClips } from '../music/timeline'
 import { freeKey, IS_MAC } from '../platform'
@@ -58,6 +58,8 @@ export function SongPanel(props: Props) {
 
   const { drag, begin, justDragged } = useBlockDrag({ laneRef, scaleTicks, spans, onDrop: props.onDrop })
   const lifted = drag?.source.kind === 'move' && !drag.copy && drag.gap !== null ? drag.source.ids : []
+  /** The block that takes the song's Tab stop (roving tabindex): the first selected, else the first of the edited section, else the first. */
+  const tabStop = (spans.find((b) => selectedIds.includes(b.id)) ?? spans.find((b) => b.section === props.current) ?? spans[0])?.id
   const label = drag ? describeBlockDrop(drag.source, drag.gap, song.arrangement, nameOf, { copy: drag.copy, open }) : null
   const dragHue = drag?.source.kind === 'add' ? sectionHue(sectionOf(song, drag.source.section)) : null
 
@@ -156,7 +158,16 @@ export function SongPanel(props: Props) {
                 ))}
                 {songTicks > 0 && <div className="playhead-marker" />}
               </div>
-              <div ref={laneRef} className={drag && drag.gap !== null ? 'song-lane dropping' : 'song-lane'} onPointerDown={props.onDeselect}>
+              <div
+                ref={laneRef}
+                className={drag && drag.gap !== null ? 'song-lane dropping' : 'song-lane'}
+                onPointerDown={props.onDeselect}
+                // One Tab stop for the whole song (roving tabindex), like the chord track.
+                role={spans.length > 0 ? 'listbox' : undefined}
+                aria-label={spans.length > 0 ? 'Parts of the song' : undefined}
+                aria-multiselectable={spans.length > 0 ? true : undefined}
+                aria-orientation={spans.length > 0 ? 'horizontal' : undefined}
+              >
                 {spans.map((b) => {
                   const section = sectionOf(song, b.section)
                   const name = sectionName(section)
@@ -180,6 +191,22 @@ export function SongPanel(props: Props) {
                         ...tint(sectionHue(section)),
                       }}
                       title={`${name} · ${bars} bar${bars === 1 ? '' : 's'}: click to edit it, drag to move it (hold the copy key to copy)`}
+                      data-block-id={b.id}
+                      role="option"
+                      aria-selected={selected}
+                      aria-label={blockSpokenName(name, b.start, b.length, barTicks)}
+                      tabIndex={b.id === tabStop ? 0 : -1}
+                      onKeyDown={(e) => {
+                        // Enter does what a click does; Shift+F10 opens the menu (←/→ are App's shortcuts).
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          props.onBlockClick(b.id, { shift: e.shiftKey, toggle: e.metaKey || e.ctrlKey })
+                        } else if (e.key === 'F10' && e.shiftKey) {
+                          e.preventDefault()
+                          const r = e.currentTarget.getBoundingClientRect()
+                          props.onBlockMenu(b.id, r.left, r.bottom + 4)
+                        }
+                      }}
                       onPointerDown={(e) => {
                         e.stopPropagation()
                         if (e.button !== 0) return
@@ -191,7 +218,10 @@ export function SongPanel(props: Props) {
                         e.preventDefault()
                         // On a Mac, Ctrl+click is a selection gesture, not a right-click.
                         if (IS_MAC && e.ctrlKey) return
-                        props.onBlockMenu(b.id, e.clientX, e.clientY)
+                        // From the keyboard (the Menu key) there's no pointer: open it under the block.
+                        const r = e.currentTarget.getBoundingClientRect()
+                        if (e.clientX === 0 && e.clientY === 0) props.onBlockMenu(b.id, r.left, r.bottom + 4)
+                        else props.onBlockMenu(b.id, e.clientX, e.clientY)
                       }}
                     >
                       <span className="song-block-name">
@@ -209,6 +239,7 @@ export function SongPanel(props: Props) {
                       {selected && (
                         <button
                           className="clip-more"
+                          tabIndex={-1}
                           aria-label={`More actions for ${name}`}
                           title="Actions (or right-click)"
                           onPointerDown={(e) => e.stopPropagation()}

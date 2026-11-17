@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { describeBlockDrop, describeDrop } from './dropLabel'
+import { blockSpokenName, clipSpokenName, describeBlockDrop, describeDrop, doneLabel, spokenPosition } from './dropLabel'
+import { makeChord } from './music/chord'
 import { parseChord } from './music/parse'
 import { planDrop, TICKS_PER_BAR, TICKS_PER_BEAT, type Clip, type HeldChord } from './music/timeline'
 
@@ -86,5 +87,44 @@ describe('describeBlockDrop', () => {
     expect(describeBlockDrop({ kind: 'move', ids: ['2'] }, null, blocks, nameOf)).toBe('Release to cancel')
     expect(describeBlockDrop({ kind: 'add', section: 'c' }, null, blocks, nameOf, { open: false })).toBe('Open Song to arrange')
     expect(describeBlockDrop({ kind: 'add', section: 'c' }, null, blocks, nameOf)).toBe('Drop on the song to add Chorus')
+  })
+})
+
+describe('spoken names (T31)', () => {
+  const bar = 1920
+  const beat = 480
+  const cm7 = makeChord('C', 'm7')
+
+  it('says where a chord starts, adding the beat only off the 1', () => {
+    expect(spokenPosition(0, bar, beat)).toBe('bar 1')
+    expect(spokenPosition(bar * 2, bar, beat)).toBe('bar 3')
+    expect(spokenPosition(bar + beat * 2, bar, beat)).toBe('bar 2, beat 3')
+    // An eighth after the 1 is still beat 1, but not "on" the bar.
+    expect(spokenPosition(bar + beat / 2, bar, beat)).toBe('bar 2, beat 1')
+    // Fractional ticks from a meter change.
+    expect(spokenPosition(bar * 3 - 1e-9, bar, beat)).toBe('bar 4')
+  })
+
+  it('names a chord, its place and its fit', () => {
+    expect(clipSpokenName({ chord: cm7, start: 0 }, bar, beat, { title: 'In key' })).toBe('Cm7, bar 1, in key')
+    expect(clipSpokenName({ chord: cm7, start: bar + beat * 2 }, bar, beat, { title: 'Borrowed from C minor', clashing: true })).toBe(
+      'Cm7, bar 2, beat 3, borrowed from C minor, clashing',
+    )
+    expect(clipSpokenName({ chord: null, start: bar * 2 }, bar, beat, { title: 'In key' })).toBe('Empty spot, bar 3')
+  })
+
+  it('names a part of the song with its bars', () => {
+    expect(blockSpokenName('Chorus', bar * 4, bar * 4, bar)).toBe('Chorus, bars 5 to 8')
+    expect(blockSpokenName('Intro', 0, bar, bar)).toBe('Intro, bar 1')
+  })
+
+  it('turns a drag label into what happened', () => {
+    expect(doneLabel('Move C after Am')).toBe('Moved C after Am')
+    expect(doneLabel('Swap C ⇄ Am')).toBe('Swapped C ⇄ Am')
+    expect(doneLabel('Copy 2 parts after Intro')).toBe('Copied 2 parts after Intro')
+    expect(doneLabel('Add Chorus before Verse')).toBe('Added Chorus before Verse')
+    expect(doneLabel('No room here')).toBeNull()
+    expect(doneLabel('Already here')).toBeNull()
+    expect(doneLabel(null)).toBeNull()
   })
 })

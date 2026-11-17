@@ -18,7 +18,7 @@ import { SongPanel } from './components/SongPanel'
 import type { BlockDrag } from './components/useBlockDrag'
 import { Timeline } from './components/Timeline'
 import { useChordDrag, type DragState } from './components/useChordDrag'
-import { describeDrop, heldName } from './dropLabel'
+import { describeBlockDrop, describeDrop, doneLabel, heldName } from './dropLabel'
 import { legacyMusic, sessionPrefix, songHistory, useSessions, type Sessions } from './session'
 import { downloadBackup } from './backup'
 import { SaveWarning } from './components/SaveWarning'
@@ -433,6 +433,30 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef, onBackup, shareOut
   const selectOnly = (id: string) => select({ ids: [id], anchor: id })
   const clearSelection = () => setSelection(EMPTY_SELECTION)
 
+  /**
+   * What the polite live region says (T31): drop results and keyboard edits, for screen readers.
+   * Saying the same thing twice toggles a trailing no-break space, so it's read again.
+   */
+  const [spoken, setSpoken] = useState('')
+  const announce = (text: string | null) => {
+    if (text) setSpoken((s) => (s === text ? `${text}\u00a0` : text))
+  }
+  /** The chord or song block that has keyboard focus, if any: ←/→ step from it (T31). */
+  const focusedItem = (): { kind: 'clip' | 'block'; id: string } | null => {
+    const el = document.activeElement
+    if (!(el instanceof HTMLElement)) return null
+    if (el.dataset.clipId) return { kind: 'clip', id: el.dataset.clipId }
+    if (el.dataset.blockId) return { kind: 'block', id: el.dataset.blockId }
+    return null
+  }
+  const focusItem = (kind: 'clip' | 'block', id: string) =>
+    document.querySelector<HTMLElement>(`[data-${kind}-id="${CSS.escape(id)}"]`)?.focus()
+  /** Words for some chords: "Cm", "3 chords". */
+  const chordsWord = (ids: string[]) => {
+    const one = ids.length === 1 ? clips.find((c) => c.id === ids[0]) : undefined
+    return one ? (one.chord ? chordName(one.chord) : 'empty spot') : `${ids.length} chords`
+  }
+
 
   useEffect(() => setTransportBpm(bpm), [bpm])
   useEffect(() => setMetronome(metronomeOn, metronomeVolume), [metronomeOn, metronomeVolume])
@@ -550,17 +574,21 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef, onBackup, shareOut
     if (!result) return
     setClips(() => result.clips)
     select({ ids: result.placedIds, anchor: result.placedId })
+    announce(`Duplicated ${chordsWord(selectedIds)}`)
   }
 
   /** ⌥←/→ (Mac) or Ctrl+←/→: the selected chords one grid step into empty space (nudgeClips). */
   const nudgeSelected = (dir: -1 | 1) => {
     const moved = nudgeClips(clips, selectedIds, dir, gridTicks, totalTicks, beatTicks, barTicks)
-    if (moved) setClips(() => moved)
+    if (!moved) return
+    setClips(() => moved)
+    announce(`Moved ${chordsWord(selectedIds)} ${dir < 0 ? 'earlier' : 'later'}`)
   }
 
   /** Clear chord: the selected chords become empty spots, staying where they are. */
   const clearSelected = () => {
     setClips((c) => c.map((x) => (selectedIds.includes(x.id) ? { ...x, chord: null } : x)))
+    announce(`Cleared ${chordsWord(selectedIds)}`)
     // An empty spot has no flavors; land on its ideas (and stay there once it's filled).
     setInspectorTab((t) => (t === 'flavors' ? 'ideas' : t))
   }
@@ -577,6 +605,7 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef, onBackup, shareOut
     if (selectedIds.length === 0) return
     setClips((c) => c.filter((clip) => !selectedIds.includes(clip.id)))
     clearSelection()
+    announce(`Deleted ${chordsWord(selectedIds)}`)
   }
 
   /**
@@ -632,6 +661,7 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef, onBackup, shareOut
 
   /** A drop on the song timeline: a section added, blocks moved, or copied (linked). The result is selected. */
   const dropOnSong = ({ source, gap, copy }: BlockDrag & { gap: number }) => {
+    announce(doneLabel(describeBlockDrop(source, gap, arrangement, sectionNameOf, { copy })))
     if (source.kind === 'move' && !copy) {
       song.commit((s) => moveBlocks(s, source.ids, gap))
       setBlockSelection({ ids: source.ids, anchor: source.ids[0] })
@@ -655,25 +685,41 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef, onBackup, shareOut
     const newIds = selectedBlocks.map(() => crypto.randomUUID())
     song.commit((s) => duplicateBlocks(s, selectedBlocks, newIds))
     setBlockSelection({ ids: newIds, anchor: newIds[0] })
+    announce(`Duplicated ${blocksWord(selectedBlocks)}`)
   }
 
   /** Delete on blocks: out of the song (the sections stay). */
   const removeSelectedBlocks = () => {
     song.commit((s) => removeBlocks(s, selectedBlocks))
     setBlockSelection(EMPTY_SELECTION)
+    announce(`Removed ${blocksWord(selectedBlocks)} from the song`)
+  }
+
+  /** A section's name on screen, by id. */
+  const sectionNameOf = (id: string) => sectionName(sectionOf(song.value, id))
+  /** Words for some blocks: "Chorus", "2 parts". */
+  const blocksWord = (ids: string[]) => {
+    const one = ids.length === 1 ? spans.find((b) => b.id === ids[0]) : undefined
+    return one ? sectionNameOf(one.section) : `${ids.length} parts`
   }
 
   /** ←/→ with blocks selected: the previous/next block, edited like a click. */
-  const stepBlock = (dir: -1 | 1) => {
-    const from = blockSelection.anchor && selectedBlocks.includes(blockSelection.anchor) ? blockSelection.anchor : selectedBlocks[0]
+  const stepBlock = (dir: -1 | 1, focusedId?: string) => {
+    const from =
+      focusedId ?? (blockSelection.anchor && selectedBlocks.includes(blockSelection.anchor) ? blockSelection.anchor : selectedBlocks[0])
     const next = spans[spans.findIndex((b) => b.id === from) + dir]
-    if (next) clickBlock(next.id)
+    if (!next) return
+    clickBlock(next.id)
+    // Focus follows the selection when the keyboard is in the song (one Tab stop, roving).
+    if (focusedId) focusItem('block', next.id)
   }
 
   /** ⌥←/→ (Ctrl on Windows) with blocks selected: move them one place. */
   const nudgeBlocks = (dir: -1 | 1) => {
     const gap = stepGap(song.value, selectedBlocks, dir)
-    if (gap !== null) song.commit((s) => moveBlocks(s, selectedBlocks, gap))
+    if (gap === null) return
+    announce(doneLabel(describeBlockDrop({ kind: 'move', ids: selectedBlocks }, gap, arrangement, sectionNameOf)))
+    song.commit((s) => moveBlocks(s, selectedBlocks, gap))
   }
 
   /** "Make a new section from this" on a block: it plays an independent copy, opened to edit. */
@@ -738,8 +784,8 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef, onBackup, shareOut
     if (show !== sectionId) switchSection(show)
     return true
   }
-  const undo = () => showStep(song.previous) && song.undo()
-  const redo = () => showStep(song.next) && song.redo()
+  const undo = () => showStep(song.previous) && (song.undo(), announce('Undone'))
+  const redo = () => showStep(song.next) && (song.redo(), announce('Redone'))
 
   // Clicking anywhere non-interactive deselects, like a typical editor. Clips handle
   // their own selection; palette chords act on the selection (replace), and controls
@@ -764,13 +810,19 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef, onBackup, shareOut
     if (!isPlaying && clip.chord) previewChord(clip.chord)
   }
 
-  /** Select the clip before/after the anchor; returns false if nothing is selected. */
-  const stepSelection = (dir: -1 | 1) => {
-    if (selectedIds.length === 0) return false
-    const from = selection.anchor && selectedIds.includes(selection.anchor) ? selection.anchor : selectedIds[0]
+  /**
+   * Select the clip before/after the focused chord (keyboard in the track: focus moves with it),
+   * else the anchor; returns false if there's neither.
+   */
+  const stepSelection = (dir: -1 | 1, focusedId?: string) => {
+    if (selectedIds.length === 0 && !focusedId) return false
+    const from = focusedId ?? (selection.anchor && selectedIds.includes(selection.anchor) ? selection.anchor : selectedIds[0])
     const sorted = [...clips].sort((a, b) => a.start - b.start)
     const next = sorted[sorted.findIndex((c) => c.id === from) + dir]
-    if (next) selectClip(next)
+    if (next) {
+      selectClip(next)
+      if (focusedId) focusItem('clip', next.id)
+    }
     return true
   }
 
@@ -807,6 +859,7 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef, onBackup, shareOut
   const canInvertAll = (dir: 1 | -1) => octaveTargets.length > 0 && octaveTargets.every((c) => canInvert(c.chord, dir))
   const invertChords = (dir: 1 | -1) => {
     if (!canInvertAll(dir)) return
+    announce(`${voicingScope}: ${dir > 0 ? 'higher' : 'lower'} inversion`)
     editChords(
       octaveTargets.map((c) => c.id),
       (c) => invert(c, dir),
@@ -823,6 +876,7 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef, onBackup, shareOut
   const shiftOctaves = (dir: 1 | -1) => {
     const moved = octaveShifted(dir)
     if (!moved) return
+    announce(`${voicingScope}: octave ${dir > 0 ? 'up' : 'down'}`)
     const byId = new Map(octaveTargets.map((c, i) => [c.id, moved[i]!]))
     setClips((c) => c.map((clip) => (byId.has(clip.id) ? { ...clip, chord: byId.get(clip.id)! } : clip)))
     if (!isPlaying) previewChord(moved[0]!)
@@ -954,10 +1008,12 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef, onBackup, shareOut
           return togglePlay()
         case 'stop':
           return stop()
-        case 'step':
-          if (blocksActive) return stepBlock(shortcut.dir)
-          if (!stepSelection(shortcut.dir)) nudgePlayhead(shortcut.dir)
+        case 'step': {
+          const focused = focusedItem()
+          if (focused?.kind === 'block' || (!focused && blocksActive)) return stepBlock(shortcut.dir, focused?.id)
+          if (!stepSelection(shortcut.dir, focused?.id)) nudgePlayhead(shortcut.dir)
           return
+        }
         case 'invert':
           return invertChords(shortcut.dir)
         case 'octave':
@@ -1011,6 +1067,7 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef, onBackup, shareOut
       const result = plan(d)
       if (!result) return
       setClips(() => result.clips)
+      announce(doneLabel(describeDrop({ ...d.held, copy: d.copy }, result, true, clips)))
       // The dropped clip(s) end up selected, so the panel shows the chord just placed.
       select({ ids: result.placedIds, anchor: result.placedId })
       const placed = result.clips.find((c) => c.id === result.placedId)?.chord ?? d.held.chord
@@ -1275,6 +1332,11 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef, onBackup, shareOut
         onAddAll={addEverySection}
       />
 
+      {/* What just happened, for screen readers (drops, keyboard edits). */}
+      <div className="visually-hidden" role="status" aria-live="polite">
+        {spoken}
+      </div>
+
       {/* Floating notices, stacked at the bottom of the window: they never move the page. */}
       <div className="floating-notices">
         <SaveWarning onBackup={onBackup} />
@@ -1323,6 +1385,7 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef, onBackup, shareOut
             invalid={isOverTrack && !preview}
             changes={dropChangeMap}
             onSelect={(id) => (id ? selectOnly(id) : clearSelection())}
+            onActivate={selectClip}
             onClipPointerDown={(clip, e, grabOffset) => {
               // Dragging any clip of a multi-selection moves the whole selection.
               const group = selectedIds.length > 1 && selectedIds.includes(clip.id) ? selectedIds : undefined

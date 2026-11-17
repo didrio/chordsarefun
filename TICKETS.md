@@ -4,9 +4,10 @@ Living, ordered backlog. One ticket per session: `/clear` → `/start Tn` → wo
 session updates this file and picks the next ticket, so each new session starts with a small, clear context.
 Rules: `.claude/skills/wrap/SKILL.md`. Capture ideas any time with `/ticket`.
 
-**Next:** T31 — Keyboard access to chords and song blocks (Opus · high · plan mode on). Before that, on the live
-site: paste a Share link in Messages/Discord (the usual card should show) and open it on an iPhone (Safari 16.4+;
-try Share… there too), try audio with the silent switch on, and turn on Cloudflare Web Analytics.
+**Next:** T34 — Silent song previews in the sessions window (Opus · high · plan mode on), once you've saved a
+backup from the live site ("Back up all sessions") and can say where it is. Without a backup: T33 (needs your call).
+Still to check on the live site: a Share link's preview card in Messages/Discord, an iPhone (Share…, silent switch),
+Cloudflare Web Analytics.
 
 ## In progress
 
@@ -87,19 +88,24 @@ Agent's calls the owner accepted (in the proposal):
   The editor never jumps while the song plays: the chord track shows its playhead only while the edited section
   is the one sounding.
 
-### T31 — Keyboard access to chords and song blocks
-- **Status:** ready
+### T34 — Silent song previews in the sessions window (live site)
+- **Status:** ready once the owner has saved a backup
 - **Session:** Opus · high · plan mode on
-- **Goal:** someone using only a keyboard (or a screen reader) can pick a chord and a song block. Today clips and
-  blocks are divs with no tabindex: ←/→ step between chords only once one is selected, and selecting needs a mouse.
-- **Done when:** Tab reaches the chord track and the song lane as one stop each (roving tabindex: ←/→ move focus
-  and selection together, as they do now); Enter selects/opens the focused chord (Space stays play/pause); each
-  chord has a name a screen reader reads ("Cm7, bar 1, in key"; an empty spot "Empty spot, bar 3"); drag results
-  and edits from the keyboard are announced in a polite live region ("Moved C after Am"); the focus ring
-  (`:focus-visible`, T30) shows on the focused chord; e2e case tabbing in and pressing Enter.
-- **Context:** `Timeline.tsx` (clips), `SongPanel.tsx` (blocks), `shortcuts.ts` (←/→ already step; check what
-  Enter does now), `selection.ts`. Keep `KEEPS_SELECTION` in mind (focus mustn't clear the selection).
-  `describeDrop` / `describeBlockDrop` already produce the plain-words sentences for announcements.
+- **Goal:** the owner's song sessions make sound when previewed (▶ in the sessions window) on chordsarefun.com
+  (desktop). Reported in the T31 session; not reproduced there.
+- **Before starting:** the owner saves "Back up all sessions" from the live site somewhere the agent can read and
+  says where. Don't commit it (it's their work).
+- **Done when:** the cause is found with the owner's data, fixed in `audio.ts` / `session.ts`, a unit test covers it,
+  and a song preview from that backup is measured making sound in a production build.
+- **Context:** what was ruled out (T31): a 2-part song (different presets, drums off in one part) previews with sound
+  in dev and in `vite preview` (`chords-prod` in `.claude/launch.json`, port 4173; open the song there with a share
+  link made in the dev page via `encodeShare`/`shareUrl`). How to measure: before clicking ▶, patch
+  `AudioNode.prototype.connect` to record connections, then hang an `AnalyserNode` off the preview's
+  `AudioWorkletNode` (the limiter) and sample peaks. Suspects not yet ruled out by data: `setPartLevels(g, seg.groove,
+  time)` in `previewSession` schedules every block's ramps at once, and `node.mute = false` sets `.value`, which
+  cancels ramps already scheduled (matters when a part is off in one block and on in another, in an order the test
+  song didn't have); `sessionMusic` choosing segments whose sections have no chords; a part at volume 0.
+  Song previews now play once (`passes: 1` in `SessionBrowser.tsx` `hear`).
 
 ### T33 — Installable / offline app
 - **Status:** idea, needs the owner's call
@@ -133,6 +139,7 @@ Agent's calls the owner accepted (in the proposal):
 
 ## Done
 
+- T31 — Keyboard access to chords and song blocks — 2026-11-17 — the chord track and the song lane are each one Tab stop (roving tabindex, listbox/option); Enter = click, ←/→ step from the focused chord/part with focus following, Shift+F10 / Menu key opens the menu; plain-words names (`clipSpokenName`, `blockSpokenName`: "Cm7, bar 1, in key", "Chorus, bars 5 to 8"); a polite live region announces drops (`doneLabel`) and keyboard edits; focus ring hugs chords/blocks; e2e for both lanes. Also (owner's ask): song previews in the sessions window play the whole song once (progressions loop) with a "Song · 2:08" tag; the reported silent song preview wasn't reproduced (T34). Not tried with a real screen reader.
 - T32 — Share a song by link — 2026-11-17 — a Share button (song bar's right end, icon on phones; owner's call over an Export row) opens a panel: what's shared, the link, Copy link (falls back to selecting it), Share… where there's a share sheet; the link is `#song=` + the song as JSON without ids, deflate-raw, base64url (`share.ts`: ~400 chars for one progression, ~800 for 4 sections / 28 chords; with ids it was ~2,100). Opening one (on load or pasted into an open tab) adds a new session ("(shared)" if taken, "Shared song" for an automatic name), clears the hash, and shows a notice with ▶ Play; bad / too-new / unsupported / storage-full links say so. Versioned (`SHARE_VERSION`, `migrateSong`, a frozen v1 link in the tests); links are checked harder than stored songs (`isSafeSong`, 32k payload and 1 MB inflate caps). `importSessions(plan, open)`. e2e: share → open in a fresh browser → second copy → broken link; Share on the phone header row and on screen at ten widths. Owner to check on the live site: link preview card, an iPhone, Share….
 - T30 — Production polish pass — 2026-11-17 — site basics for going public at chordsarefun.com: head tags (title, description, canonical, Open Graph/Twitter card with `og.png`, JSON-LD, noscript), icons + `site.webmanifest` (`display: browser`, iPhone storage), `robots.txt`, `sitemap.xml`, `_headers` (immutable `/assets/*`, nosniff, no CSP on purpose); save failures shown (`SaveStatus`, `SaveWarning`), `ErrorBoundary` crash screen (backup, blank session), `askToKeepStorage`; iPhone `audioSession` playback; global focus ring, reduced motion; all-rights-reserved `LICENSE`, `/licenses.txt` via Vite `build.license`, privacy + licenses footer in help; fixed the help popover running off screen at ~600–1100px. New: T31–T33. Unticketed: owner asked directly. Owner to check after deploy: share preview, iPhone silent switch, `curl -I` headers; Cloudflare Web Analytics is a dashboard step.
 - T29 — Picked chip scrolls into view on phones — 2026-11-17 — genre chip (progression browser) and view chip (sessions window) scroll fully into view when picked or on open (`scrollIntoView` effects keyed on genre/view); e2e at 375px. Not looked at in the browser pane.

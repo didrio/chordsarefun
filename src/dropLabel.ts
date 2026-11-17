@@ -64,3 +64,50 @@ export function describeBlockDrop(
   if (g === 0) return `${verb} ${what} before ${nameOf(stays[0].section)}`
   return `${verb} ${what} after ${nameOf(stays[g - 1].section)}`
 }
+
+// --- What a screen reader hears (T31) -------------------------------------------------------
+
+/** Where a chord starts, in words: "bar 2", or "bar 2, beat 3" when it doesn't start on the 1. */
+export function spokenPosition(start: number, barTicks: number, beatTicks: number): string {
+  // Tolerant of the fractional ticks a time-signature change can leave.
+  const bar = Math.floor(start / barTicks + 1e-6)
+  const within = start - bar * barTicks
+  if (within < 1) return `bar ${bar + 1}`
+  return `bar ${bar + 1}, beat ${Math.floor(within / beatTicks + 1e-6) + 1}`
+}
+
+/**
+ * A chord on the track as a screen reader reads it: "Cm7, bar 1, in key", "Eb, bar 2, beat 3,
+ * borrowed from C minor, clashing", "Empty spot, bar 3". `fit` is the plain fit title ("In key").
+ */
+export function clipSpokenName(
+  clip: Pick<Clip, 'chord' | 'start'>,
+  barTicks: number,
+  beatTicks: number,
+  fit?: { title: string; clashing?: boolean },
+): string {
+  const where = spokenPosition(clip.start, barTicks, beatTicks)
+  if (!clip.chord) return `Empty spot, ${where}`
+  const parts = [chordName(clip.chord), where]
+  if (fit) parts.push(fit.title.charAt(0).toLowerCase() + fit.title.slice(1))
+  if (fit?.clashing) parts.push('clashing')
+  return parts.join(', ')
+}
+
+/** A part of the song as a screen reader reads it: "Chorus, bars 5 to 8", "Intro, bar 1". */
+export function blockSpokenName(name: string, start: number, length: number, barTicks: number): string {
+  const first = Math.round(start / barTicks) + 1
+  const last = Math.round((start + length) / barTicks)
+  return last > first ? `${name}, bars ${first} to ${last}` : `${name}, bar ${first}`
+}
+
+const DONE: Record<string, string> = { Swap: 'Swapped', Move: 'Moved', Add: 'Added', Replace: 'Replaced', Copy: 'Copied' }
+
+/**
+ * A drag label ("Move C after Am") as what just happened ("Moved C after Am"), for the
+ * announcement after a drop. Labels that don't describe a change ("No room here") give null.
+ */
+export function doneLabel(label: string | null): string | null {
+  const m = label && /^(\w+) /.exec(label)
+  return m && DONE[m[1]] ? DONE[m[1]] + label!.slice(m[1].length) : null
+}
