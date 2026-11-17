@@ -212,6 +212,14 @@ const newMeta = (name: string, folder: string | null = null): SessionMeta => {
 export type SessionState = { sessions: SessionMeta[]; current: string }
 
 /**
+ * After a crash (ErrorBoundary): forget which session was open, so the next load makes a new blank one
+ * (prepareSessions) instead of reopening the one that may be crashing. Nothing is deleted.
+ */
+export function openBlankOnNextLoad() {
+  save('currentSession', null)
+}
+
+/**
  * Load the session list, upgrading old data, so there's always a current, listed session:
  * - old entries get their new fields (migrateMeta), every session is kept as it was;
  * - work in the old unsaved (scratch) session becomes a listed "Untitled session" (copied

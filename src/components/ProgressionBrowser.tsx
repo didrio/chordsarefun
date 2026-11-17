@@ -15,7 +15,7 @@ import {
 } from '../music/progressions'
 import { keyName, rootDegree } from '../music/theory'
 import { usePersistentState } from '../persist'
-import { UNDO_KEY } from '../platform'
+import { scrollMotion, UNDO_KEY } from '../platform'
 import { PlayIcon, StopIcon } from './Icons'
 import { Modal } from './Modal'
 
@@ -58,7 +58,7 @@ export function ProgressionBrowser({ tonic, groove, bpm, onUse, onBeforePreview,
   useEffect(() => {
     dialogRef.current
       ?.querySelector('.session-sidebar [aria-current="true"]')
-      ?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: scrollMotion() })
   }, [genre])
 
   const rows = searchProgressions(PROGRESSIONS, genre, query, tonic)

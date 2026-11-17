@@ -4,8 +4,9 @@ Living, ordered backlog. One ticket per session: `/clear` → `/start Tn` → wo
 session updates this file and picks the next ticket, so each new session starts with a small, clear context.
 Rules: `.claude/skills/wrap/SKILL.md`. Capture ideas any time with `/ticket`.
 
-**Next:** nothing queued. First listen to T28's limiter (see its Done line); if busy presets sound too quiet,
-`/ticket` a rebalance. Otherwise pick from the Backlog and `/ticket` it into Up next.
+**Next:** T32 — Share a song by link (Opus · extra high · plan mode on), the sharing feature for going public;
+T31 (keyboard access) after it. Before that, after T30 deploys: check the share preview (paste the link in
+Messages/Discord), try audio on an iPhone with the silent switch on, and turn on Cloudflare Web Analytics.
 
 ## In progress
 
@@ -86,6 +87,44 @@ Agent's calls the owner accepted (in the proposal):
   The editor never jumps while the song plays: the chord track shows its playhead only while the edited section
   is the one sounding.
 
+### T32 — Share a song by link
+- **Status:** ready
+- **Session:** Opus · extra high · plan mode on
+- **Goal:** the main sharing feature for going public: send someone a link that opens your song (chords, sections,
+  arrangement, instruments, key, tempo) in their browser, no account.
+- **Done when:** "Copy link" (in the Export menu, or a Share button: owner's call) puts the song in the URL hash
+  (compact JSON, compressed with `CompressionStream` and base64url; no server); opening such a link adds it as a
+  **new session** named after the shared one ("(shared)" if taken), never overwriting anything, then clears the hash;
+  a bad or too-new link says so plainly; links stay readable across future shape changes (a version field and
+  `migrateSong`); the share card (`og.png`) still shows for these links; tests for encode/decode round trips and
+  size (a 4-section song should stay well under ~2,000 characters if possible; measure).
+- **Context:** `song.ts` (`isSong`, `migrateSong`), `backup.ts` `planImport` (how imports add sessions without
+  overwriting), `session.ts`. Only the song, not its undo history. The hash never reaches the server, so links stay
+  private to whoever has them.
+
+### T31 — Keyboard access to chords and song blocks
+- **Status:** ready
+- **Session:** Opus · high · plan mode on
+- **Goal:** someone using only a keyboard (or a screen reader) can pick a chord and a song block. Today clips and
+  blocks are divs with no tabindex: ←/→ step between chords only once one is selected, and selecting needs a mouse.
+- **Done when:** Tab reaches the chord track and the song lane as one stop each (roving tabindex: ←/→ move focus
+  and selection together, as they do now); Enter selects/opens the focused chord (Space stays play/pause); each
+  chord has a name a screen reader reads ("Cm7, bar 1, in key"; an empty spot "Empty spot, bar 3"); drag results
+  and edits from the keyboard are announced in a polite live region ("Moved C after Am"); the focus ring
+  (`:focus-visible`, T30) shows on the focused chord; e2e case tabbing in and pressing Enter.
+- **Context:** `Timeline.tsx` (clips), `SongPanel.tsx` (blocks), `shortcuts.ts` (←/→ already step; check what
+  Enter does now), `selection.ts`. Keep `KEEPS_SELECTION` in mind (focus mustn't clear the selection).
+  `describeDrop` / `describeBlockDrop` already produce the plain-words sentences for announcements.
+
+### T33 — Installable / offline app
+- **Status:** idea, needs the owner's call
+- **Session:** Opus · high · plan mode on
+- **Goal:** install it like an app and use it with no connection (producers on a plane).
+- **Done when:** a service worker caches the build (and updates cleanly on deploy: no stale app after a push);
+  `site.webmanifest` `display: standalone`; **solve the iPhone catch first**: a home-screen app gets its own empty
+  storage, so its first launch must offer to import a backup (or explain where the sessions are). T30 kept
+  `display: "browser"` for that reason.
+
 ## Backlog
 
 - Sessions window: drag rows onto folders (today: the row's ⋯ → Move to). Maybe an undo toast instead of the
@@ -107,6 +146,7 @@ Agent's calls the owner accepted (in the proposal):
 
 ## Done
 
+- T30 — Production polish pass — 2026-11-17 — site basics for going public at chordsarefun.com: head tags (title, description, canonical, Open Graph/Twitter card with `og.png`, JSON-LD, noscript), icons + `site.webmanifest` (`display: browser`, iPhone storage), `robots.txt`, `sitemap.xml`, `_headers` (immutable `/assets/*`, nosniff, no CSP on purpose); save failures shown (`SaveStatus`, `SaveWarning`), `ErrorBoundary` crash screen (backup, blank session), `askToKeepStorage`; iPhone `audioSession` playback; global focus ring, reduced motion; all-rights-reserved `LICENSE`, `/licenses.txt` via Vite `build.license`, privacy + licenses footer in help; fixed the help popover running off screen at ~600–1100px. New: T31–T33. Unticketed: owner asked directly. Owner to check after deploy: share preview, iPhone silent switch, `curl -I` headers; Cloudflare Web Analytics is a dashboard step.
 - T29 — Picked chip scrolls into view on phones — 2026-11-17 — genre chip (progression browser) and view chip (sessions window) scroll fully into view when picked or on open (`scrollIntoView` effects keyed on genre/view); e2e at 375px. Not looked at in the browser pane.
 - T28 — A real master limiter — 2026-11-17 — lookahead brickwall in an AudioWorklet (`limiter.ts`: pure `createLimiter`, 5 ms lookahead, 50 ms release, −1 dBFS ceiling by construction; the worklet is built from its source text, `limiterWorkletSource`, since Tone's context can't load modules that import); playback, previews and WAV all go through it, the WAV skips its 5 ms delay (`Rendered.offset`); e2e checks the WAV peak. Measured on all 64 presets: peaks were +0.4…+6 dBFS, now exactly −1.00 with no sample over; loudness median −0.55 dB, Pop −0.7, worst Clav funk −2.2 / Country train −2.0 (busy presets sit ~−14 LUFS; presets left as they were, owner to judge). Deviation: no separate worklet file. Owner to listen: Pop, Clav funk, Country train for crunch or pumping on kicks, and whether anything sounds quieter or duller; a WAV vs playback.
 - T26 — Export audio (WAV) — 2026-11-17 — ⤓ Export menu (Audio (WAV) | MIDI, whole song / this section, mix or stems; parts that are off disabled; files named after the session, `exportFileName`); `renderAudio` renders offline in 1 s slices driving Tone's clock (`bouncePlan` pure, 3 min in ~7–11 s; Tone.Offline was quadratic, ~75 s), with a floating progress bar and Cancel; `wav.ts` 24-bit encoder, tail trimmed never before the last bar; e2e downloads a WAV and cancels one. Deviations: not Tone.Offline (speed, progress, cancel); MIDI files renamed after the session too. Also fixed the details hint's missing space. Found: the mix clips on drum hits (T28). Owner to listen: WAV matches playback (levels, swing, section sound switches), stems sum to the mix, Ableton import.

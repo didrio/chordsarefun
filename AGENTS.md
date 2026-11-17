@@ -695,7 +695,9 @@ Song **with its full undo/redo history** (debounced, and flushed on page hide, o
 unmount and on demand; the groove and BPM are inside it), grid, loop, notes-lane toggle,
 metronome on/off and volume, the selection, the section being edited and panels. Loaded data is validated (`isSong`, type checks; note
 names via `isNoteName`, since Tonal returns NaN, not undefined, for nonsense);
-invalid or corrupt data falls back to defaults, and storage errors are ignored. On
+invalid or corrupt data falls back to defaults. A failed save never breaks the app, but it's **shown**: `save` /
+`saveRaw` / `copyKeys` record a `SaveStatus` (`'full'` on `QuotaExceededError`, else `'blocked'`), and `SaveWarning`
+(in `.floating-notices`) says so with **Back up all sessions** until a save works again (T30). On
 shape changes, **migrate old data on load** so saved work survives: the song lives under the same `track` key
 (`songHistory` in `session.ts`); a stored Track (every session from before songs) becomes a song with one unnamed
 section with the fixed id `main` (`migrateSong`, step by step across the whole undo history), after `migrateTrack`
@@ -831,6 +833,39 @@ as intended). Playhead and play state are not saved.
   Random sharing a full-width row under the transport (its two halves need ~985px side by
   side; it was 800px until T23's wrap found it overflowing at 900). Otherwise tablets use the desktop layout. `e2e` checks ten widths from 320 to 1280px
   for sideways overflow and an off-screen progression browser, and the phone header's rows.
+
+## Site basics (T30)
+
+The public site is **https://chordsarefun.com** (a Workers custom domain). What's around the app:
+
+- **`index.html` head**: title "chords are fun · chord progression generator & songwriting tool" (the search term
+  people use), meta description, canonical, `theme-color`, Open Graph + Twitter card (`summary_large_image`, image
+  `https://chordsarefun.com/og.png`: absolute, as the spec needs), JSON-LD `WebApplication`, and a `<noscript>`
+  paragraph. Keep the description and the share text in step with what the app does.
+- **`public/`**: `og.png` (1200×630 share card), `apple-touch-icon.png` (180), `icon-192/512.png` (all rendered from
+  `favicon.svg` / an HTML card with headless Chrome; the card's source isn't in the repo, re-make it the same way),
+  `site.webmanifest`, `robots.txt`, `sitemap.xml`, `_headers`.
+- **The manifest says `display: "browser"`, not standalone**, on purpose: an iPhone home-screen web app gets its
+  own, empty storage, so a user would think their sessions were gone. Installable/offline is a ticket.
+- **`_headers`** (Workers static assets read it; it isn't served): hashed `/assets/*` cached for a year
+  (`immutable`), plus `nosniff` and a referrer policy. **No CSP on purpose**: Tone and the limiter load AudioWorklets
+  from `blob:` URLs, and a wrong policy breaks audio in production only (dev doesn't use `_headers`).
+- **Licenses**: the repo's `LICENSE` is all rights reserved (owner's call: public to read, not to reuse). The
+  bundled libraries' notices (MIT) are emitted by Vite's `build.license` as `/licenses.txt`, linked from the help
+  popover's footer (it 404s in dev; it only exists in the build).
+- **Privacy**: no cookies, no accounts, nothing uploaded; sessions live in localStorage. The help popover's footer
+  says so and recommends backups. Cloudflare Web Analytics (cookieless) may be on, set up in the dashboard.
+- **Not losing work**: `ErrorBoundary` (around `App` in `main.tsx`) replaces a blank page after a crash with
+  Reload, **Download a backup** (`downloadBackup` reads storage directly) and **Open a blank session**
+  (`openBlankOnNextLoad`: forgets the current session id, so `prepareSessions` makes a new one; nothing deleted).
+  Save failures show `SaveWarning` (see Persistence). Once a session has chords the app asks the browser to keep
+  its storage (`askToKeepStorage`: `navigator.storage.persist()`, once per load; Firefox may ask the user).
+- **iPhone audio**: `ensureAudio` sets `navigator.audioSession.type = 'playback'` where it exists, so the ring/silent
+  switch doesn't mute the app (like any music app; it pauses other audio).
+- **Accessibility basics**: one global `:focus-visible` ring (2px accent; menus draw their own highlight), and
+  `prefers-reduced-motion` turns transitions off (`scrollMotion()` in `platform.ts` for `scrollIntoView`). Every
+  button has an accessible name (icon buttons use `aria-label`); keep it that way. Chords and song blocks aren't
+  reachable by keyboard yet (ticketed).
 
 ## Design decisions (and why)
 
@@ -1020,11 +1055,12 @@ them up.
 - `src/names.ts`: `uniqueName` ("Verse 2", "Untitled session 3"), `exportFileName` ("My song - Bass.wav").
 - `src/download.ts`: `downloadFile` (save bytes as a file: backups, MIDI, WAV).
 - `src/history.ts`: undo/redo (pure transitions + `useHistory`, optionally persisted, with `encode`/`decode`).
-- `src/persist.ts`: localStorage helpers + `usePersistentState`, `copyKeys`/`removeKeys`.
+- `src/persist.ts`: localStorage helpers + `usePersistentState`, `copyKeys`/`removeKeys`, the save status
+  (`useSaveStatus`) and `askToKeepStorage`.
 - `src/session.ts`: sessions (keys, list, folders, favorites, sort/filter, migration `prepareSessions`,
   summaries; `useSessions`).
 - `src/backup.ts`: backup files (`downloadBackup`, `readBackup`, `planImport`).
-- `src/platform.ts`: Mac vs Windows modifiers (`copyKey`, `freeKey`, `nudgeKey`).
+- `src/platform.ts`: Mac vs Windows modifiers (`copyKey`, `freeKey`, `nudgeKey`), `scrollMotion` (reduced motion).
 - `src/selection.ts`: selection rules (`clickSelect`, `selectAll`, `pruneSelection`), for clips and song blocks.
 - `src/shortcuts.ts`: key → action (`shortcutFor`); App executes actions.
 - `src/dropLabel.ts`: drag preview labels (`describeDrop`, `heldName`; `describeBlockDrop` for the song).
@@ -1045,7 +1081,8 @@ them up.
   - `SectionBar.tsx`: the section chips and "+ Section" (see Visual design); `tint.ts` their color.
   - `SongPanel.tsx` (the Song panel and song timeline) + `useBlockDrag.ts` (see The song timeline).
   - `ChordInspector.tsx`, `NotesLane.tsx`, `ProgressionBrowser.tsx` (the progression window),
-    `HomeNotice.tsx`, `SessionBrowser.tsx` (the sessions trigger + window),
+    `HomeNotice.tsx`, `SaveWarning.tsx` (storage refused a save), `ErrorBoundary.tsx` (the crash screen),
+    `SessionBrowser.tsx` (the sessions trigger + window),
     `InstrumentsPanel.tsx`, `ExportMenu.tsx` + `ExportStatus.tsx` (+ `useDropdown.ts`): see Behavior.
     The lane renders inside `Timeline` and follows the playhead via the `--playhead`
     CSS variable set on `.timeline`.

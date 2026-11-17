@@ -373,6 +373,10 @@ function ownSynths(g: Graph) {
 
 /** Browsers require audio to be started from a user gesture. */
 export async function ensureAudio() {
+  // iPhones mute Web Audio with the ring/silent switch unless the page says it's playing music
+  // (Safari 16.4+), like any music app. Elsewhere the property doesn't exist and nothing changes.
+  const session = (navigator as Navigator & { audioSession?: { type: string } }).audioSession
+  if (session && session.type !== 'playback') session.type = 'playback'
   await Tone.start()
 }
 

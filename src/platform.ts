@@ -28,3 +28,8 @@ export const TAP =
 /** Shortcuts as written in on-screen hints. */
 export const UNDO_KEY = IS_MAC ? '⌘Z' : 'Ctrl+Z'
 export const DUPLICATE_KEY = IS_MAC ? '⌘D' : 'Ctrl+D'
+
+/** Smooth scrolling, unless the user asked their system for less motion (then it jumps). */
+export function scrollMotion(): ScrollBehavior {
+  return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+}

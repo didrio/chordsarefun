@@ -119,6 +119,13 @@ export function HelpTip() {
           </section>
         ))}
         </div>
+        <p className="help-foot">
+          Your sessions stay in this browser: no account, no cookies, nothing uploaded. Clearing this site's data
+          deletes them, so back up now and then (sessions window → Back up all sessions).{' '}
+          <a href="./licenses.txt" target="_blank" rel="noreferrer">
+            Open-source licenses
+          </a>
+        </p>
       </div>
     </span>
   )

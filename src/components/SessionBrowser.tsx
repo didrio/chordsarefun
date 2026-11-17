@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { planImport, readBackup } from '../backup'
 import { previewSession, stopPreview } from '../music/audio'
+import { scrollMotion } from '../platform'
 import { PlayIcon, StopIcon } from './Icons'
 import { Modal } from './Modal'
 import {
@@ -202,7 +203,7 @@ function SessionBrowser({ sessions: s, onOpen, onNew, onDuplicate, onBackup, onB
   useEffect(() => {
     dialogRef.current
       ?.querySelector('.session-sidebar [aria-current="true"]')
-      ?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: scrollMotion() })
   }, [shownView])
 
   // A new copy or import: show it and briefly highlight it.

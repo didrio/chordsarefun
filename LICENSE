@@ -1,0 +1,7 @@
+Copyright (c) 2026 Andrew Harris. All rights reserved.
+
+The source code in this repository is published so it can be read. No license is granted to copy,
+modify, distribute or host it, in whole or in part, without written permission.
+
+Third-party libraries bundled with the site (Tone.js, Tonal, @tonejs/midi, React and their
+dependencies) are used under their own licenses; their notices ship with the site at /licenses.txt.

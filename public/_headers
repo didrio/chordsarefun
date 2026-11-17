@@ -1,0 +1,10 @@
+# Cloudflare Workers static assets read this file (it isn't served). See AGENTS.md → Site basics.
+# Vite's hashed bundles never change under the same name, so browsers can keep them for a year.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# No CSP on purpose: Tone.js and the master limiter load AudioWorklets from blob: URLs, and a wrong
+# policy would silently break audio in production only.
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin

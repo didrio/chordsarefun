@@ -21,8 +21,9 @@ import { useChordDrag, type DragState } from './components/useChordDrag'
 import { describeDrop, heldName } from './dropLabel'
 import { legacyMusic, sessionPrefix, songHistory, useSessions, type Sessions } from './session'
 import { downloadBackup } from './backup'
+import { SaveWarning } from './components/SaveWarning'
 import { useHistory } from './history'
-import { usePersistentState } from './persist'
+import { askToKeepStorage, usePersistentState } from './persist'
 import { clickSelect, EMPTY_SELECTION, pruneSelection, selectAll, type ClickMods, type Selection } from './selection'
 import { shortcutFor } from './shortcuts'
 import { COPY_KEY, DUPLICATE_KEY, IS_MAC, TAP } from './platform'
@@ -154,6 +155,7 @@ export default function App() {
       prefix={sessionPrefix(sessions.current)}
       sessions={sessions}
       flushRef={flushRef}
+      onBackup={backup}
       sessionMenu={(onBeforePreview) => (
         <SessionMenu
           sessions={sessions}
@@ -195,9 +197,11 @@ type WorkspaceProps = {
   sessionMenu: (onBeforePreview: () => void) => ReactNode
   /** Set to this workspace's "save everything now", so a session can be copied right away. */
   flushRef: { current: () => void }
+  /** Save everything, then download a backup of every session (the save warning offers it). */
+  onBackup: () => void
 }
 
-function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) {
+function Workspace({ prefix, sessions, sessionMenu, flushRef, onBackup }: WorkspaceProps) {
   // Everything here is saved in the session (keys listed in SESSION_KEYS).
   const k = (key: string) => prefix + key
   // Hidden by default: powerful, but a lot on first sight.
@@ -316,6 +320,11 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
   const songPlaying = isPlaying && songScope
   // The key is the song's: detection and the suggestion look at every section's chords.
   const allClips = useMemo(() => songClips({ sections, sig, arrangement }), [sections, sig, arrangement])
+  const hasWork = allClips.some((c) => c.chord !== null)
+  // Once there's work worth keeping, ask the browser not to clear it when space runs low.
+  useEffect(() => {
+    if (hasWork) askToKeepStorage()
+  }, [hasWork])
   const homeSuggestion = useMemo(() => suggestHome(allClips, { tonic, mode }), [allClips, tonic, mode])
   const detectedKeys = useMemo(() => keyCandidates(allClips), [allClips])
   /**
@@ -1202,6 +1211,7 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
 
       {/* Floating notices, stacked at the bottom of the window: they never move the page. */}
       <div className="floating-notices">
+        <SaveWarning onBackup={onBackup} />
         {exportJob && <ExportStatus job={exportJob} onCancel={cancelExport} />}
         {activeOffer && (
           <HomeNotice

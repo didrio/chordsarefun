@@ -2,12 +2,54 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>chords are fun | create a chord progression</title>
+    <title>chords are fun · chord progression generator &amp; songwriting tool</title>
+    <meta
+      name="description"
+      content="Make chord progressions in your browser. Hear ideas for every chord, browse 180 progressions by feel, build a song and export MIDI or WAV. No theory needed, free, no sign-up."
+    />
+    <meta name="theme-color" content="#14151a" />
+    <link rel="canonical" href="https://chordsarefun.com/" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <link rel="manifest" href="./site.webmanifest" />
+
+    <!-- Share previews (Messages, Discord, Slack, X…). The image URL must be absolute. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="chords are fun" />
+    <meta property="og:url" content="https://chordsarefun.com/" />
+    <meta property="og:title" content="chords are fun · create a chord progression" />
+    <meta
+      property="og:description"
+      content="Make chord progressions by ear. Hear ideas for every chord, browse 180 progressions by feel, build a song and export MIDI or WAV. No theory needed."
+    />
+    <meta property="og:image" content="https://chordsarefun.com/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="chords are fun: a row of four colored chords, Cm7, Abmaj7, Ebmaj7 and Bb, on a track" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "chords are fun",
+        "url": "https://chordsarefun.com/",
+        "description": "A browser app for making chord progressions by ear: ideas for every chord, 180 progressions by feel, song sections, and MIDI or WAV export. No music theory needed.",
+        "applicationCategory": "MultimediaApplication",
+        "operatingSystem": "Any (runs in a web browser)",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      <p style="font-family: system-ui, sans-serif; color: #e8e8ec; background: #14151a; padding: 2rem; margin: 0">
+        <b>chords are fun</b> helps you make chord progressions by ear: ideas for every chord, 180 progressions by
+        feel, song sections, and MIDI or WAV export. It needs JavaScript to run, so please turn it on.
+      </p>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
