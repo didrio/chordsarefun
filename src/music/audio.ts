@@ -1,7 +1,7 @@
 import * as Tone from 'tone'
 import type { Chord } from './chord'
-import { arrangementOf, DEFAULT_GROOVE, type GrooveSettings } from './grooves'
-import { bassNoteFor, chordPartVoicing, renderTrack, type DrumVoice, type NoteEvent } from './patterns'
+import { DEFAULT_GROOVE, type GrooveSettings } from './grooves'
+import { bassNoteFor, chordPartVoicing, type DrumVoice, type NoteEvent } from './patterns'
 import { audible, renderSegments, segmentAt, segmentsEnd, type Segment, type SegmentNotes } from './segments'
 import { bassSound, chordSound, cutoffHz, DRUM_TRIM_DB, partDb, type Instrument } from './sound'
 import { chordTimes, metronomeClicks, TICKS_PER_BEAT, type ClickAccent, type Clip, type TimeSignature } from './timeline'
@@ -212,13 +212,6 @@ function setPartLevels(g: Graph, settings: GrooveSettings, time?: number) {
   else g.chordFilter.frequency.rampTo(hz, LEVEL_RAMP, time)
 }
 
-/** Each part's level and on/off from groove settings (instrument trims included). */
-function setLevels(g: Graph, settings: GrooveSettings, chordInst: Instrument, bassInst: Instrument) {
-  setLevel(g.chordVolume, settings.chords.on, settings.chords.volume, chordInst.trimDb)
-  setLevel(g.bassVolume, settings.bass.on, settings.bass.volume, bassInst.trimDb)
-  setLevel(g.drumVolume, settings.drums.on, settings.drums.volume, DRUM_TRIM_DB)
-}
-
 const setLevel = (node: Tone.Volume, on: boolean, volume: number, trimDb = 0) => {
   const db = partDb(volume, trimDb)
   node.mute = !on || !Number.isFinite(db)
@@ -357,25 +350,32 @@ export function previewProgression(chords: Chord[], seconds: number) {
 /** How long a preview that plays a set number of passes lets its last notes ring before it stops. */
 const PREVIEW_TAIL_SECONDS = 1.5
 
-/** A whole stored session, as its Play button would play it once. */
+/**
+ * A whole stored session, as its Play button would play it once. For a song, `segments` is
+ * what plays (one per block, from songSegments) and `totalTicks` the song's length; `clips`
+ * and `groove` are then unused.
+ */
 export type SessionMusic = {
   clips: Clip[]
   totalTicks: number
   sig: TimeSignature
   bpm: number
   groove: GrooveSettings
+  segments?: Segment[]
 }
 
 /**
  * Hear another session exactly as its Play button plays it, looping over the whole track
- * until stopped: its tempo, time signature, patterns, swing, sounds, brightness, mix and
- * parts on/off, without the metronome. It plays on its own sound graph built from that
- * session's groove (so the open session's sounds are untouched). Each pass's notes (from
- * renderTrack) are scheduled on the audio clock when the pass before starts, so loops are
- * seamless and there's always a pass queued ahead. Replaces any running preview; stopped
- * by stopPreview (■, another preview, silenceAll). `onChord` is called as each chord starts
- * (index into chordTimes), `onEnd` when the preview is stopped. With `passes`, it stops by
- * itself after that many times through (once the last notes have rung out).
+ * (or song) until stopped: its tempo, time signature, patterns, swing, sounds, brightness,
+ * mix and parts on/off, without the metronome. It plays on its own sound graph (so the open
+ * session's sounds are untouched), with one synth per sound in use and the levels moving
+ * at each block's start, as the main graph does for a song. Each pass's notes (from
+ * renderSegments) are scheduled on the audio clock when the pass before starts, so loops
+ * are seamless and there's always a pass queued ahead. Replaces any running preview; stopped
+ * by stopPreview (■, another preview, silenceAll). `onChord` is called as each cue starts
+ * (index: a chord of the section, in chordTimes order; for a song, a block), `onEnd` when
+ * the preview is stopped. With `passes`, it stops by itself after that many times through
+ * (once the last notes have rung out).
  */
 export async function previewSession(
   music: SessionMusic,
@@ -388,21 +388,39 @@ export async function previewSession(
   if (token !== previewToken) return // stopped (or replaced) while the audio was starting
 
   const { clips, totalTicks, sig, bpm, groove: settings } = music
+  const segs: Segment[] = music.segments ?? [{ start: 0, length: totalTicks, clips, groove: settings }]
+  const song = music.segments !== undefined
   const sec = (ticks: number) => (ticks / TICKS_PER_BEAT) * (60 / bpm)
-  const g = makeGraph(settings.chords.brightness)
-  const chordInst = chordSound(settings.chords.sound)
-  const bassInst = bassSound(settings.bass.sound)
-  const chords = makePoly(chordInst, g.chordFilter)
-  const bass = makePoly(bassInst, g.bassVolume)
-  setLevels(g, settings, chordInst, bassInst)
-  previewRig = { graph: g, synths: [chords, bass] }
+  const g = makeGraph(segs[0].groove.chords.brightness)
+  const synths: Poly[] = []
+  const poly = new Map<string, Poly>()
+  /** The synth for a part's sound in a section's settings, through its own trim, made the first time. */
+  const polyFor = (part: Part, gr: GrooveSettings) => {
+    const inst = soundOf(part, gr)
+    const key = `${part}:${inst.id}`
+    let p = poly.get(key)
+    if (!p) {
+      const trim = new Tone.Volume(inst.trimDb).connect(part === 'chords' ? g.chordFilter : g.bassVolume)
+      g.nodes.push(trim)
+      p = makePoly(inst, trim)
+      synths.push(p)
+      poly.set(key, p)
+    }
+    return p
+  }
+  for (const seg of segs) {
+    polyFor('chords', seg.groove)
+    polyFor('bass', seg.groove)
+  }
+  setPartLevels(g, segs[0].groove)
+  previewRig = { graph: g, synths }
 
-  const rendered = renderTrack(clips, totalTicks, sig, arrangementOf(settings))
+  const rendered = renderSegments(segs, sig)
   const byTick = <T extends { tick: number }>(events: T[]) => [...events].sort((a, b) => a.tick - b.tick)
-  const chordEvents = settings.chords.on ? byTick(rendered.chords) : []
-  const bassEvents = settings.bass.on ? byTick(rendered.bass) : []
-  const drumEvents = settings.drums.on ? byTick(rendered.drums) : []
-  const times = chordTimes(clips, bpm)
+  const chordEvents = byTick(rendered.chords)
+  const bassEvents = byTick(rendered.bass)
+  const drumEvents = byTick(rendered.drums)
+  const cues = song ? segs.map((seg) => sec(seg.start)) : chordTimes(clips, bpm).map((c) => c.at)
   const loopSeconds = sec(totalTicks)
   const first = Tone.now() + 0.05
   /** Milliseconds until an audio-clock time, so timers follow the music without drifting. */
@@ -416,13 +434,14 @@ export async function previewSession(
       previewTimers = [...previewTimers, window.setTimeout(() => stopPreview(), msUntil(start + PREVIEW_TAIL_SECONDS))]
       return
     }
-    for (const e of chordEvents) playNote(chords, e, start + sec(e.tick), sec(e.duration))
-    for (const e of bassEvents) playNote(bass, e, start + sec(e.tick), sec(e.duration))
+    if (segs.length > 1) for (const seg of segs) setPartLevels(g, seg.groove, start + sec(seg.start))
+    for (const e of chordEvents) playNote(polyFor('chords', segs[e.segment].groove), e, start + sec(e.tick), sec(e.duration))
+    for (const e of bassEvents) playNote(polyFor('bass', segs[e.segment].groove), e, start + sec(e.tick), sec(e.duration))
     for (const e of drumEvents) g.kit.trigger(e.voice, start + sec(e.tick), e.velocity)
     // Added to the earlier passes' timers (some still pending), so stopPreview clears them all.
     previewTimers = [
       ...previewTimers,
-      ...times.map(({ at }, i) => window.setTimeout(() => onChord?.(i), msUntil(start + at))),
+      ...cues.map((at, i) => window.setTimeout(() => onChord?.(i), msUntil(start + at))),
       // Once this pass starts, queue the next one (a whole loop ahead).
       window.setTimeout(() => schedulePass(n + 1), msUntil(start)),
     ]

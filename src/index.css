@@ -1941,6 +1941,17 @@ input[type='text'][aria-invalid='true'] {
   width: 18rem;
 }
 
+/* Whole song | This section, at the top of the MIDI menu once parts are arranged. */
+.midi-scope {
+  display: flex;
+  gap: 0.3rem;
+  padding: 0.25rem 0.3rem 0.4rem;
+}
+
+.midi-scope .toggle {
+  flex: 1;
+}
+
 /* Home menu: key buttons over the mood list. */
 .key-panel {
   min-width: 0;
@@ -2451,6 +2462,12 @@ button.session-hear:disabled {
 
 .session-chords > span {
   flex: none;
+}
+
+/* A song lists its parts ("Intro · Verse · Chorus"). */
+.session-chords.parts > span:not(:last-child)::after {
+  content: ' ·';
+  color: var(--muted);
 }
 
 .session-chords.empty {

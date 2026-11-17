@@ -327,10 +327,11 @@ function SessionBrowser({ sessions: s, onOpen, onNew, onDuplicate, onBackup, onB
   const row = (m: SessionMeta) => {
     const isCurrent = m.id === s.current
     const heard = hearing?.id === m.id ? hearing : null
-    const names = music.get(m.id)?.names
-    // Its chords (lit one by one while heard), then key · folder · edited, always on the right.
+    const heardMusic = music.get(m.id)
+    const names = heardMusic?.names
+    // Its chords, or for a song its parts (lit one by one while heard), then key · folder · edited, always on the right.
     const chords = names ? (
-      <span className="session-chords" aria-live="off">
+      <span className={heardMusic?.segments ? 'session-chords parts' : 'session-chords'} aria-live="off">
         {names.map((n, i) => (
           <span key={i} className={i === heard?.at ? 'now' : undefined}>
             {n}

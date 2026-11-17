@@ -333,6 +333,32 @@ describe('chord menu', () => {
   })
 })
 
+describe('an arranged song at every width', () => {
+  it('scrolls its chips and timeline sideways inside, never the page; the MIDI menu stays on screen', async () => {
+    const p = await start(full())
+    for (const label of [/^Verse /, /^Pre-chorus /, /^Chorus /, /^Bridge /]) {
+      await p.locator('.add-section .dropdown-trigger').click()
+      await p.getByRole('menuitem', { name: label }).click()
+    }
+    await p.locator('.song-arranger .panel-bar').click()
+    await p.getByRole('button', { name: /Add every section in order/ }).click()
+    expect(await p.locator('.song-block').count()).toBeGreaterThan(3)
+    const overflow = () => p.evaluate<number>('document.documentElement.scrollWidth - window.innerWidth')
+    for (const width of [320, 360, 375, 430, 600, 640, 768, 900, 1024, 1280]) {
+      await p.setViewportSize({ width, height: 900 })
+      expect(await overflow(), `${width}px: no sideways page scroll`).toBeLessThanOrEqual(0)
+      await p.locator('.midi-menu .dropdown-trigger').click()
+      await p.getByRole('button', { name: 'Whole song' }).waitFor()
+      const menu = await p.locator('.midi-panel').boundingBox()
+      if (!menu) throw new Error('No MIDI menu')
+      expect(menu.x, `${width}px: MIDI menu starts on screen`).toBeGreaterThanOrEqual(0)
+      expect(menu.x + menu.width, `${width}px: MIDI menu ends on screen`).toBeLessThanOrEqual(width)
+      expect(await overflow(), `${width}px: nothing runs off with the menu open`).toBeLessThanOrEqual(0)
+      await p.keyboard.press('Escape')
+    }
+  })
+})
+
 describe('layout at every width', () => {
   // Phones (smallest first), the widths between phone and desktop (where the toolbar wraps), tablet, laptop.
   for (const width of [320, 360, 375, 430, 600, 640, 768, 900, 1024, 1280]) {

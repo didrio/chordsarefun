@@ -14,7 +14,7 @@ import {
   type SessionMeta,
 } from './session'
 import { DEFAULT_TRACK } from './track'
-import { addSection, MAIN_SECTION, packSongHistory, sectionTrack, songFromTrack, withSectionTrack } from './song'
+import { addSection, insertBlocks, MAIN_SECTION, packSongHistory, sectionTrack, songFromTrack, songTicks, withSectionTrack } from './song'
 import { makeChord } from './music/chord'
 import { applyGroove, DEFAULT_GROOVE, GROOVES } from './music/grooves'
 
@@ -168,6 +168,16 @@ describe('sessions hold songs', () => {
     expect(sessionMusic('both')?.names).toEqual(['C'])
     save(`${sessionPrefix('both')}section`, MAIN_SECTION)
     expect(sessionMusic('both')?.names).toEqual(['F'])
+  })
+
+  it('plays the whole song once parts are arranged, listing its parts', () => {
+    const arranged = insertBlocks(insertBlocks(song(2), 0, ['chorus'], ['b1']), 1, ['chorus', MAIN_SECTION], ['b2', 'b3'])
+    save(`${sessionPrefix('arr')}track`, packSongHistory({ past: [], present: arranged, future: [] }))
+    const m = sessionMusic('arr')!
+    expect(m.names).toEqual(['Chorus', 'Chorus', 'Progression'])
+    expect(m.segments).toHaveLength(3)
+    expect(m.totalTicks).toBe(songTicks(arranged))
+    expect(m.bpm).toBe(101)
   })
 })
 

@@ -3,7 +3,7 @@ import { readHistory, type History, type Persist, type StoredHistory } from './h
 import { uniqueName } from './names'
 import { copyKeys, load, loadRaw, removeKeys, save, saveRaw } from './persist'
 import { DEFAULT_MUSIC, isBpm, type TrackMusic } from './track'
-import { isSong, migrateSong, packSongHistory, sectionOf, unpackSongHistory, type Song } from './song'
+import { blockSpans, isSong, migrateSong, packSongHistory, sectionName, sectionOf, songSegments, songTicks, unpackSongHistory, type Song } from './song'
 import { chordClips, chordTimes, sigBarTicks } from './music/timeline'
 import { isGrooveSettings, type GrooveSettings } from './music/grooves'
 import { chordName } from './music/chord'
@@ -166,20 +166,34 @@ export function sessionKey(id: string): string | null {
 }
 
 /**
- * Everything needed to hear a stored session as its Play button plays it (the section being
- * edited, or the first with chords if that one is empty, with its instruments and the song's
- * tempo, read the way the workspace reads them), plus its chord names in order; null if it
- * has no chords. Whole songs come with the song timeline (T24/T25).
+ * Everything needed to hear a stored session as its Play button plays it, plus what its row
+ * lists, in order; null if there's nothing with chords to hear. A song with parts arranged
+ * plays the whole song (`segments`) and lists its sections ("Intro", "Verse", "Chorus", one
+ * per block, lit as each one starts). Otherwise it plays the section being edited (or the
+ * first with chords if that one is empty), with its instruments and the song's tempo, read
+ * the way the workspace reads them, and lists that section's chords.
  */
 export function sessionMusic(id: string): (SessionMusic & { names: string[] }) | null {
   const h = readSong(id)
   if (!h) return null
   const song = h.present
+  const { sig, bpm } = song
+  const segments = songSegments(song)
+  if (segments.some((seg) => chordClips(seg.clips).length > 0)) {
+    return {
+      clips: [],
+      totalTicks: songTicks(song),
+      sig,
+      bpm,
+      groove: segments[0].groove,
+      segments,
+      names: blockSpans(song).map((b) => sectionName(sectionOf(song, b.section))),
+    }
+  }
   const edited = sectionOf(song, load(`${sessionPrefix(id)}section`, '', (v) => typeof v === 'string'))
   const section = chordClips(edited.clips).length > 0 ? edited : song.sections.find((s) => chordClips(s.clips).length > 0)
   if (!section) return null
   const { clips, bars, groove } = section
-  const { sig, bpm } = song
   return {
     clips,
     totalTicks: bars * sigBarTicks(sig),

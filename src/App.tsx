@@ -1025,8 +1025,22 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef }: WorkspaceProps) 
           />
           <MidiMenu
             groove={groove}
-            disabled={chordClips(clips).length === 0}
-            onDownload={(parts, filename) => downloadMidi({ clips: sortedClips, totalTicks, bpm, sig, groove, parts }, filename)}
+            songGrooves={songSegs.map((seg) => seg.groove)}
+            disabled={chordClips(clips).length === 0 && !songSegs.some((seg) => chordClips(seg.clips).length > 0)}
+            onDownload={(scope, parts, filename) =>
+              downloadMidi(
+                scope === 'song'
+                  ? {
+                      segments: songSegs,
+                      markers: spans.map((b) => ({ tick: b.start, text: sectionName(sections.find((s) => s.id === b.section)!) })),
+                      bpm,
+                      sig,
+                      parts,
+                    }
+                  : { segments: sectionSegs, bpm, sig, parts },
+                filename,
+              )
+            }
           />
         </div>
       </header>

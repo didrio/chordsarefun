@@ -651,11 +651,14 @@ The (i) tooltip next to the logo (`HelpTip.tsx`: how it works + every shortcut, 
   opens, F2 renames, Esc closes (or closes a menu/confirm first); Tab stays inside; the app's shortcuts are
   off while it's open (focus that falls out of it is taken back). Folder ⋯: Rename, Delete (its sessions are
   kept, back to no folder).
-- **Hear a session** (the row's ▶, ■ while it plays): it plays the section being edited (or the first with chords;
-  whole songs come with T25) and **loops over it until stopped** (no
+- **Hear a session** (the row's ▶, ■ while it plays): a song with blocks plays the **whole song** (`sessionMusic`
+  returns `segments`, and the row lists its parts, "Intro · Verse · Chorus", one per block, each lit as it starts);
+  otherwise it plays the section being edited (or the first with chords) and lists its chords. Either
+  **loops until stopped** (no
   metronome; handy for singing over a session), exactly as its own Play would: its tempo, time signature, patterns, swing, chord/bass sounds, brightness, mix and parts
   on/off (`sessionMusic` reads them from the stored track, migrated like the workspace's; `previewSession` in `audio.ts` renders it with
-  `renderTrack` on a **separate sound graph** built from that session's groove, so the open session's sounds
+  `renderSegments` on a **separate sound graph**, with a synth per sound in use and the part levels and brightness
+  ramped at each block's start (`setPartLevels`), as the main graph does, so the open session's sounds
   are untouched; each pass is scheduled on the audio clock when the one before starts, so loops are seamless;
   the graph is thrown away when it stops). While
   it plays, the sounding chord in the row's chord list lights up (`chordTimes`). It pauses the song if it's playing,
@@ -704,10 +707,14 @@ as intended). Playhead and play state are not saved.
 
 ### Export
 
-Download MIDI (`midi.ts`, `MidiMenu.tsx`) renders with `renderTrack`, so the MIDI is
-exactly what you hear (patterns, swing, voicings), with tempo and time signature. It's
-a menu: all parts that are on (one file, a track each, which Ableton splits into
-tracks; drums on channel 10 with General MIDI notes) or one part alone.
+Download MIDI (`midi.ts`, `MidiMenu.tsx`, T25) renders segments (`renderSegments`, the same as playback), so the
+MIDI is exactly what you hear (patterns, swing, voicings, each block's own instruments), with tempo and time
+signature. It's a menu: all parts that are on (one file, a track each, which Ableton splits into tracks; drums
+on channel 10 with General MIDI notes) or one part alone. **Once the song has blocks** the menu opens with
+**Whole song | This section** (`songMidi`): the blocks' notes at their song times as one arrangement, a MIDI
+**marker** at each block start named after its section (a DAW shows them as locators), files `song*.mid`; "All
+parts that are on" means on in any block, and a part that's off in a block is silent there. This section =
+`sectionSegments` of the edited one, `progression*.mid`. `trackMidi` (one progression) is `songMidi` of one segment.
 
 ## Visual design
 
@@ -778,7 +785,8 @@ tracks; drums on channel 10 with General MIDI notes) or one part alone.
   popover) opens as a sheet spanning its bar instead of hanging off its trigger, the
   Instruments strips stack (one column, the preset picker stays in the bar), the chord details header puts
   "Type a chord" on its own row, and the tabs scroll sideways instead of wrapping (the
-  spot's context is hidden). No horizontal page scroll down to 320px. Touch drags are untested
+  spot's context is hidden). No horizontal page scroll down to 320px, also with an arranged song open (the Song bar's
+  chips and the song timeline scroll sideways inside themselves; the MIDI menu stays on screen; `e2e` checks it). Touch drags are untested
   on a real device.
 - **Narrow windows and tablets (≤ 1000px)**: the main toolbar wraps, Browse progressions and
   Random sharing a full-width row under the transport (its two halves need ~985px side by
@@ -873,6 +881,11 @@ These were discussed and chosen deliberately; don't "fix" them without asking.
   against it, so the parts must agree on key and tempo; chords, length and instruments differ per section.
   **Repeats are linked** (two Chorus blocks are one Chorus; "Make a new section from this" forks an independent
   copy). **The song area is on top** (song, then chords, then one chord).
+- **The song timeline isn't the chord timeline** (T24): chords live on a fixed length with gaps, resizing and a
+  grid; the song is an ordered list of back-to-back blocks with none of those, so it has its own small drag hook
+  (`useBlockDrag`) and shares only selection, the menu, panel and ruler styling.
+- **Song MIDI is one arrangement with markers, not one file per section** (T25): Ableton imports it as the whole
+  song on its timeline, with a locator at every part; "This section" stays for taking just one part.
 - **`Track` stays as "one section seen with the song's settings"** (lenses) rather than every function learning
   about songs: the chord editing rules didn't change at all.
 - **One undo history for the song**, and undo opens the section it changes, rather than a history per section
@@ -931,14 +944,14 @@ them up.
     a track, `progressionMusic` (a progression ready to hear), `progressionTrack` (taking its chords,
     instruments or both) and `searchProgressions` (the browser's list).
   - `segments.ts`: what plays as segments (a section, or one per song block): `renderSegments`, `segmentAt`,
-    `segmentsEnd`, pure (T25's MIDI and T26's WAV can reuse it).
+    `segmentsEnd`, pure (song MIDI uses it; T26's WAV will too).
   - `audio.ts`: Tone.js playback of the three parts (a synth per sound in use, drum kit, per-part
     volume, limiter), one `schedule` for a section or the song, seeking, metronome. The only module touching Web Audio.
     Previews (`previewChord`, `previewProgression`, `previewSession`: loops, or `passes` times) and `silenceAll`.
   - `patterns.ts`: chord/bass/drum patterns and `renderTrack` (all notes played), pure.
   - `grooves.ts`: groove settings, presets, matching, validation.
   - `sound.ts`: instrument presets (Tone options as data), brightness → cutoff, levels.
-  - `midi.ts`: MIDI export of any parts, from `renderTrack`.
+  - `midi.ts`: MIDI export of any parts, from `renderSegments` (`songMidi`; `trackMidi` is one segment), with markers.
 - `src/song.ts`: the `Song` document (sections, arrangement, shared key/tempo/meter), validation (`isSong`),
   migration from tracks (`migrateSong`), packed history storage, the lenses (`sectionTrack`, `withSectionTrack`),
   section edits (add / rename / copy / remove), labels and colors, `changedSection`, song-wide changes, the
