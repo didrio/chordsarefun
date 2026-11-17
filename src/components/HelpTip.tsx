@@ -1,4 +1,5 @@
 import { COPY_KEY, FREE_KEY, NUDGE_KEY } from '../platform'
+import { install, installHint, isAppleMobile, isInstalled, usePwa } from '../pwa'
 
 /** [what you do, what happens] rows, grouped. Keep in sync with shortcuts.ts and AGENTS.md. */
 const KEYS: { title: string; rows: [string, string][] }[] = [
@@ -126,6 +127,8 @@ export function HelpTip() {
         ))}
         </div>
         <p className="help-foot">
+          <InstallLine />
+          <br />
           Your sessions stay in this browser: no account, no cookies, nothing uploaded. Clearing this site's data
           deletes them, so back up now and then (sessions window → Back up all sessions).{' '}
           <a href="./licenses.txt" target="_blank" rel="noreferrer">
@@ -135,4 +138,31 @@ export function HelpTip() {
       </div>
     </span>
   )
+}
+
+/** The help footer's word on offline and installing (T33): what this browser can do, in its own terms. */
+function InstallLine() {
+  const { canInstall } = usePwa()
+  switch (installHint(isInstalled(), canInstall, isAppleMobile())) {
+    case 'installed':
+      return <>Works offline: this is the installed app.</>
+    case 'prompt':
+      return (
+        <>
+          Works offline once loaded, and installs like an app:{' '}
+          <button className="small" onClick={() => void install()}>
+            Install app
+          </button>
+        </>
+      )
+    case 'ios':
+      return <>Works offline once loaded. To install it: Share → Add to Home Screen.</>
+    case 'menu':
+      return (
+        <>
+          Works offline once loaded. To install it like an app: the install icon in Chrome's or Edge's address bar,
+          or File → Add to Dock in Safari.
+        </>
+      )
+  }
 }

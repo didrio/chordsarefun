@@ -1,9 +1,11 @@
 {
+  "id": "./",
   "name": "chords are fun",
   "short_name": "chords",
   "description": "Make chord progressions by ear. No theory needed.",
   "start_url": "./",
-  "display": "browser",
+  "scope": "./",
+  "display": "standalone",
   "background_color": "#14151a",
   "theme_color": "#14151a",
   "icons": [

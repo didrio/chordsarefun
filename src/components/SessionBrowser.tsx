@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
-import { planImport, readBackup } from '../backup'
+import { IMPORT_FULL, readImport } from '../backup'
 import { previewSession, stopPreview } from '../music/audio'
 import { scrollMotion } from '../platform'
 import { formatDuration } from '../song'
@@ -260,18 +260,13 @@ function SessionBrowser({ sessions: s, onOpen, onNew, onDuplicate, onBackup, onB
   }
 
   const importFile = async (file: File) => {
-    const storage = readBackup(await file.text())
-    if (!storage) return setNotice("That file isn't a sessions backup.")
-    const plan = planImport(storage, s.sessions, s.folders)
-    if (plan.sessions.length === 0) return setNotice('No sessions in that backup.')
-    if (!s.importSessions(plan)) return setNotice("Not enough room in this browser's storage to import it.")
+    const { plan, message } = readImport(await file.text(), s.sessions, s.folders)
+    if (!plan) return setNotice(message)
+    if (!s.importSessions(plan)) return setNotice(IMPORT_FULL)
     setView('all')
     setQuery('')
     setFlash(plan.sessions[0].id)
-    setNotice(
-      `Imported ${plural(plan.sessions.length, 'session')}` +
-        (plan.renamed ? ` (${plan.renamed} renamed "(imported)": the name was taken).` : '.'),
-    )
+    setNotice(message)
   }
 
   const rowMenu = (m: SessionMeta, at: MenuAt) => (

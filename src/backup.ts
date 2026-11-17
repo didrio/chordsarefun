@@ -161,3 +161,30 @@ export function planImport(
   }
   return { sessions, folders, writes, renamed }
 }
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+
+/**
+ * A backup file's text read and planned for import (readBackup + planImport), with what to tell the user: a
+ * plan and "Imported 3 sessions.", or why nothing can be imported. Shared by the sessions window and the
+ * installed app's welcome. The caller stores the plan (`importSessions`), which can still fail on full storage.
+ */
+export function readImport(
+  text: string,
+  existing: SessionMeta[],
+  existingFolders: Folder[],
+): { plan: ImportPlan; message: string } | { plan: null; message: string } {
+  const storage = readBackup(text)
+  if (!storage) return { plan: null, message: "That file isn't a sessions backup." }
+  const plan = planImport(storage, existing, existingFolders)
+  if (plan.sessions.length === 0) return { plan: null, message: 'No sessions in that backup.' }
+  return {
+    plan,
+    message:
+      `Imported ${plural(plan.sessions.length, 'session')}` +
+      (plan.renamed ? ` (${plan.renamed} renamed "(imported)": the name was taken).` : '.'),
+  }
+}
+
+/** What to say when storage refused an import. */
+export const IMPORT_FULL = "Not enough room in this browser's storage to import it."

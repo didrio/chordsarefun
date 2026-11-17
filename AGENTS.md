@@ -898,10 +898,31 @@ The public site is **https://chordsarefun.com** (a Workers custom domain). What'
 - **`public/`**: `og.png` (1200×630 share card), `apple-touch-icon.png` (180), `icon-192/512.png` (all rendered from
   `favicon.svg` / an HTML card with headless Chrome; the card's source isn't in the repo, re-make it the same way),
   `site.webmanifest`, `robots.txt`, `sitemap.xml`, `_headers`.
-- **The manifest says `display: "browser"`, not standalone**, on purpose: an iPhone home-screen web app gets its
-  own, empty storage, so a user would think their sessions were gone. Installable/offline is a ticket.
+- **Installable and offline (T33)**: `site.webmanifest` is `display: "standalone"` (`id`/`scope` `./`), so Chrome
+  and Edge offer to install it and iPhone's Add to Home Screen opens it as an app. **The iPhone catch**: on iPhone,
+  iPad and Safari's Add to Dock, an installed app gets its own, empty storage, apart from the browser's. So the
+  installed app opening on **fresh storage** (`isFreshStorage` in `session.ts`, read before `prepareSessions`;
+  `isInstalled` in `pwa.ts`; not when a shared link is opening) shows a welcome (`InstalledWelcome.tsx`, a `Modal`):
+  why the sessions aren't here, how to bring them (the browser's Back up all sessions), **Import backup…** (opens the
+  most recently edited imported session; `readImport` in `backup.ts`, shared with the sessions window) and **Start
+  fresh**. Only on the first launch. (Bonus: iOS doesn't clear a home-screen app's storage after 7 days unused.)
+- **The offline copy** (`serviceWorker.ts`, `pwa.ts`): the build writes `dist/sw.js` (a plugin in `vite.config.ts`,
+  `closeBundle`) listing every built file (`precacheList`: not `og.png`, `robots.txt`, `sitemap.xml`,
+  `licenses.txt`, `_headers`; `index.html` as `./`) with a version hashed from their contents (`buildVersion`), so
+  every deploy that changes anything is a new worker. The worker: the page **network first** (a 3 s timeout, then
+  the saved copy), so whoever's online always gets the latest deploy; every other saved file **cache first** (new
+  hashed `assets/` saved as fetched; `ignoreVary`, since the saved copy was fetched without the Origin header a
+  module script sends); cross-origin requests and other pages (`licenses.txt`) left alone. A new worker takes over
+  at once (`skipWaiting`, `clients.claim`, old `chords-*` caches deleted: safe because nothing is lazily loaded), and
+  an open tab then shows **"A new version of the app is ready" · Reload · Later** (`UpdateNotice.tsx`, in
+  `.floating-notices`; Reload saves first; nothing reloads by itself). Long-open tabs check for a new worker when shown
+  again, at most hourly. Registered only in production builds (`import.meta.env.PROD`): dev has no `sw.js`.
+- **Installing, in the help popover's footer** (`InstallLine` in `HelpTip.tsx`, `installHint`): "Works offline once
+  loaded" plus an **Install app** button where the browser offered one (`beforeinstallprompt`, kept by `pwa.ts`),
+  Share → Add to Home Screen on iPhone/iPad, the browser's menu otherwise, or "this is the installed app".
 - **`_headers`** (Workers static assets read it; it isn't served): hashed `/assets/*` cached for a year
-  (`immutable`), plus `nosniff` and a referrer policy. **No CSP on purpose**: Tone and the limiter load AudioWorklets
+  (`immutable`), `/sw.js`, `/` and `/index.html` `no-cache` (always checked with the server), plus `nosniff` and a
+  referrer policy. **No CSP on purpose**: Tone and the limiter load AudioWorklets
   from `blob:` URLs, and a wrong policy breaks audio in production only (dev doesn't use `_headers`).
 - **Licenses**: the repo's `LICENSE` is all rights reserved (owner's call: public to read, not to reuse). The
   bundled libraries' notices (MIT) are emitted by Vite's `build.license` as `/licenses.txt`, linked from the help
@@ -1043,6 +1064,13 @@ These were discussed and chosen deliberately; don't "fix" them without asking.
   makeup gain, so it's never a brickwall (a hard-knee one still peaked +2 dBFS); a clipper crunches kicks; turning
   every preset down ~5 dB makes everything quieter. The limiter costs some loudness on the busiest presets (see
   Levels) and 5 ms of playback latency (not compensated; the WAV is).
+- **The offline copy is a ~100-line worker of our own, not Workbox / vite-plugin-pwa** (T33): one page and a few
+  hashed files need two rules (page network first, files cache first), and no dependency to keep up. **Network first
+  for the page** means a deploy reaches everyone online on their next load; **skipWaiting + a Reload notice** (owner's
+  call) means an open tab is never reloaded under someone mid-song.
+- **Standalone everywhere, with a welcome for the iPhone catch** (owner's call, T33, reversing T30's `display:
+  browser`): the alternative, `minimal-ui` (installable on computers and Android, a Safari bookmark on iPhone),
+  couldn't be checked without a device and isn't an app on iPhone.
 - **The saved history stores each section once** (owner's call in T23): plain copies would let one big song fill the
   browser's storage, and full storage silently stops saving.
 
@@ -1123,6 +1151,10 @@ them up.
 - `src/backup.ts`: backup files (`downloadBackup`, `readBackup`, `planImport`).
 - `src/share.ts`: share links (`toShared` / `fromShared`, `isSafeSong`, `encodeShare` / `decodeShare` with their
   size caps, `shareUrl`, `sharedPayload`, `planShared`); the codec is async (`CompressionStream`), the rest pure.
+- `src/serviceWorker.ts`: the offline copy's worker as text (`serviceWorkerSource`), what it saves (`precacheList`)
+  and its version (`buildVersion`), pure; `vite.config.ts` writes it as `dist/sw.js`.
+- `src/pwa.ts`: registers the worker (production only), the "update ready" state, the install prompt (`usePwa`,
+  `install`), `isInstalled`, `installHint`.
 - `src/platform.ts`: Mac vs Windows modifiers (`copyKey`, `freeKey`, `nudgeKey`), `scrollMotion` (reduced motion).
 - `src/selection.ts`: selection rules (`clickSelect`, `selectAll`, `pruneSelection`), for clips and song blocks.
 - `src/shortcuts.ts`: key → action (`shortcutFor`); App executes actions.
@@ -1147,12 +1179,14 @@ them up.
   - `ChordInspector.tsx`, `NotesLane.tsx`, `ProgressionBrowser.tsx` (the progression window),
     `HomeNotice.tsx`, `SaveWarning.tsx` (storage refused a save), `ErrorBoundary.tsx` (the crash screen),
     `SessionBrowser.tsx` (the sessions trigger + window),
-    `InstrumentsPanel.tsx`, `ExportMenu.tsx` + `ExportStatus.tsx`, `ShareMenu.tsx` + `ShareNotice.tsx`
+    `InstrumentsPanel.tsx`, `ExportMenu.tsx` + `ExportStatus.tsx`, `ShareMenu.tsx` + `ShareNotice.tsx`,
+    `UpdateNotice.tsx` + `InstalledWelcome.tsx` (see Site basics)
     (+ `useDropdown.ts`): see Behavior.
     The lane renders inside `Timeline` and follows the playhead via the `--playhead`
     CSS variable set on `.timeline`.
 - `e2e/`: browser smoke tests (`harness.ts` starts Vite + Chrome, seeds tracks, `openLink` opens a URL in a fresh
-  browser; `smoke.e2e.ts`).
+  browser; `smoke.e2e.ts`), and `offline.e2e.ts` (a real production build served by `vite preview`: offline
+  reload, a rebuild playing a deploy, the installed app's welcome).
 - `src/App.tsx`: `App` (the sessions shell, which also opens shared links) and `Workspace` (state: the song history and the edited section,
   edited through a small `track` adapter over the lenses,
   settings, selection, play state, playhead; wiring and layout), keyed by session. Drag previews are `planDrop(...)` rendered in place of the clips.
@@ -1176,13 +1210,16 @@ them up.
 
 ## Verifying
 
-- Unit tests cover the rules; they can't see layout or hear audio. `npm run e2e` (about 6 s)
+- Unit tests cover the rules; they can't see layout or hear audio. `npm run e2e` (about 40 s: smoke ~35 s, offline ~7 s)
   covers the real-pointer flows: it starts its own Vite server on a free port, uses
   `playwright-core` with the installed Chrome (`CHROME_PATH` overrides; Mac and Linux paths are
   tried), seeds `chords:v1:track` in localStorage (`seedTrack` in `e2e/harness.ts`) and reads
   clips from the DOM. Add a case there when a new pointer or keyboard flow lands. It also
   checks the layout at ten widths (no sideways scroll, the progression browser on screen) and
-  that the phone header keeps its two rows.
+  that the phone header keeps its two rows. `offline.e2e.ts` builds the app (in production mode: Vitest sets
+  `NODE_ENV=test`, which would leave out the worker) into a temp folder and rebuilds it to play deploys.
+- The service worker only runs in a build: `npm run build`, then the `chords-prod` preview (port 4173). It stays
+  registered for that origin in the browser pane; it's network first, so a new build shows on reload.
 - For UI: run the dev server and drive the installed Chrome headlessly, e.g.
   `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new
   --screenshot=out.png --window-size=1280,800 http://localhost:5173/`, or a

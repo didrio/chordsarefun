@@ -5,9 +5,11 @@ session updates this file and picks the next ticket, so each new session starts 
 Rules: `.claude/skills/wrap/SKILL.md`. Capture ideas any time with `/ticket`.
 
 **Next:** T34 — Silent song previews in the sessions window (Opus · high · plan mode on), once you've saved a
-backup from the live site ("Back up all sessions") and can say where it is. Without a backup: T33 (needs your call).
+backup from the live site ("Back up all sessions") and can say where it is. Up next is otherwise empty: pick from the
+Backlog with `/ticket`.
 Still to check on the live site: a Share link's preview card in Messages/Discord, an iPhone (Share…, silent switch),
-Cloudflare Web Analytics.
+Cloudflare Web Analytics; T33's install/offline (Chrome's install icon, airplane mode after one visit, iPhone Add to
+Home Screen → welcome → import a backup from Files, and whether backup/WAV downloads work in the installed iPhone app).
 
 ## In progress
 
@@ -107,15 +109,6 @@ Agent's calls the owner accepted (in the proposal):
   song didn't have); `sessionMusic` choosing segments whose sections have no chords; a part at volume 0.
   Song previews now play once (`passes: 1` in `SessionBrowser.tsx` `hear`).
 
-### T33 — Installable / offline app
-- **Status:** idea, needs the owner's call
-- **Session:** Opus · high · plan mode on
-- **Goal:** install it like an app and use it with no connection (producers on a plane).
-- **Done when:** a service worker caches the build (and updates cleanly on deploy: no stale app after a push);
-  `site.webmanifest` `display: standalone`; **solve the iPhone catch first**: a home-screen app gets its own empty
-  storage, so its first launch must offer to import a backup (or explain where the sessions are). T30 kept
-  `display: "browser"` for that reason.
-
 ## Backlog
 
 - Shared links (T32): opening the same link twice makes two copies ("Name (shared)"). Could open an unedited
@@ -135,10 +128,13 @@ Agent's calls the owner accepted (in the proposal):
 - Should a new empty spot open on Ideas even when the sticky tab is Notes? (Owner's call; today the tab is
   sticky everywhere. Agent's view: keep one rule; an empty spot's Notes tab still works, by clicking keys.)
 - The production bundle is ~745 kB (Tone.js); Vite warns about chunks over 500 kB. Lazy-loading Tone on the
-  first user gesture would halve the first load, if load time ever matters.
+  first user gesture would halve the first load, if load time ever matters. Careful (T33): the service worker
+  `skipWaiting`s and deletes old caches because nothing is lazily loaded; with lazy chunks, an old tab could ask
+  for a chunk the new deploy removed. Keep old chunks or stop skipping the wait.
 
 ## Done
 
+- T33 — Installable / offline app — 2026-11-17 — `display: standalone`; our own service worker written by the build (`serviceWorker.ts` + a `vite.config.ts` plugin, versioned by file contents; page network first with a 3 s fallback, files cache first, `ignoreVary`), registered in production (`pwa.ts`); an open tab gets "A new version is ready · Reload" (`UpdateNotice`); the installed app on fresh storage shows a welcome that imports a backup (`InstalledWelcome`, `isFreshStorage`, `readImport` shared with the sessions window); help footer says it works offline with an Install button / iPhone hint; `_headers` no-cache for `sw.js` and the page. e2e `offline.e2e.ts` on a real build (offline reload, deploys, welcome import). Owner's calls: standalone + welcome, notice + Reload, help-popover line. Not tried on a real iPhone.
 - T31 — Keyboard access to chords and song blocks — 2026-11-17 — the chord track and the song lane are each one Tab stop (roving tabindex, listbox/option); Enter = click, ←/→ step from the focused chord/part with focus following, Shift+F10 / Menu key opens the menu; plain-words names (`clipSpokenName`, `blockSpokenName`: "Cm7, bar 1, in key", "Chorus, bars 5 to 8"); a polite live region announces drops (`doneLabel`) and keyboard edits; focus ring hugs chords/blocks; e2e for both lanes. Also (owner's ask): song previews in the sessions window play the whole song once (progressions loop) with a "Song · 2:08" tag; the reported silent song preview wasn't reproduced (T34). Not tried with a real screen reader.
 - T32 — Share a song by link — 2026-11-17 — a Share button (song bar's right end, icon on phones; owner's call over an Export row) opens a panel: what's shared, the link, Copy link (falls back to selecting it), Share… where there's a share sheet; the link is `#song=` + the song as JSON without ids, deflate-raw, base64url (`share.ts`: ~400 chars for one progression, ~800 for 4 sections / 28 chords; with ids it was ~2,100). Opening one (on load or pasted into an open tab) adds a new session ("(shared)" if taken, "Shared song" for an automatic name), clears the hash, and shows a notice with ▶ Play; bad / too-new / unsupported / storage-full links say so. Versioned (`SHARE_VERSION`, `migrateSong`, a frozen v1 link in the tests); links are checked harder than stored songs (`isSafeSong`, 32k payload and 1 MB inflate caps). `importSessions(plan, open)`. e2e: share → open in a fresh browser → second copy → broken link; Share on the phone header row and on screen at ten widths. Owner to check on the live site: link preview card, an iPhone, Share….
 - T30 — Production polish pass — 2026-11-17 — site basics for going public at chordsarefun.com: head tags (title, description, canonical, Open Graph/Twitter card with `og.png`, JSON-LD, noscript), icons + `site.webmanifest` (`display: browser`, iPhone storage), `robots.txt`, `sitemap.xml`, `_headers` (immutable `/assets/*`, nosniff, no CSP on purpose); save failures shown (`SaveStatus`, `SaveWarning`), `ErrorBoundary` crash screen (backup, blank session), `askToKeepStorage`; iPhone `audioSession` playback; global focus ring, reduced motion; all-rights-reserved `LICENSE`, `/licenses.txt` via Vite `build.license`, privacy + licenses footer in help; fixed the help popover running off screen at ~600–1100px. New: T31–T33. Unticketed: owner asked directly. Owner to check after deploy: share preview, iPhone silent switch, `curl -I` headers; Cloudflare Web Analytics is a dashboard step.

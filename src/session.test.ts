@@ -5,6 +5,7 @@ import {
   hasWork,
   isAutoName,
   migrateMeta,
+  isFreshStorage,
   prepareSessions,
   sessionKey,
   sessionMusic,
@@ -113,6 +114,17 @@ describe('prepareSessions', () => {
     const { sessions, current } = prepareSessions()
     expect(sessions).toHaveLength(1)
     expect(sessions[0]).toMatchObject({ id: current, name: 'Untitled session' })
+  })
+
+  it('knows fresh storage (the installed app on iPhone) from a returning visit', () => {
+    expect(isFreshStorage()).toBe(true)
+    save('track', history(0)) // an old empty scratch: still nothing
+    expect(isFreshStorage()).toBe(true)
+    save('track', history(2)) // old unsaved work
+    expect(isFreshStorage()).toBe(false)
+    store.clear()
+    prepareSessions() // the first visit made its session
+    expect(isFreshStorage()).toBe(false)
   })
 })
 

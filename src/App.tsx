@@ -19,9 +19,12 @@ import type { BlockDrag } from './components/useBlockDrag'
 import { Timeline } from './components/Timeline'
 import { useChordDrag, type DragState } from './components/useChordDrag'
 import { describeBlockDrop, describeDrop, doneLabel, heldName } from './dropLabel'
-import { legacyMusic, sessionPrefix, songHistory, useSessions, type Sessions } from './session'
-import { downloadBackup } from './backup'
+import { isFreshStorage, legacyMusic, sessionPrefix, songHistory, useSessions, type Sessions } from './session'
+import { downloadBackup, IMPORT_FULL, readImport } from './backup'
 import { SaveWarning } from './components/SaveWarning'
+import { UpdateNotice } from './components/UpdateNotice'
+import { InstalledWelcome } from './components/InstalledWelcome'
+import { isInstalled } from './pwa'
 import { ShareMenu } from './components/ShareMenu'
 import { ShareNotice, type ShareOutcome } from './components/ShareNotice'
 import { decodeShare, planShared, sharedPayload } from './share'
@@ -135,6 +138,9 @@ const clearShareHash = () => window.history.replaceState(window.history.state, '
  * sessions remounts it and every setting loads from that session's saved values.
  */
 export default function App() {
+  // The installed app opening on empty storage explains where the browser's sessions are (T33). Read before
+  // useSessions makes the first session; not when a shared link is opening (that's what they came for).
+  const [welcome, setWelcome] = useState(() => isFreshStorage() && isInstalled() && sharedPayload(location.hash) === null)
   const sessions = useSessions()
   const flushRef = useRef<() => void>(() => {})
   /** Save what's on screen first, so a switch, copy or backup has the latest edits and undo history. */
@@ -198,28 +204,42 @@ export default function App() {
     flush()
     downloadBackup()
   }
+  /** The welcome's import: opens the most recently edited imported session; an error to show, or null. */
+  const importFromWelcome = async (text: string) => {
+    flush()
+    const s = latestSessions.current
+    const { plan, message } = readImport(text, s.sessions, s.folders)
+    if (!plan) return message
+    const newest = plan.sessions.reduce((a, b) => (b.updated > a.updated ? b : a))
+    if (!s.importSessions(plan, newest.id)) return IMPORT_FULL
+    setWelcome(false)
+    return null
+  }
   if (booting) return null
   return (
-    <Workspace
-      key={sessions.current}
-      prefix={sessionPrefix(sessions.current)}
-      sessions={sessions}
-      flushRef={flushRef}
-      onBackup={backup}
-      shareOutcome={shareOutcome}
-      onShareDone={dismissShare}
-      sessionMenu={(onBeforePreview) => (
-        <SessionMenu
-          sessions={sessions}
-          onFlush={flush}
-          onOpen={open}
-          onNew={newSession}
-          onDuplicate={duplicate}
-          onBackup={backup}
-          onBeforePreview={onBeforePreview}
-        />
-      )}
-    />
+    <>
+      {welcome && <InstalledWelcome onImport={importFromWelcome} onClose={() => setWelcome(false)} />}
+      <Workspace
+        key={sessions.current}
+        prefix={sessionPrefix(sessions.current)}
+        sessions={sessions}
+        flushRef={flushRef}
+        onBackup={backup}
+        shareOutcome={shareOutcome}
+        onShareDone={dismissShare}
+        sessionMenu={(onBeforePreview) => (
+          <SessionMenu
+            sessions={sessions}
+            onFlush={flush}
+            onOpen={open}
+            onNew={newSession}
+            onDuplicate={duplicate}
+            onBackup={backup}
+            onBeforePreview={onBeforePreview}
+          />
+        )}
+      />
+    </>
   )
 }
 
@@ -1340,6 +1360,7 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef, onBackup, shareOut
       {/* Floating notices, stacked at the bottom of the window: they never move the page. */}
       <div className="floating-notices">
         <SaveWarning onBackup={onBackup} />
+        <UpdateNotice onFlush={() => flushRef.current()} />
         {shareOutcome && (
           <ShareNotice
             outcome={shareOutcome}

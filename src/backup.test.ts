@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { makeBackup, planImport, readBackup } from './backup'
+import { makeBackup, planImport, readBackup, readImport } from './backup'
 import type { SessionMeta } from './session'
 import { DEFAULT_TRACK } from './track'
 import { makeChord } from './music/chord'
@@ -64,5 +64,17 @@ describe('backups', () => {
     )
     expect(plan.sessions[0]).toMatchObject({ name: 'Verse (imported) 2', folder: 'mine' })
     expect(plan.folders).toEqual([])
+  })
+
+  it("says what an import did, or why it can't", () => {
+    expect(readImport('not json', [], [])).toEqual({ plan: null, message: "That file isn't a sessions backup." })
+    expect(readImport(JSON.stringify({ 'chords:v1:sessions': '[]' }), [], [])).toEqual({
+      plan: null,
+      message: 'No sessions in that backup.',
+    })
+    const ok = readImport(backupText, [here('Chorus')], [])
+    expect(ok.plan?.sessions).toHaveLength(3)
+    expect(ok.message).toBe('Imported 3 sessions (1 renamed "(imported)": the name was taken).')
+    expect(readImport(backupText, [], []).message).toBe('Imported 3 sessions.')
   })
 })

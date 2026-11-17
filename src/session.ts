@@ -227,6 +227,15 @@ export function openBlankOnNextLoad() {
  * - with nothing to open, a new empty session is made.
  * Idempotent: the result is saved, so running it again (React StrictMode) changes nothing.
  */
+/**
+ * True when nothing of the app is stored yet: no session list and no old unsaved work. Read before
+ * `prepareSessions` (which makes the first session). An installed app opening on fresh storage gets a welcome
+ * (T33): on iPhone, iPad and Safari's Add to Dock, an installed app has its own storage, apart from the browser's.
+ */
+export function isFreshStorage(): boolean {
+  return loadRaw('sessions') === null && !hasWork(null)
+}
+
 export function prepareSessions(): SessionState {
   const stored = load<unknown[]>('sessions', [], Array.isArray)
   let sessions = stored.map(migrateMeta).filter((m): m is SessionMeta => m !== null)

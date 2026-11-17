@@ -2367,6 +2367,44 @@ button.icon {
   outline: none;
 }
 
+/* The installed app's first-launch welcome (InstalledWelcome.tsx): a small card, also on phones. */
+.modal.welcome-window {
+  display: block;
+  width: min(30rem, calc(100% - 2rem));
+  height: auto;
+  max-height: calc(100% - 2rem);
+  overflow-y: auto;
+  padding: 1.25rem 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.welcome-window h2 {
+  margin: 0 0 0.75rem;
+  font-size: var(--fs-lg);
+}
+
+.welcome-window p {
+  margin: 0 0 0.75rem;
+  line-height: 1.45;
+}
+
+.welcome-window .welcome-note {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+.welcome-window .welcome-error {
+  color: var(--fit-out);
+}
+
+.welcome-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
 .session-browser-head {
   grid-area: head;
   display: flex;
