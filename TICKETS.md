@@ -4,9 +4,9 @@ Living, ordered backlog. One ticket per session: `/clear` → `/start Tn` → wo
 session updates this file and picks the next ticket, so each new session starts with a small, clear context.
 Rules: `.claude/skills/wrap/SKILL.md`. Capture ideas any time with `/ticket`.
 
-**Next:** T32 — Share a song by link (Opus · extra high · plan mode on), the sharing feature for going public;
-T31 (keyboard access) after it. Before that, after T30 deploys: check the share preview (paste the link in
-Messages/Discord), try audio on an iPhone with the silent switch on, and turn on Cloudflare Web Analytics.
+**Next:** T31 — Keyboard access to chords and song blocks (Opus · high · plan mode on). Before that, on the live
+site: paste a Share link in Messages/Discord (the usual card should show) and open it on an iPhone (Safari 16.4+;
+try Share… there too), try audio with the silent switch on, and turn on Cloudflare Web Analytics.
 
 ## In progress
 
@@ -87,21 +87,6 @@ Agent's calls the owner accepted (in the proposal):
   The editor never jumps while the song plays: the chord track shows its playhead only while the edited section
   is the one sounding.
 
-### T32 — Share a song by link
-- **Status:** ready
-- **Session:** Opus · extra high · plan mode on
-- **Goal:** the main sharing feature for going public: send someone a link that opens your song (chords, sections,
-  arrangement, instruments, key, tempo) in their browser, no account.
-- **Done when:** "Copy link" (in the Export menu, or a Share button: owner's call) puts the song in the URL hash
-  (compact JSON, compressed with `CompressionStream` and base64url; no server); opening such a link adds it as a
-  **new session** named after the shared one ("(shared)" if taken), never overwriting anything, then clears the hash;
-  a bad or too-new link says so plainly; links stay readable across future shape changes (a version field and
-  `migrateSong`); the share card (`og.png`) still shows for these links; tests for encode/decode round trips and
-  size (a 4-section song should stay well under ~2,000 characters if possible; measure).
-- **Context:** `song.ts` (`isSong`, `migrateSong`), `backup.ts` `planImport` (how imports add sessions without
-  overwriting), `session.ts`. Only the song, not its undo history. The hash never reaches the server, so links stay
-  private to whoever has them.
-
 ### T31 — Keyboard access to chords and song blocks
 - **Status:** ready
 - **Session:** Opus · high · plan mode on
@@ -127,6 +112,8 @@ Agent's calls the owner accepted (in the proposal):
 
 ## Backlog
 
+- Shared links (T32): opening the same link twice makes two copies ("Name (shared)"). Could open an unedited
+  copy that's already there instead (compare `toShared` of the present song). Owner's call; today's rule is simple.
 - Sessions window: drag rows onto folders (today: the row's ⋯ → Move to). Maybe an undo toast instead of the
   delete confirm.
 - Try T3's ⌘D on a full track: the copy shrinks to one grid step and the last chord is squeezed (the copy-drag
@@ -146,6 +133,7 @@ Agent's calls the owner accepted (in the proposal):
 
 ## Done
 
+- T32 — Share a song by link — 2026-11-17 — a Share button (song bar's right end, icon on phones; owner's call over an Export row) opens a panel: what's shared, the link, Copy link (falls back to selecting it), Share… where there's a share sheet; the link is `#song=` + the song as JSON without ids, deflate-raw, base64url (`share.ts`: ~400 chars for one progression, ~800 for 4 sections / 28 chords; with ids it was ~2,100). Opening one (on load or pasted into an open tab) adds a new session ("(shared)" if taken, "Shared song" for an automatic name), clears the hash, and shows a notice with ▶ Play; bad / too-new / unsupported / storage-full links say so. Versioned (`SHARE_VERSION`, `migrateSong`, a frozen v1 link in the tests); links are checked harder than stored songs (`isSafeSong`, 32k payload and 1 MB inflate caps). `importSessions(plan, open)`. e2e: share → open in a fresh browser → second copy → broken link; Share on the phone header row and on screen at ten widths. Owner to check on the live site: link preview card, an iPhone, Share….
 - T30 — Production polish pass — 2026-11-17 — site basics for going public at chordsarefun.com: head tags (title, description, canonical, Open Graph/Twitter card with `og.png`, JSON-LD, noscript), icons + `site.webmanifest` (`display: browser`, iPhone storage), `robots.txt`, `sitemap.xml`, `_headers` (immutable `/assets/*`, nosniff, no CSP on purpose); save failures shown (`SaveStatus`, `SaveWarning`), `ErrorBoundary` crash screen (backup, blank session), `askToKeepStorage`; iPhone `audioSession` playback; global focus ring, reduced motion; all-rights-reserved `LICENSE`, `/licenses.txt` via Vite `build.license`, privacy + licenses footer in help; fixed the help popover running off screen at ~600–1100px. New: T31–T33. Unticketed: owner asked directly. Owner to check after deploy: share preview, iPhone silent switch, `curl -I` headers; Cloudflare Web Analytics is a dashboard step.
 - T29 — Picked chip scrolls into view on phones — 2026-11-17 — genre chip (progression browser) and view chip (sessions window) scroll fully into view when picked or on open (`scrollIntoView` effects keyed on genre/view); e2e at 375px. Not looked at in the browser pane.
 - T28 — A real master limiter — 2026-11-17 — lookahead brickwall in an AudioWorklet (`limiter.ts`: pure `createLimiter`, 5 ms lookahead, 50 ms release, −1 dBFS ceiling by construction; the worklet is built from its source text, `limiterWorkletSource`, since Tone's context can't load modules that import); playback, previews and WAV all go through it, the WAV skips its 5 ms delay (`Rendered.offset`); e2e checks the WAV peak. Measured on all 64 presets: peaks were +0.4…+6 dBFS, now exactly −1.00 with no sample over; loudness median −0.55 dB, Pop −0.7, worst Clav funk −2.2 / Country train −2.0 (busy presets sit ~−14 LUFS; presets left as they were, owner to judge). Deviation: no separate worklet file. Owner to listen: Pop, Clav funk, Country train for crunch or pumping on kicks, and whether anything sounds quieter or duller; a WAV vs playback.
@@ -169,7 +157,3 @@ Agent's calls the owner accepted (in the proposal):
 - T12 — Hear a session from the sessions window — 2026-11-16 — ▶ on each row plays that session once exactly as its own Play would (its tempo, groove, sounds, drums, mix; own sound graph, ■ stops), shows the chord names with the sounding one lit, pauses the song first.
 - T11 — Detect key, silent session switch, sessions window, backups — 2026-11-16 — Key menu "Detect from your chords" (best match + major/minor second opinions, re-label only); `silenceAll` on session switch (progression/"in place" previews used to keep playing into the next session); the sessions dropdown became a modal window (folders, favorites, sort, search, inline rename/delete, no more "Unsaved session", blank sessions clean up); "Back up all sessions" / "Import backup…" (never overwrites, taken names get "(imported)"). Owner to listen once that switching sessions is silent.
 - T10 — Key-change notice without moving the track — 2026-11-15 — `HomeNotice` is a fixed bottom-center bar (z-index 15), so the track never moves; clicking it keeps the selection; `e2e` case checks `.track` top before/after.
-- T9 — UI/UX pass — 2026-11-15 — Progressions menu stays on screen at every width, leads with each progression's
-  feel and shows that it scrolls; toolbar wraps at ≤800px (it overflowed 600–800px); a one-line hint where the
-  chord details go while none are open; phone header in five rows instead of six, no sideways scroll down to
-  320px; `e2e` layout cases at nine widths. Unticketed: the owner asked for the pass directly.

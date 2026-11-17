@@ -4,6 +4,10 @@ Older finished tickets, moved from `TICKETS.md` to keep it lean (newest first).
 
 ## Done
 
+- T9 — UI/UX pass — 2026-11-15 — Progressions menu stays on screen at every width, leads with each progression's
+  feel and shows that it scrolls; toolbar wraps at ≤800px (it overflowed 600–800px); a one-line hint where the
+  chord details go while none are open; phone header in five rows instead of six, no sideways scroll down to
+  320px; `e2e` layout cases at nine widths. Unticketed: the owner asked for the pass directly.
 - T8 — e2e in CI — 2026-11-14 — separate `e2e` job in `ci.yml` (ubuntu, `CHROME_PATH=/usr/bin/google-chrome`). Pushed straight to `main`, so its first run is unverified: check it on GitHub; if it flakes, fix the test, don't retry.
 - T7 — Browser smoke tests — 2026-11-14 — `npm run e2e`: 9 real-Chrome tests (reorder, swap, copy-drag, resize
   trims neighbor, ruler click, ⌘D + ⌘Z, nudge, double-click adds a spot, idea ▶ leaves the track alone), ~6 s.

@@ -47,6 +47,12 @@ export const UndoIcon = () => (
     <path d="M6.5 3.5 3 7l3.5 3.5M3.5 7H11a3.5 3.5 0 0 1 0 7H8" />
   </Svg>
 )
+/** Share: a box with an arrow leaving it (the usual "send this somewhere" sign). */
+export const ShareIcon = () => (
+  <Svg>
+    <path d="M9 11V2.5M6 5.5l3-3 3 3M6.5 8H4.5v7.5h9V8h-2" />
+  </Svg>
+)
 export const RedoIcon = () => (
   <Svg>
     <path d="M11.5 3.5 15 7l-3.5 3.5M14.5 7H7a3.5 3.5 0 0 0 0 7h3" />

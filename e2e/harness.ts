@@ -65,6 +65,15 @@ export async function open(app: App, history: unknown): Promise<Page> {
   return page
 }
 
+/** Opens `url` (e.g. a shared song's link) in a fresh browser context with nothing saved, as a stranger would. */
+export async function openLink(app: App, url: string): Promise<Page> {
+  const context = await app.browser.newContext({ viewport: { width: 1280, height: 900 } })
+  const page = await context.newPage()
+  await page.goto(url)
+  await page.waitForSelector('.track')
+  return page
+}
+
 export type ClipInfo = { name: string; left: number; right: number; selected: boolean }
 
 /** Every clip on the track, left to right, from the DOM (positions in px). */

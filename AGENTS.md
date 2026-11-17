@@ -682,7 +682,8 @@ The (i) tooltip next to the logo (`HelpTip.tsx`: how it works + every shortcut, 
   every `chords:v1:*` value (so a hand-made localStorage copy imports the same way). "Import backup…" adds the
   file's sessions (`planImport`): new ids, so nothing is ever overwritten; a taken name becomes "Name
   (imported)"; folders are matched by name (made if missing); favorites and dates are kept; the old scratch
-  inside a backup comes in as "Untitled session". If storage is full, nothing is added.
+  inside a backup comes in as "Untitled session". If storage is full, nothing is added. A shared link adds its
+  song the same way (`planShared`, see Sharing); `importSessions(plan, open)` can also open the new session.
 - Each session's values live under its own key prefix (`session:<id>:`). `App` keys the `Workspace` by
   session, so switching remounts it and everything loads from storage (the history flushes on unmount;
   `silenceAll` stops every sound). The list, folders, sort and current session are global (`sessions`,
@@ -711,11 +712,48 @@ that session's old values (`legacyMusic` in `session.ts`, passed into the pure `
 defaults if none), so undo never changes how old work sounds. Those keys are no longer
 written but stay in `SESSION_KEYS`, so old backups import and copying/deleting cleans up.
 `readHistory` calls `migrate` with one argument (never map's index). Bump
-`VERSION` in `persist.ts` only for changes that can't be migrated. The old palette size
+`VERSION` in `persist.ts` only for changes that can't be migrated. **Shared links are stored songs too**: a link
+made today must keep opening after any change to the song's shape (`migrateSong` runs on it; `share.test.ts` has a
+frozen v1 link that must keep decoding), and `SHARE_VERSION` in `share.ts` goes up when an older app would misread
+a newer link (it then says "too new"). The old palette size
 key (`flavor`) is no longer read; it stays in `SESSION_KEYS` so copying and deleting
 sessions still cleans it up. Old chords have no
 `bass`, so they read as their root (inverted chords once named "F/C" are now plain F,
 as intended). Playhead and play state are not saved.
+
+### Sharing (`share.ts`, `ShareMenu.tsx`, `ShareNotice.tsx`; T32)
+
+- **A link holds the song itself**, in its hash: `https://chordsarefun.com/#song=<payload>`, the payload being
+  `{ v, name, song }` as JSON, deflated (`CompressionStream('deflate-raw')`) and base64url. No server: the hash
+  is never sent with a request, so a link is private to whoever has it, and link previews (Messages, Discord)
+  fetch the bare page, so the usual `og.png` card shows. What's in it: the song (key, tempo, time signature, every
+  section's chords, length and instruments, the arrangement) and the session's name; not the undo history or view
+  settings. **Ids are left out** (`toShared`: sections by index; fresh UUIDs on opening): they were most of the
+  size. Measured: one 4-chord progression ≈ 400 characters, 4 sections / 28 chords / 8 blocks ≈ 800 (with
+  UUIDs it was ≈ 2,100; Discord won't send a message over 2,000). Tests keep both under 600 / 1,200.
+- **Share** (the song bar's right end, after Export; icon only on phones; disabled with no chords) opens a panel:
+  what's in the link, the link (read-only, selects on focus), **Copy link** ("Copied ✓" for 2 s; if the clipboard
+  refuses, the link is selected and it says "Press ⌘C to copy it"), **Share…** where the browser has a share
+  sheet (`navigator.share`, phones), "Nothing is uploaded", and a note when a link is over 2,000 characters. The
+  link is made when the panel opens (and remade if the song changes while it's open), so Copy writes it inside the
+  click, as Safari requires.
+- **Opening a link** (`App`, on load and on `hashchange` for a link pasted into an open tab): `decodeShare` →
+  `planShared` → `importSessions(plan, open)`: always a **new session**, named after the shared one ("Name
+  (shared)" if taken, "Shared song" for an automatic name), its history starting at the song, the Song panel open
+  when it's arranged; never overwriting anything. A blank current session is cleaned up as on any switch. Then
+  the hash is cleared (`history.replaceState`). While a link from the page load is read (a few ms) the shell
+  renders nothing, so the last session never flashes. Opening the same link twice makes two copies.
+- **A link is someone else's data**, so it's checked harder than stored songs (`isSafeSong`; `isSong` itself
+  stays as it is so saved work is never rejected): lengths from the length picker, clips in order, inside their
+  section and not overlapping (fractional ticks from meter changes allowed), real intervals, `|inversion| ≤ 64`,
+  a tonic that's a note, ≤ 100 sections and 1,000 blocks; payloads over 32k characters are refused and inflating
+  stops at 1 MB (a tiny link could unpack to gigabytes). Clips are sorted by start before checking.
+- **What it says** (`ShareNotice`, in the floating notices): "Opened “Summer demo” from a link. It's one of your
+  sessions now…" with **▶ Play** (the song if arranged, else the section) and Got it; it also leaves at the first
+  edit (the song compared with the one it opened with). A bad or cut-off link: "This link doesn't open a song…";
+  a link from a newer version: "…shared from a newer version… Reload to update, and it opens" (that link stays in
+  the URL so the reload opens it; Got it clears it); no `DecompressionStream` (Safari < 16.4): "This browser can't
+  open shared songs"; storage full: says so.
 
 ### Export (`ExportMenu.tsx`, `midi.ts`, `bounce.ts`, `wav.ts`, `renderAudio` in `audio.ts`; T25–T26)
 
@@ -764,8 +802,8 @@ as intended). Playhead and play state are not saved.
     help tooltip headed "chords are fun", the sessions trigger (opens the sessions window; reads like the document's
     name); right: the **song button** "C minor · 127 BPM · 4/4 ▾" (`SongMenu.tsx`: its popover holds
     the Key on the left and tempo, time signature, length, grid and the metronome on the right; it
-    scrolls inside itself on short windows) and a compact "⤓ Export" (audio or MIDI). On narrow windows the right
-    group wraps under.
+    scrolls inside itself on short windows), a compact "⤓ Export" (audio or MIDI) and **Share** (a link to the
+    song, T32). On narrow windows the right group wraps under.
   - **Main toolbar** (dashed line above, solid below), like Ableton's transport bar: Play
     (accent tint), Stop, Loop · Undo, Redo (ghost) · **+ Add chord** (tinted) on the left;
     Browse progressions and the Random group (Chords | Instruments | Both) on the right (fixed-width trigger).
@@ -817,7 +855,7 @@ as intended). Playhead and play state are not saved.
 - **Phones (≤ 600px)**, one media block at the end of `index.css`: the song bar is two
   rows that never re-wrap, whatever the key or session is called: the logo icon (its title is
   visually hidden) and the session (takes the room left); then the song button (takes the room
-  left) and MIDI. To get there `.song-settings` becomes `display: contents`, its items are placed
+  left), Export and the Share icon. To get there `.song-settings` becomes `display: contents`, its items are placed
   with `order`, and an empty `::after` flex item between the rows forces the break. Long names
   shorten with an ellipsis rather than move anything; the song popover is a one-column sheet.
   The transport row wraps when it doesn't fit (Add chord drops to its own line at 320px). The
@@ -854,7 +892,8 @@ The public site is **https://chordsarefun.com** (a Workers custom domain). What'
   bundled libraries' notices (MIT) are emitted by Vite's `build.license` as `/licenses.txt`, linked from the help
   popover's footer (it 404s in dev; it only exists in the build).
 - **Privacy**: no cookies, no accounts, nothing uploaded; sessions live in localStorage. The help popover's footer
-  says so and recommends backups. Cloudflare Web Analytics (cookieless) may be on, set up in the dashboard.
+  says so and recommends backups. Shared links carry the song in the URL hash, which never reaches the server
+  (nor analytics). Cloudflare Web Analytics (cookieless) may be on, set up in the dashboard.
 - **Not losing work**: `ErrorBoundary` (around `App` in `main.tsx`) replaces a blank page after a crash with
   Reload, **Download a backup** (`downloadBackup` reads storage directly) and **Open a blank session**
   (`openBlankOnNextLoad`: forgets the current session id, so `prepareSessions` makes a new one; nothing deleted).
@@ -962,6 +1001,13 @@ These were discussed and chosen deliberately; don't "fix" them without asking.
   song on its timeline, with a locator at every part; "This section" stays for taking just one part.
 - **One Export menu, audio and MIDI with the same choices** (T26): the format is a toggle, not a second menu,
   so "whole song / this section" and "mix / one part" mean the same in both. Files are named after the session.
+- **Sharing is a link that holds the song, in the hash** (T32): no server or accounts to run, nothing uploaded, and
+  the link is private to whoever has it. The cost: links are long-ish (≈ 800 characters for a 4-section song) and
+  a shared song is a copy, not a live document. Ids are left out of it (size), but the song's own field names are
+  kept rather than a compact custom codec (≈ 35% shorter, but one more format to keep reading forever).
+- **Share is its own button with a panel, not a row in Export** (owner's call, T32): Export is about files (its
+  Audio/MIDI and Whole song/This section toggles mean nothing for a link), and the panel has room to say what's
+  shared and to fall back when the clipboard is blocked.
 - **Audio is rendered in the browser, as 24-bit WAV only** (T26): no server and no library; every DAW imports
   it. The render drives Tone's offline clock in slices instead of `Tone.Offline` (see Export) for speed,
   progress and Cancel.
@@ -1060,6 +1106,8 @@ them up.
 - `src/session.ts`: sessions (keys, list, folders, favorites, sort/filter, migration `prepareSessions`,
   summaries; `useSessions`).
 - `src/backup.ts`: backup files (`downloadBackup`, `readBackup`, `planImport`).
+- `src/share.ts`: share links (`toShared` / `fromShared`, `isSafeSong`, `encodeShare` / `decodeShare` with their
+  size caps, `shareUrl`, `sharedPayload`, `planShared`); the codec is async (`CompressionStream`), the rest pure.
 - `src/platform.ts`: Mac vs Windows modifiers (`copyKey`, `freeKey`, `nudgeKey`), `scrollMotion` (reduced motion).
 - `src/selection.ts`: selection rules (`clickSelect`, `selectAll`, `pruneSelection`), for clips and song blocks.
 - `src/shortcuts.ts`: key → action (`shortcutFor`); App executes actions.
@@ -1083,11 +1131,13 @@ them up.
   - `ChordInspector.tsx`, `NotesLane.tsx`, `ProgressionBrowser.tsx` (the progression window),
     `HomeNotice.tsx`, `SaveWarning.tsx` (storage refused a save), `ErrorBoundary.tsx` (the crash screen),
     `SessionBrowser.tsx` (the sessions trigger + window),
-    `InstrumentsPanel.tsx`, `ExportMenu.tsx` + `ExportStatus.tsx` (+ `useDropdown.ts`): see Behavior.
+    `InstrumentsPanel.tsx`, `ExportMenu.tsx` + `ExportStatus.tsx`, `ShareMenu.tsx` + `ShareNotice.tsx`
+    (+ `useDropdown.ts`): see Behavior.
     The lane renders inside `Timeline` and follows the playhead via the `--playhead`
     CSS variable set on `.timeline`.
-- `e2e/`: browser smoke tests (`harness.ts` starts Vite + Chrome and seeds tracks; `smoke.e2e.ts`).
-- `src/App.tsx`: `App` (the sessions shell) and `Workspace` (state: the song history and the edited section,
+- `e2e/`: browser smoke tests (`harness.ts` starts Vite + Chrome, seeds tracks, `openLink` opens a URL in a fresh
+  browser; `smoke.e2e.ts`).
+- `src/App.tsx`: `App` (the sessions shell, which also opens shared links) and `Workspace` (state: the song history and the edited section,
   edited through a small `track` adapter over the lenses,
   settings, selection, play state, playhead; wiring and layout), keyed by session. Drag previews are `planDrop(...)` rendered in place of the clips.
 

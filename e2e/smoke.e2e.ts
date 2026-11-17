@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { Page } from 'playwright-core'
-import { clips, CMD, COPY, drag, names, NUDGE, open, pointIn, seedTrack, startApp, stopApp, type App } from './harness.ts'
+import { clips, CMD, COPY, drag, names, NUDGE, open, openLink, pointIn, seedTrack, startApp, stopApp, type App } from './harness.ts'
 
 /** Four chords, one per bar: C F G Am. */
 const full = () => seedTrack([{ chord: 'C', bar: 0 }, { chord: 'F', bar: 1 }, { chord: 'G', bar: 2 }, { chord: 'Am', bar: 3 }])
@@ -22,6 +22,14 @@ async function start(history: unknown) {
   return fresh
 }
 afterAll(() => page?.context().close())
+
+/** Like start, but a fresh browser with nothing saved opening a link (a shared song). */
+async function startAt(url: string) {
+  await page?.context().close()
+  const fresh = await openLink(app, url)
+  page = fresh
+  return fresh
+}
 
 describe('dragging', () => {
   it("dropping on a chord's edge reorders", async () => {
@@ -355,6 +363,14 @@ describe('an arranged song at every width', () => {
       expect(menu.x + menu.width, `${width}px: Export menu ends on screen`).toBeLessThanOrEqual(width)
       expect(await overflow(), `${width}px: nothing runs off with the menu open`).toBeLessThanOrEqual(0)
       await p.keyboard.press('Escape')
+      // The Share panel too.
+      await p.getByRole('button', { name: 'Share this song' }).click()
+      const share = await p.locator('.share-panel').boundingBox()
+      if (!share) throw new Error('No Share panel')
+      expect(share.x, `${width}px: Share panel starts on screen`).toBeGreaterThanOrEqual(0)
+      expect(share.x + share.width, `${width}px: Share panel ends on screen`).toBeLessThanOrEqual(width)
+      expect(await overflow(), `${width}px: nothing runs off with the Share panel open`).toBeLessThanOrEqual(0)
+      await p.keyboard.press('Escape')
     }
   })
 })
@@ -399,7 +415,7 @@ describe('phone chip rows', () => {
 })
 
 describe('phone header', () => {
-  it('is two rows that never re-wrap: logo + session, then the song button + Export', async () => {
+  it('is two rows that never re-wrap: logo + session, then the song button, Export and Share', async () => {
     const p = await start(full())
     for (const width of [320, 360, 375, 430, 600]) {
       await p.setViewportSize({ width, height: 800 })
@@ -408,6 +424,7 @@ describe('phone header', () => {
       const [song, exp] = [await top('.song-menu .dropdown-trigger'), await top('.export-menu .dropdown-trigger')]
       expect(Math.abs(logo - session), `${width}px: logo and session share a row`).toBeLessThan(12)
       expect(Math.abs(song - exp), `${width}px: song button and Export share a row`).toBeLessThan(4)
+      expect(Math.abs(song - (await top('.share-menu .dropdown-trigger'))), `${width}px: and Share`).toBeLessThan(4)
       expect(song, `${width}px: the song row is under the session row`).toBeGreaterThan(session + 20)
       // The popover opens as a sheet that stays on screen.
       await p.locator('.song-menu .dropdown-trigger').click()
@@ -640,6 +657,75 @@ describe('undo covers instruments and tempo', () => {
     expect(Number(await volume.inputValue())).toBeLessThan(Number(before))
     await undoKey(p)
     expect(await volume.inputValue()).toBe(before)
+  })
+})
+
+describe('sharing', () => {
+  const chipNames = (p: Page) => p.locator('.section-chip-name').allTextContents()
+  const sessionName = (p: Page) => p.locator('.session-trigger').textContent()
+  const notice = (p: Page, text: string | RegExp) => p.locator('.share-notice', { hasText: text })
+  const sessionList = async (p: Page) => {
+    await p.locator('.session-trigger').click()
+    await p.locator('.session-browser').waitFor()
+    const list = await p.locator('.session-row .session-title').allTextContents()
+    await p.keyboard.press('Escape')
+    return list
+  }
+
+  it('copies a link that opens the song as a new session in a fresh browser, never overwriting anything', async () => {
+    const p = await start(full())
+    // Name the session, add a Chorus with a chord, arrange both.
+    await p.locator('.session-trigger').click()
+    await p.getByRole('button', { name: 'More options for Untitled session', exact: true }).click()
+    await p.locator('.session-popup button', { hasText: 'Rename' }).click()
+    await p.keyboard.type('Summer demo')
+    await p.keyboard.press('Enter')
+    await p.keyboard.press('Escape')
+    await p.locator('.add-section .dropdown-trigger').click()
+    await p.getByRole('menuitem', { name: /^Chorus / }).click()
+    await p.getByRole('button', { name: 'Add a chord' }).click()
+    await p.getByLabel('Type any chord').fill('Dm')
+    await p.keyboard.press('Enter')
+    await p.locator('.song-arranger .panel-bar').click()
+    await p.getByRole('button', { name: /Add every section in order/ }).click()
+
+    // Share → Copy link.
+    await p.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+    await p.getByRole('button', { name: 'Share this song' }).click()
+    const field = p.getByLabel('Link to this song')
+    await expect.poll(() => field.inputValue()).toMatch(/#song=[A-Za-z0-9_-]+$/)
+    const link = await field.inputValue()
+    expect(link.length).toBeLessThan(2_000)
+    await p.getByRole('button', { name: 'Copy link' }).click()
+    await p.getByRole('button', { name: 'Copied ✓' }).waitFor()
+    expect(await p.evaluate<string>('navigator.clipboard.readText()')).toBe(link)
+
+    // Someone else opens it: a browser with nothing saved.
+    const q = await startAt(link)
+    await notice(q, /Opened .Summer demo. from a link/).waitFor()
+    expect(await sessionName(q)).toContain('Summer demo')
+    expect(await chipNames(q)).toEqual(['Progression', 'Chorus'])
+    expect(await names(q)).toEqual(['C', 'F', 'G', 'Am'])
+    expect(await q.locator('.song-block').count()).toBe(2) // the Song panel opens on an arranged song
+    expect(await q.evaluate<string>('location.hash')).toBe('')
+    // The blank session made on arrival is gone: only the shared one is listed.
+    expect(await sessionList(q)).toEqual(['Summer demo'])
+    // Editing the song dismisses the notice.
+    await q.keyboard.press('ArrowUp')
+    await notice(q, 'from a link').waitFor({ state: 'detached' })
+
+    // The same link pasted into the open tab: a second copy, the first untouched.
+    await q.evaluate(`location.hash = ${JSON.stringify(new URL(link).hash)}`)
+    await notice(q, /Opened .Summer demo \(shared\). from a link/).waitFor()
+    expect(await sessionName(q)).toContain('Summer demo (shared)')
+    expect((await sessionList(q)).sort()).toEqual(['Summer demo', 'Summer demo (shared)'])
+
+    // A broken link says so and leaves everything as it was.
+    await q.evaluate(`location.hash = '#song=cut-off'`)
+    await notice(q, "This link doesn't open a song").waitFor()
+    expect(await sessionName(q)).toContain('Summer demo (shared)')
+    expect(await q.evaluate<string>('location.hash')).toBe('')
+    expect((await sessionList(q)).length).toBe(2)
   })
 })
 

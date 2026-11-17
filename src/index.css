@@ -2009,6 +2009,63 @@ input[type='text'][aria-invalid='true'] {
   flex: 1;
 }
 
+/* Share (T32): the last thing in the song bar; its panel hangs from the bar's right end, like Export's. */
+.share-menu .dropdown-trigger {
+  gap: 0.35rem;
+}
+
+.share-menu .dropdown-trigger svg {
+  width: 16px;
+  height: 16px;
+}
+
+.share-panel {
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  width: 21rem;
+  padding: 0.65rem 0.65rem 0.35rem;
+}
+
+.share-what,
+.share-long {
+  margin: 0;
+  font-size: var(--fs-sm);
+  line-height: 1.35;
+}
+
+.share-long {
+  font-size: var(--fs-xs);
+  color: var(--fit-out);
+}
+
+input[type='text'].share-link {
+  flex: none;
+  width: 100%;
+  box-sizing: border-box;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  text-overflow: ellipsis;
+}
+
+.share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.5rem;
+  font-size: var(--fs-sm);
+}
+
+/* "Copy link" and "Copied ✓" take the same room, so nothing beside it moves. */
+.share-copy {
+  min-width: 7rem;
+}
+
+.share-panel .menu-foot {
+  margin-top: 0;
+}
+
 /* Home menu: key buttons over the mood list. */
 .key-panel {
   min-width: 0;
@@ -3562,7 +3619,7 @@ button.show-all {
 
   /*
    * The song bar in two rows that never re-wrap: the logo (its title steps aside) and the session
-   * (takes the room left); then the song settings button (takes the room left) and Export.
+   * (takes the room left); then the song settings button (takes the room left), Export and Share (its icon).
    * The settings group dissolves so its items can sit in those rows, and an empty flex item between
    * the rows forces the break whatever the names are.
    */
@@ -3650,6 +3707,16 @@ button.show-all {
     justify-content: space-between;
     width: var(--export-width);
     overflow: hidden;
+  }
+
+  /* Share is the icon alone here (its name stays for screen readers, in aria-label). */
+  .song-bar .share-menu {
+    order: 5;
+    flex: none;
+  }
+
+  .share-label {
+    display: none;
   }
 
   .song-panel {

@@ -381,10 +381,11 @@ export function useSessions() {
       setSessions(sessions.map((s) => (s.folder === id ? { ...s, folder: null } : s)))
     },
     /**
-     * Add sessions from a backup (see backup.ts planImport: new ids, nothing overwritten).
-     * Returns false, adding nothing, if the browser's storage is full.
+     * Add sessions from a backup or a shared link (see backup.ts planImport, share.ts planShared: new
+     * ids, nothing overwritten), and with `open`, switch to that one (save the workspace first: the
+     * caller flushes). Returns false, adding nothing, if the browser's storage is full.
      */
-    importSessions(plan: { sessions: SessionMeta[]; folders: Folder[]; writes: [string, string][] }): boolean {
+    importSessions(plan: { sessions: SessionMeta[]; folders: Folder[]; writes: [string, string][] }, open?: string): boolean {
       for (const [key, raw] of plan.writes) {
         if (!saveRaw(key, raw)) {
           for (const s of plan.sessions) removeKeys(SESSION_KEYS, sessionPrefix(s.id))
@@ -392,7 +393,10 @@ export function useSessions() {
         }
       }
       setFolders([...folders, ...plan.folders])
-      setSessions([...plan.sessions, ...sessions])
+      const list = [...plan.sessions, ...sessions]
+      // One commit for the list and the session to open (opening after setSessions would see the old list).
+      if (open !== undefined && list.some((s) => s.id === open)) commit({ sessions: leaving(list, open), current: open })
+      else setSessions(list)
       return true
     },
     /** Note that the current session changed, for "last edited" in the list. */

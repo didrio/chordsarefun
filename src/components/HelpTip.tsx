@@ -101,6 +101,10 @@ export function HelpTip() {
             <b>Keep it.</b> Everything saves as you go. The session name at the top opens all your sessions (folders,
             favorites, a backup file), and <b>Export</b> takes it into your DAW as audio (WAV) or MIDI.
           </li>
+          <li>
+            <b>Share it.</b> <b>Share</b> copies a link that holds the song itself: whoever opens it gets their own
+            copy, no account needed.
+          </li>
         </ol>
         </div>
         <div>

@@ -22,6 +22,9 @@ import { describeDrop, heldName } from './dropLabel'
 import { legacyMusic, sessionPrefix, songHistory, useSessions, type Sessions } from './session'
 import { downloadBackup } from './backup'
 import { SaveWarning } from './components/SaveWarning'
+import { ShareMenu } from './components/ShareMenu'
+import { ShareNotice, type ShareOutcome } from './components/ShareNotice'
+import { decodeShare, planShared, sharedPayload } from './share'
 import { useHistory } from './history'
 import { askToKeepStorage, usePersistentState } from './persist'
 import { clickSelect, EMPTY_SELECTION, pruneSelection, selectAll, type ClickMods, type Selection } from './selection'
@@ -124,6 +127,9 @@ import {
   type TimeSignature,
 } from './music/timeline'
 
+/** Take the shared song out of the URL (keeping the page and its query), so a reload doesn't open it again. */
+const clearShareHash = () => window.history.replaceState(window.history.state, '', location.pathname + location.search)
+
 /**
  * The app shell: sessions. The workspace below is keyed by session, so switching
  * sessions remounts it and every setting loads from that session's saved values.
@@ -133,6 +139,49 @@ export default function App() {
   const flushRef = useRef<() => void>(() => {})
   /** Save what's on screen first, so a switch, copy or backup has the latest edits and undo history. */
   const flush = () => flushRef.current()
+
+  // A shared song in the URL (`#song=…`, share.ts): read on load, and when the hash changes (a link
+  // pasted into a tab that's already open). It becomes a new session, opened; the hash is then cleared.
+  const [incoming, setIncoming] = useState(() => sharedPayload(location.hash))
+  // While a link from the page load is read (a few ms), show nothing, so the last session doesn't flash first.
+  const [booting, setBooting] = useState(incoming !== null)
+  const [shareOutcome, setShareOutcome] = useState<ShareOutcome | null>(null)
+  const latestSessions = useRef(sessions)
+  useEffect(() => {
+    latestSessions.current = sessions
+  })
+  useEffect(() => {
+    const onHash = () => setIncoming(sharedPayload(location.hash))
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
+  useEffect(() => {
+    if (incoming === null) return
+    let cancelled = false // StrictMode runs this twice: only the second one imports
+    void decodeShare(incoming).then((result) => {
+      if (cancelled) return
+      // A link from a newer app stays in the URL, so reloading (and getting that app) opens it.
+      if (result.ok || result.reason !== 'too-new') clearShareHash()
+      if (!result.ok) setShareOutcome({ kind: result.reason })
+      else {
+        flushRef.current()
+        const s = latestSessions.current
+        const plan = planShared(result, s.sessions)
+        const meta = plan.sessions[0]
+        setShareOutcome(s.importSessions(plan, meta.id) ? { kind: 'opened', name: meta.name } : { kind: 'full' })
+      }
+      setIncoming(null)
+      setBooting(false)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [incoming])
+  const dismissShare = () => {
+    if (shareOutcome?.kind === 'too-new') clearShareHash()
+    setShareOutcome(null)
+  }
+
   const open = (id: string) => {
     flush()
     sessions.open(id)
@@ -149,6 +198,7 @@ export default function App() {
     flush()
     downloadBackup()
   }
+  if (booting) return null
   return (
     <Workspace
       key={sessions.current}
@@ -156,6 +206,8 @@ export default function App() {
       sessions={sessions}
       flushRef={flushRef}
       onBackup={backup}
+      shareOutcome={shareOutcome}
+      onShareDone={dismissShare}
       sessionMenu={(onBeforePreview) => (
         <SessionMenu
           sessions={sessions}
@@ -199,9 +251,12 @@ type WorkspaceProps = {
   flushRef: { current: () => void }
   /** Save everything, then download a backup of every session (the save warning offers it). */
   onBackup: () => void
+  /** What opening a shared link did (shown as a notice until dismissed), or null. */
+  shareOutcome: ShareOutcome | null
+  onShareDone: () => void
 }
 
-function Workspace({ prefix, sessions, sessionMenu, flushRef, onBackup }: WorkspaceProps) {
+function Workspace({ prefix, sessions, sessionMenu, flushRef, onBackup, shareOutcome, onShareDone }: WorkspaceProps) {
   // Everything here is saved in the session (keys listed in SESSION_KEYS).
   const k = (key: string) => prefix + key
   // Hidden by default: powerful, but a lot on first sight.
@@ -265,6 +320,16 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef, onBackup }: Worksp
       return
     }
     touch.current()
+  }, [song.value])
+  // "Opened … from a link" goes away by itself once you edit the song (compared with the song as it opened,
+  // not "after the first render", which StrictMode runs twice).
+  const songAtOpen = useRef(song.value)
+  const shareDone = useRef(onShareDone)
+  useEffect(() => {
+    shareDone.current = shareOutcome?.kind === 'opened' ? onShareDone : () => {}
+  })
+  useEffect(() => {
+    if (song.value !== songAtOpen.current) shareDone.current()
   }, [song.value])
   const { tonic, mode, sig, bpm, sections, arrangement } = song.value
   const { clips, bars, groove } = section
@@ -1100,6 +1165,7 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef, onBackup }: Worksp
             rendering={exportJob !== null && !exportJob.failed}
             onExport={exportMusic}
           />
+          <ShareMenu song={song.value} name={sessions.currentName} disabled={!songHasChords(song.value)} />
         </div>
       </header>
 
@@ -1212,6 +1278,16 @@ function Workspace({ prefix, sessions, sessionMenu, flushRef, onBackup }: Worksp
       {/* Floating notices, stacked at the bottom of the window: they never move the page. */}
       <div className="floating-notices">
         <SaveWarning onBackup={onBackup} />
+        {shareOutcome && (
+          <ShareNotice
+            outcome={shareOutcome}
+            onPlay={() => {
+              play(arrangement.length > 0 ? 'song' : 'section')
+              onShareDone()
+            }}
+            onDismiss={onShareDone}
+          />
+        )}
         {exportJob && <ExportStatus job={exportJob} onCancel={cancelExport} />}
         {activeOffer && (
           <HomeNotice
